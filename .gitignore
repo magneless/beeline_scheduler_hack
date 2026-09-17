@@ -1,0 +1,11 @@
+# Original recordings and generated slide previews remain local.
+/docs/qa_1/audio.wav
+/docs/qa_1/input.webm
+/docs/presentation/preview/
+
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,427 @@
+{
+  "scenario": {
+    "snapshot": {
+      "scenario_id": "scenario-1",
+      "revision": 1,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "active"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": []
+    },
+    "current_plan_id": "plan-1"
+  },
+  "run": {
+    "id": "run-1",
+    "scenario_id": "scenario-1",
+    "status": "succeeded",
+    "plan_id": "plan-1",
+    "error": null
+  },
+  "plan": {
+    "id": "plan-1",
+    "scenario_id": "scenario-1",
+    "snapshot_revision": 1,
+    "base_plan_id": null,
+    "as_of": "2026-09-16T21:00:00Z",
+    "routes": [
+      {
+        "engineer_id": "eng-1",
+        "start_location_id": "office-1",
+        "start_at": "2026-09-17T06:00:00Z",
+        "visits": [
+          {
+            "order_id": "order-1",
+            "arrival_at": "2026-09-17T06:15:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
+            "end_at": "2026-09-17T07:30:00Z"
+          }
+        ],
+        "legs": [
+          {
+            "id": "leg-1",
+            "from_location_id": "office-1",
+            "to_location_id": "loc-1",
+            "start_at": "2026-09-17T06:00:00Z",
+            "end_at": "2026-09-17T06:15:00Z",
+            "distance_m": 1200,
+            "geo_context_id": "geo-1",
+            "geometry": [
+              {
+                "lat": 55.75,
+                "lon": 37.61
+              },
+              {
+                "lat": 55.76,
+                "lon": 37.61
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "unassigned": [],
+    "cancelled_order_ids": [],
+    "issues": [],
+    "metrics": {
+      "assigned_count": 1,
+      "unassigned_count": 0,
+      "used_engineer_count": 1,
+      "total_distance_m": 1200,
+      "per_engineer": [
+        {
+          "engineer_id": "eng-1",
+          "distance_m": 1200
+        }
+      ]
+    },
+    "baseline_metrics": {
+      "assigned_count": 1,
+      "unassigned_count": 0,
+      "used_engineer_count": 1,
+      "total_distance_m": 1200,
+      "per_engineer": [
+        {
+          "engineer_id": "eng-1",
+          "distance_m": 1200
+        }
+      ]
+    },
+    "changes": [],
+    "termination": "completed"
+  },
+  "stale_version_error": {
+    "code": "STALE_VERSION",
+    "message": "Исходные данные или текущий план изменились",
+    "details": {}
+  },
+  "scenario_before": {
+    "snapshot": {
+      "scenario_id": "scenario-1",
+      "revision": 1,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "active"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": []
+    },
+    "current_plan_id": null
+  },
+  "demo_datasets": {
+    "items": [
+      {
+        "id": "demo-1",
+        "name": "Пример контракта",
+        "region_id": "region-1",
+        "date": "2026-09-17",
+        "timezone": "Europe/Moscow"
+      }
+    ]
+  },
+  "plan_request": {
+    "request_id": "request-1",
+    "snapshot_revision": 1,
+    "expected_current_plan_id": null
+  },
+  "accepted": {
+    "run_id": "run-1"
+  },
+  "run_running": {
+    "id": "run-1",
+    "scenario_id": "scenario-1",
+    "status": "running",
+    "plan_id": null,
+    "error": null
+  },
+  "event_request": {
+    "request_id": "request-2",
+    "snapshot_revision": 1,
+    "event": {
+      "id": "event-1",
+      "occurred_at": "2026-09-17T05:00:00Z",
+      "type": "order_cancelled",
+      "payload": {
+        "order_id": "order-1"
+      }
+    }
+  },
+  "event_plan": {
+    "id": "plan-2",
+    "scenario_id": "scenario-1",
+    "snapshot_revision": 2,
+    "base_plan_id": "plan-1",
+    "as_of": "2026-09-17T05:00:00Z",
+    "routes": [],
+    "unassigned": [],
+    "cancelled_order_ids": [
+      "order-1"
+    ],
+    "issues": [],
+    "metrics": {
+      "assigned_count": 0,
+      "unassigned_count": 0,
+      "used_engineer_count": 0,
+      "total_distance_m": 0,
+      "per_engineer": []
+    },
+    "baseline_metrics": null,
+    "changes": [
+      {
+        "order_id": "order-1",
+        "before": {
+          "engineer_id": "eng-1",
+          "sequence": 0,
+          "arrival_at": "2026-09-17T06:15:00Z",
+          "start_at": "2026-09-17T07:00:00Z",
+          "end_at": "2026-09-17T07:30:00Z"
+        },
+        "after": null,
+        "reason": "cancelled"
+      }
+    ],
+    "termination": "completed"
+  },
+  "event_run": {
+    "id": "run-2",
+    "scenario_id": "scenario-1",
+    "status": "succeeded",
+    "plan_id": "plan-2",
+    "error": null
+  },
+  "scenario_after_event": {
+    "snapshot": {
+      "scenario_id": "scenario-1",
+      "revision": 2,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "cancelled"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": []
+    },
+    "current_plan_id": "plan-2"
+  },
+  "import_with_issue": {
+    "snapshot": {
+      "scenario_id": "scenario-import-1",
+      "revision": 1,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "active"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": [
+        {
+          "source_row": 3,
+          "entity_id": null,
+          "field": "service_sec",
+          "code": "INVALID_INPUT",
+          "message": "Не определена длительность работы; строка исключена из расчёта"
+        }
+      ]
+    },
+    "current_plan_id": null
+  }
+}

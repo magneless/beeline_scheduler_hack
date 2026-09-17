@@ -1,0 +1,833 @@
+{
+  "snapshot": {
+    "scenario_id": "scenario-1",
+    "revision": 1,
+    "region_id": "region-1",
+    "date": "2026-09-17",
+    "timezone": "Europe/Moscow",
+    "office_location_id": "office-1",
+    "locations": [
+      {
+        "id": "office-1",
+        "address": "Москва, офис",
+        "point": {
+          "lat": 55.75,
+          "lon": 37.61
+        }
+      },
+      {
+        "id": "loc-1",
+        "address": "Москва, ул. Тверская, 1",
+        "point": {
+          "lat": 55.76,
+          "lon": 37.61
+        }
+      }
+    ],
+    "orders": [
+      {
+        "id": "order-1",
+        "location_id": "loc-1",
+        "required_skills": [
+          "repair"
+        ],
+        "required_transport": "car",
+        "window": {
+          "start": "2026-09-17T07:00:00Z",
+          "end": "2026-09-17T09:00:00Z"
+        },
+        "service_sec": 1800,
+        "priority": "normal",
+        "source_order": 1,
+        "status": "active"
+      }
+    ],
+    "engineers": [
+      {
+        "id": "eng-1",
+        "skills": [
+          "repair"
+        ],
+        "transport": "car",
+        "shift": {
+          "start": "2026-09-17T06:00:00Z",
+          "end": "2026-09-17T15:00:00Z"
+        },
+        "available": true,
+        "source_order": 1
+      }
+    ],
+    "issues": []
+  },
+  "build_request": {
+    "request_id": "request-1",
+    "scenario_id": "scenario-1",
+    "snapshot_revision": 1,
+    "expected_current_plan_id": null
+  },
+  "geocode_request": {
+    "region_id": "region-1",
+    "locations": [
+      {
+        "id": "office-1",
+        "address": "Москва, офис",
+        "point": null
+      },
+      {
+        "id": "loc-1",
+        "address": "Москва, ул. Тверская, 1",
+        "point": null
+      }
+    ]
+  },
+  "geocode_result": {
+    "items": [
+      {
+        "location_id": "office-1",
+        "location": {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        "issue": null
+      },
+      {
+        "location_id": "loc-1",
+        "location": {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        },
+        "issue": null
+      }
+    ]
+  },
+  "matrix_request": {
+    "locations": [
+      {
+        "id": "office-1",
+        "address": "Москва, офис",
+        "point": {
+          "lat": 55.75,
+          "lon": 37.61
+        }
+      },
+      {
+        "id": "loc-1",
+        "address": "Москва, ул. Тверская, 1",
+        "point": {
+          "lat": 55.76,
+          "lon": 37.61
+        }
+      }
+    ],
+    "profiles": [
+      "car"
+    ],
+    "geo_context_id": null
+  },
+  "matrix": {
+    "id": "matrix-1",
+    "geo_context_id": "geo-1",
+    "location_ids": [
+      "office-1",
+      "loc-1"
+    ],
+    "profiles": {
+      "car": [
+        [
+          {
+            "reachable": true,
+            "duration_sec": 0,
+            "distance_m": 0
+          },
+          {
+            "reachable": true,
+            "duration_sec": 900,
+            "distance_m": 1200
+          }
+        ],
+        [
+          {
+            "reachable": true,
+            "duration_sec": 840,
+            "distance_m": 1100
+          },
+          {
+            "reachable": true,
+            "duration_sec": 0,
+            "distance_m": 0
+          }
+        ]
+      ]
+    }
+  },
+  "solve_request": {
+    "mode": "optimized",
+    "orders": [
+      {
+        "id": "order-1",
+        "location_id": "loc-1",
+        "required_skills": [
+          "repair"
+        ],
+        "required_transport": "car",
+        "window": {
+          "start": "2026-09-17T07:00:00Z",
+          "end": "2026-09-17T09:00:00Z"
+        },
+        "service_sec": 1800,
+        "priority": "normal",
+        "source_order": 1,
+        "status": "active"
+      }
+    ],
+    "engineers": [
+      {
+        "id": "eng-1",
+        "skills": [
+          "repair"
+        ],
+        "transport": "car",
+        "shift": {
+          "start": "2026-09-17T06:00:00Z",
+          "end": "2026-09-17T15:00:00Z"
+        },
+        "available": true,
+        "source_order": 1
+      }
+    ],
+    "engineer_states": [
+      {
+        "engineer_id": "eng-1",
+        "start_location_id": "office-1",
+        "available_from": "2026-09-17T06:00:00Z"
+      }
+    ],
+    "already_used_engineer_ids": [],
+    "travel_matrix": {
+      "id": "matrix-1",
+      "geo_context_id": "geo-1",
+      "location_ids": [
+        "office-1",
+        "loc-1"
+      ],
+      "profiles": {
+        "car": [
+          [
+            {
+              "reachable": true,
+              "duration_sec": 0,
+              "distance_m": 0
+            },
+            {
+              "reachable": true,
+              "duration_sec": 900,
+              "distance_m": 1200
+            }
+          ],
+          [
+            {
+              "reachable": true,
+              "duration_sec": 840,
+              "distance_m": 1100
+            },
+            {
+              "reachable": true,
+              "duration_sec": 0,
+              "distance_m": 0
+            }
+          ]
+        ]
+      }
+    },
+    "time_limit_ms": 1000
+  },
+  "solve_result": {
+    "routes": [
+      {
+        "engineer_id": "eng-1",
+        "start_location_id": "office-1",
+        "start_at": "2026-09-17T06:00:00Z",
+        "visits": [
+          {
+            "order_id": "order-1",
+            "arrival_at": "2026-09-17T06:15:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
+            "end_at": "2026-09-17T07:30:00Z"
+          }
+        ],
+        "legs": [
+          {
+            "id": "leg-1",
+            "from_location_id": "office-1",
+            "to_location_id": "loc-1",
+            "start_at": "2026-09-17T06:00:00Z",
+            "end_at": "2026-09-17T06:15:00Z",
+            "distance_m": 1200,
+            "geo_context_id": "geo-1",
+            "geometry": null
+          }
+        ]
+      }
+    ],
+    "unassigned": [],
+    "termination": "completed"
+  },
+  "routes_request": {
+    "geo_context_id": "geo-1",
+    "locations": [
+      {
+        "id": "office-1",
+        "address": "Москва, офис",
+        "point": {
+          "lat": 55.75,
+          "lon": 37.61
+        }
+      },
+      {
+        "id": "loc-1",
+        "address": "Москва, ул. Тверская, 1",
+        "point": {
+          "lat": 55.76,
+          "lon": 37.61
+        }
+      }
+    ],
+    "legs": [
+      {
+        "leg_id": "leg-1",
+        "from_location_id": "office-1",
+        "to_location_id": "loc-1",
+        "profile": "car"
+      }
+    ]
+  },
+  "routes_geometry": {
+    "items": [
+      {
+        "leg_id": "leg-1",
+        "geometry": [
+          {
+            "lat": 55.75,
+            "lon": 37.61
+          },
+          {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        ]
+      }
+    ]
+  },
+  "position_request": {
+    "leg": {
+      "id": "leg-1",
+      "from_location_id": "office-1",
+      "to_location_id": "loc-1",
+      "start_at": "2026-09-17T06:00:00Z",
+      "end_at": "2026-09-17T06:15:00Z",
+      "distance_m": 1200,
+      "geo_context_id": "geo-1",
+      "geometry": [
+        {
+          "lat": 55.75,
+          "lon": 37.61
+        },
+        {
+          "lat": 55.76,
+          "lon": 37.61
+        }
+      ]
+    },
+    "at": "2026-09-17T06:07:30Z"
+  },
+  "position_result": {
+    "point": {
+      "lat": 55.755,
+      "lon": 37.61
+    },
+    "elapsed_duration_sec": 450,
+    "elapsed_distance_m": 600,
+    "elapsed_geometry": [
+      {
+        "lat": 55.75,
+        "lon": 37.61
+      },
+      {
+        "lat": 55.755,
+        "lon": 37.61
+      }
+    ]
+  },
+  "plan_result": {
+    "draft": {
+      "scenario_id": "scenario-1",
+      "snapshot_revision": 1,
+      "base_plan_id": null,
+      "as_of": "2026-09-16T21:00:00Z",
+      "routes": [
+        {
+          "engineer_id": "eng-1",
+          "start_location_id": "office-1",
+          "start_at": "2026-09-17T06:00:00Z",
+          "visits": [
+            {
+              "order_id": "order-1",
+              "arrival_at": "2026-09-17T06:15:00Z",
+              "start_at": "2026-09-17T07:00:00Z",
+              "end_at": "2026-09-17T07:30:00Z"
+            }
+          ],
+          "legs": [
+            {
+              "id": "leg-1",
+              "from_location_id": "office-1",
+              "to_location_id": "loc-1",
+              "start_at": "2026-09-17T06:00:00Z",
+              "end_at": "2026-09-17T06:15:00Z",
+              "distance_m": 1200,
+              "geo_context_id": "geo-1",
+              "geometry": [
+                {
+                  "lat": 55.75,
+                  "lon": 37.61
+                },
+                {
+                  "lat": 55.76,
+                  "lon": 37.61
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "unassigned": [],
+      "cancelled_order_ids": [],
+      "issues": [],
+      "metrics": {
+        "assigned_count": 1,
+        "unassigned_count": 0,
+        "used_engineer_count": 1,
+        "total_distance_m": 1200,
+        "per_engineer": [
+          {
+            "engineer_id": "eng-1",
+            "distance_m": 1200
+          }
+        ]
+      },
+      "baseline_metrics": {
+        "assigned_count": 1,
+        "unassigned_count": 0,
+        "used_engineer_count": 1,
+        "total_distance_m": 1200,
+        "per_engineer": [
+          {
+            "engineer_id": "eng-1",
+            "distance_m": 1200
+          }
+        ]
+      },
+      "changes": [],
+      "termination": "completed"
+    },
+    "target_snapshot": {
+      "scenario_id": "scenario-1",
+      "revision": 1,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "active"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": []
+    },
+    "applied_event": null
+  },
+  "plan_commit": {
+    "request_id": "request-1",
+    "expected_revision": 1,
+    "expected_current_plan_id": null,
+    "result": {
+      "draft": {
+        "scenario_id": "scenario-1",
+        "snapshot_revision": 1,
+        "base_plan_id": null,
+        "as_of": "2026-09-16T21:00:00Z",
+        "routes": [
+          {
+            "engineer_id": "eng-1",
+            "start_location_id": "office-1",
+            "start_at": "2026-09-17T06:00:00Z",
+            "visits": [
+              {
+                "order_id": "order-1",
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              }
+            ],
+            "legs": [
+              {
+                "id": "leg-1",
+                "from_location_id": "office-1",
+                "to_location_id": "loc-1",
+                "start_at": "2026-09-17T06:00:00Z",
+                "end_at": "2026-09-17T06:15:00Z",
+                "distance_m": 1200,
+                "geo_context_id": "geo-1",
+                "geometry": [
+                  {
+                    "lat": 55.75,
+                    "lon": 37.61
+                  },
+                  {
+                    "lat": 55.76,
+                    "lon": 37.61
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "unassigned": [],
+        "cancelled_order_ids": [],
+        "issues": [],
+        "metrics": {
+          "assigned_count": 1,
+          "unassigned_count": 0,
+          "used_engineer_count": 1,
+          "total_distance_m": 1200,
+          "per_engineer": [
+            {
+              "engineer_id": "eng-1",
+              "distance_m": 1200
+            }
+          ]
+        },
+        "baseline_metrics": {
+          "assigned_count": 1,
+          "unassigned_count": 0,
+          "used_engineer_count": 1,
+          "total_distance_m": 1200,
+          "per_engineer": [
+            {
+              "engineer_id": "eng-1",
+              "distance_m": 1200
+            }
+          ]
+        },
+        "changes": [],
+        "termination": "completed"
+      },
+      "target_snapshot": {
+        "scenario_id": "scenario-1",
+        "revision": 1,
+        "region_id": "region-1",
+        "date": "2026-09-17",
+        "timezone": "Europe/Moscow",
+        "office_location_id": "office-1",
+        "locations": [
+          {
+            "id": "office-1",
+            "address": "Москва, офис",
+            "point": {
+              "lat": 55.75,
+              "lon": 37.61
+            }
+          },
+          {
+            "id": "loc-1",
+            "address": "Москва, ул. Тверская, 1",
+            "point": {
+              "lat": 55.76,
+              "lon": 37.61
+            }
+          }
+        ],
+        "orders": [
+          {
+            "id": "order-1",
+            "location_id": "loc-1",
+            "required_skills": [
+              "repair"
+            ],
+            "required_transport": "car",
+            "window": {
+              "start": "2026-09-17T07:00:00Z",
+              "end": "2026-09-17T09:00:00Z"
+            },
+            "service_sec": 1800,
+            "priority": "normal",
+            "source_order": 1,
+            "status": "active"
+          }
+        ],
+        "engineers": [
+          {
+            "id": "eng-1",
+            "skills": [
+              "repair"
+            ],
+            "transport": "car",
+            "shift": {
+              "start": "2026-09-17T06:00:00Z",
+              "end": "2026-09-17T15:00:00Z"
+            },
+            "available": true,
+            "source_order": 1
+          }
+        ],
+        "issues": []
+      },
+      "applied_event": null
+    }
+  },
+  "saved_plan": {
+    "id": "plan-1",
+    "scenario_id": "scenario-1",
+    "snapshot_revision": 1,
+    "base_plan_id": null,
+    "as_of": "2026-09-16T21:00:00Z",
+    "routes": [
+      {
+        "engineer_id": "eng-1",
+        "start_location_id": "office-1",
+        "start_at": "2026-09-17T06:00:00Z",
+        "visits": [
+          {
+            "order_id": "order-1",
+            "arrival_at": "2026-09-17T06:15:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
+            "end_at": "2026-09-17T07:30:00Z"
+          }
+        ],
+        "legs": [
+          {
+            "id": "leg-1",
+            "from_location_id": "office-1",
+            "to_location_id": "loc-1",
+            "start_at": "2026-09-17T06:00:00Z",
+            "end_at": "2026-09-17T06:15:00Z",
+            "distance_m": 1200,
+            "geo_context_id": "geo-1",
+            "geometry": [
+              {
+                "lat": 55.75,
+                "lon": 37.61
+              },
+              {
+                "lat": 55.76,
+                "lon": 37.61
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "unassigned": [],
+    "cancelled_order_ids": [],
+    "issues": [],
+    "metrics": {
+      "assigned_count": 1,
+      "unassigned_count": 0,
+      "used_engineer_count": 1,
+      "total_distance_m": 1200,
+      "per_engineer": [
+        {
+          "engineer_id": "eng-1",
+          "distance_m": 1200
+        }
+      ]
+    },
+    "baseline_metrics": {
+      "assigned_count": 1,
+      "unassigned_count": 0,
+      "used_engineer_count": 1,
+      "total_distance_m": 1200,
+      "per_engineer": [
+        {
+          "engineer_id": "eng-1",
+          "distance_m": 1200
+        }
+      ]
+    },
+    "changes": [],
+    "termination": "completed"
+  },
+  "replan_request": {
+    "request_id": "request-2",
+    "scenario_id": "scenario-1",
+    "snapshot_revision": 1,
+    "base_plan_id": "plan-1",
+    "event": {
+      "id": "event-1",
+      "occurred_at": "2026-09-17T05:00:00Z",
+      "type": "order_cancelled",
+      "payload": {
+        "order_id": "order-1"
+      }
+    }
+  },
+  "replan_result": {
+    "draft": {
+      "scenario_id": "scenario-1",
+      "snapshot_revision": 2,
+      "base_plan_id": "plan-1",
+      "as_of": "2026-09-17T05:00:00Z",
+      "routes": [],
+      "unassigned": [],
+      "cancelled_order_ids": [
+        "order-1"
+      ],
+      "issues": [],
+      "metrics": {
+        "assigned_count": 0,
+        "unassigned_count": 0,
+        "used_engineer_count": 0,
+        "total_distance_m": 0,
+        "per_engineer": []
+      },
+      "baseline_metrics": null,
+      "changes": [
+        {
+          "order_id": "order-1",
+          "before": {
+            "engineer_id": "eng-1",
+            "sequence": 0,
+            "arrival_at": "2026-09-17T06:15:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
+            "end_at": "2026-09-17T07:30:00Z"
+          },
+          "after": null,
+          "reason": "cancelled"
+        }
+      ],
+      "termination": "completed"
+    },
+    "target_snapshot": {
+      "scenario_id": "scenario-1",
+      "revision": 2,
+      "region_id": "region-1",
+      "date": "2026-09-17",
+      "timezone": "Europe/Moscow",
+      "office_location_id": "office-1",
+      "locations": [
+        {
+          "id": "office-1",
+          "address": "Москва, офис",
+          "point": {
+            "lat": 55.75,
+            "lon": 37.61
+          }
+        },
+        {
+          "id": "loc-1",
+          "address": "Москва, ул. Тверская, 1",
+          "point": {
+            "lat": 55.76,
+            "lon": 37.61
+          }
+        }
+      ],
+      "orders": [
+        {
+          "id": "order-1",
+          "location_id": "loc-1",
+          "required_skills": [
+            "repair"
+          ],
+          "required_transport": "car",
+          "window": {
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T09:00:00Z"
+          },
+          "service_sec": 1800,
+          "priority": "normal",
+          "source_order": 1,
+          "status": "cancelled"
+        }
+      ],
+      "engineers": [
+        {
+          "id": "eng-1",
+          "skills": [
+            "repair"
+          ],
+          "transport": "car",
+          "shift": {
+            "start": "2026-09-17T06:00:00Z",
+            "end": "2026-09-17T15:00:00Z"
+          },
+          "available": true,
+          "source_order": 1
+        }
+      ],
+      "issues": []
+    },
+    "applied_event": {
+      "id": "event-1",
+      "occurred_at": "2026-09-17T05:00:00Z",
+      "type": "order_cancelled",
+      "payload": {
+        "order_id": "order-1"
+      }
+    }
+  }
+}
