@@ -27,6 +27,7 @@
 
 - [Техническое задание](docs/specification.pdf).
 - [Транскрипция Q&A](docs/qa_1/QA_1_transcrib.md).
+- [Ответы экспертов Q&A 2](docs/qa_2/QA_2_answers.md) и [влияние на план](docs/qa_2/QA_2_impact.md). Перепланирование остаётся в основе F1–F7.
 - [Нормативы](docs/Нормативы.xlsx).
 - [Наборы данных](datasets/original/).
 
