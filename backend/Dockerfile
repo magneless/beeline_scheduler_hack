@@ -29,12 +29,14 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates libstdc++6 libssl3 \
     && rm -rf /var/lib/apt/lists/*
-ENV LD_LIBRARY_PATH=/opt/ortools
+ENV LD_LIBRARY_PATH=/opt/ortools \
+    GEO_CACHE_DIR=/var/cache/scheduler
 WORKDIR /app
 COPY --from=build /opt/ortools/ /opt/ortools/
 COPY --from=build /scheduler /app/scheduler
 COPY datasets/original/ /app/datasets/original/
 COPY docs/contracts/examples/ /app/docs/contracts/examples/
+RUN mkdir -p /var/cache/scheduler && chown 65532:65532 /var/cache/scheduler
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/app/scheduler"]

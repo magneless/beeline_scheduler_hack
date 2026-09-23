@@ -32,6 +32,11 @@ export const useBuildPlan = ({
             if (!snapshot) {
                 throw new Error('Сценарий ещё не загружен');
             }
+            if (snapshot.engineers.length === 0) {
+                throw new Error(
+                    'Добавьте хотя бы одну бригаду через CSV в панели «Бригады»'
+                );
+            }
 
             const run = await runPlanCommand(
                 () =>

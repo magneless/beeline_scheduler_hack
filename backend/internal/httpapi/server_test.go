@@ -198,12 +198,37 @@ func TestHTTPImportPatchAndErrors(t *testing.T) {
 	}
 	var v c.ScenarioView
 	json.Unmarshal(w.Body.Bytes(), &v)
+	if len(v.Snapshot.Engineers) != 0 {
+		t.Fatal("CSV import fabricated engineers")
+	}
+	body.Reset()
+	mw = multipart.NewWriter(&body)
+	part, e = mw.CreateFormFile("file", "engineers.csv")
+	if e != nil {
+		t.Fatal(e)
+	}
+	io.WriteString(part, "id;skills;transport;shift_start;shift_end;available;router;tv_box\ncrew-1;repair;car;08:00;18:00;true;2;1\n")
+	mw.WriteField("expected_revision", "1")
+	mw.Close()
+	r = httptest.NewRequest("POST", "/api/v1/scenarios/"+v.Snapshot.ScenarioID+"/engineers/import", &body)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Snapshot.Engineers) != 1 || v.Snapshot.Revision != 2 {
+		t.Fatal(v)
+	}
 	path := "/scenarios/" + v.Snapshot.ScenarioID + "/engineers/" + v.Snapshot.Engineers[0].ID
-	call(t, h, "PATCH", path, `{"expected_revision":1,"skills":null}`, 422, nil)
-	call(t, h, "PATCH", path, `{"expected_revision":1,"shift":{"start":"2026-08-17T08:00:00Z"}}`, 422, nil)
-	call(t, h, "PATCH", path, `{"expected_revision":1,"shift":{"start":"2026-08-17T08:00:00Z","end":"2026-08-17T09:00:00Z","unknown":true}}`, 422, nil)
-	call(t, h, "PATCH", path, `{"expected_revision":1,"skills":[]}`, 200, &v)
-	if v.Snapshot.Revision != 2 || len(v.Snapshot.Engineers[0].Skills) != 0 {
+	call(t, h, "PATCH", path, `{"expected_revision":2,"skills":null}`, 422, nil)
+	call(t, h, "PATCH", path, `{"expected_revision":2,"shift":{"start":"2026-08-17T08:00:00Z"}}`, 422, nil)
+	call(t, h, "PATCH", path, `{"expected_revision":2,"shift":{"start":"2026-08-17T08:00:00Z","end":"2026-08-17T09:00:00Z","unknown":true}}`, 422, nil)
+	call(t, h, "PATCH", path, `{"expected_revision":2,"skills":[]}`, 200, &v)
+	if v.Snapshot.Revision != 3 || len(v.Snapshot.Engineers[0].Skills) != 0 {
 		t.Fatal(v)
 	}
 	call(t, h, "PATCH", path, `{"expected_revision":1,"available":false}`, 409, nil)

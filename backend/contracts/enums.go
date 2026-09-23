@@ -26,8 +26,9 @@ const (
 type SolveMode = shared.SolveMode
 
 const (
-	SolveModeBaseline  SolveMode = "baseline"
-	SolveModeOptimized SolveMode = "optimized"
+	SolveModeBaseline   SolveMode = "baseline"
+	SolveModeOptimized  SolveMode = "optimized"
+	SolveModeInsertOnly SolveMode = "insert_only"
 )
 
 type Termination = shared.Termination
@@ -41,6 +42,7 @@ type EventType = string
 
 const (
 	EventUrgentOrderAdded    EventType = "urgent_order_added"
+	EventOrdinaryOrderAdded  EventType = "ordinary_order_added"
 	EventOrderCancelled      EventType = "order_cancelled"
 	EventEngineerUnavailable EventType = "engineer_unavailable"
 )

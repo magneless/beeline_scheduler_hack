@@ -27,6 +27,8 @@ type WorkspaceSidePanelProps = {
     crewsCount: number;
     orders: Order[];
     engineers: Engineer[];
+    scenarioId?: string;
+    revision?: number;
     selectedOrderId: TypeOrNull<string>;
     selectedEngineerId: TypeOrNull<string>;
     engineerByOrder: Map<string, string>;
@@ -62,6 +64,8 @@ export const WorkspaceSidePanel = ({
     crewsCount,
     orders,
     engineers,
+    scenarioId,
+    revision,
     selectedOrderId,
     selectedEngineerId,
     engineerByOrder,
@@ -142,6 +146,8 @@ export const WorkspaceSidePanel = ({
                 {panelTab === 'crews' ? (
                     <CrewPanel
                         engineers={engineers}
+                        scenarioId={scenarioId ?? ''}
+                        revision={revision ?? 0}
                         selectedEngineerId={selectedEngineerId}
                         timezone={timezone}
                         date={date}

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { CalendarRange, PanelRight } from 'lucide-react';
 
+import { type PlanEventInput } from 'features/applyPlanEvent';
 import {
     type Metrics,
     type Run,
@@ -10,11 +12,10 @@ import { type TypeOrNull } from 'shared/lib/types';
 import { cn, formatCount, formatDay, formatKm } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 
-import { EventTimeField } from './EventTimeField';
+import { OrderForm } from './OrderForm';
 import { RegionSwitcher } from './RegionSwitcher';
 import { TopbarMetric } from './TopbarMetric';
 import { workspaceCopy } from '../lib/config';
-import { useEmergencyControls } from '../model/useEmergencyControls';
 
 type WorkspaceTopbarProps = {
     snapshot: Snapshot | undefined;
@@ -30,7 +31,7 @@ type WorkspaceTopbarProps = {
     panelOpen: boolean;
     timezone: string;
     defaultOccurredAt: string;
-    onEmergency: (occurredAt: string) => void;
+    onNewOrder: (input: PlanEventInput) => void;
     onRebuild: () => void;
     onToggleSchedule: () => void;
     onTogglePanel: () => void;
@@ -70,12 +71,12 @@ export const WorkspaceTopbar = ({
     panelOpen,
     timezone,
     defaultOccurredAt,
-    onEmergency,
+    onNewOrder,
     onRebuild,
     onToggleSchedule,
     onTogglePanel,
 }: WorkspaceTopbarProps) => {
-    const emergency = useEmergencyControls(defaultOccurredAt);
+    const [orderFormOpen, setOrderFormOpen] = useState(false);
 
     const regionName = snapshot
         ? (regionLabel[snapshot.region_id] ?? snapshot.region_id)
@@ -91,10 +92,6 @@ export const WorkspaceTopbar = ({
         runStatus && runStatus !== 'succeeded'
             ? runStatusLabel[runStatus]
             : workspaceCopy.mapHint;
-
-    const handleSubmitEmergency = () => {
-        emergency.submit(onEmergency);
-    };
 
     return (
         <div className="pointer-events-none absolute inset-x-4 top-4 z-30 flex items-start gap-2">
@@ -191,39 +188,26 @@ export const WorkspaceTopbar = ({
                         <Button
                             size="sm"
                             variant="outline"
-                            disabled={eventPending}
-                            title={workspaceCopy.emergencyTitle}
-                            onClick={emergency.toggle}
+                            disabled={eventPending || buildPending}
+                            title="Добавить обычную или аварийную заявку"
+                            onClick={() => setOrderFormOpen((v) => !v)}
                         >
                             {eventPending
                                 ? workspaceCopy.emergencyPending
-                                : workspaceCopy.emergency}
+                                : 'Новая заявка'}
                         </Button>
-                        {emergency.open ? (
-                            <div
-                                className={cn(
-                                    'absolute z-40 w-80 max-w-[calc(100vw-2rem)]',
-                                    'space-y-2 rounded-[22px] bg-card p-3',
-                                    panelOpen
-                                        ? 'top-0 right-[calc(100%+16px)]'
-                                        : 'top-11 right-0'
-                                )}
-                                style={{ boxShadow: 'var(--shadow-soft)' }}
-                            >
-                                <EventTimeField
-                                    value={emergency.occurredAt}
-                                    timezone={timezone}
-                                    onChange={emergency.setOccurredAt}
-                                />
-                                <Button
-                                    size="sm"
-                                    className="w-full"
-                                    disabled={eventPending}
-                                    onClick={handleSubmitEmergency}
-                                >
-                                    {workspaceCopy.emergencySubmit}
-                                </Button>
-                            </div>
+                        {orderFormOpen && snapshot ? (
+                            <OrderForm
+                                snapshot={snapshot}
+                                timezone={timezone}
+                                occurredAt={defaultOccurredAt}
+                                pending={eventPending}
+                                onSubmit={(input) => {
+                                    onNewOrder(input);
+                                    setOrderFormOpen(false);
+                                }}
+                                onClose={() => setOrderFormOpen(false)}
+                            />
                         ) : null}
                     </div>
                 ) : null}

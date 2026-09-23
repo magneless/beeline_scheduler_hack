@@ -50,7 +50,9 @@ export const waitForRun = async (
     runId: string,
     onStatus?: (run: Run) => void
 ) => {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    const deadline = Date.now() + 6 * 60 * 1000;
+
+    while (Date.now() < deadline) {
         const run = await getRun(runId);
 
         onStatus?.(run);
@@ -59,8 +61,10 @@ export const waitForRun = async (
             return run;
         }
 
-        await wait(350);
+        await wait(1000);
     }
 
-    throw new Error('Расчёт не завершился вовремя');
+    throw new Error(
+        'Расчёт ещё выполняется. Обновите сценарий, чтобы получить результат.'
+    );
 };

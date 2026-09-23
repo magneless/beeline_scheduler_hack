@@ -9,7 +9,7 @@ import (
 func normalizeEvent(e c.Event) c.Event {
 	var value any
 	switch e.Type {
-	case "urgent_order_added":
+	case "urgent_order_added", "ordinary_order_added":
 		var p c.UrgentOrderAdded
 		json.Unmarshal(e.Payload, &p)
 		p.Order.Window.Start = p.Order.Window.Start.UTC()

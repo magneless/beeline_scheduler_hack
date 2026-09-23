@@ -68,6 +68,7 @@ func (i *Importer) Demo(ctx context.Context, id string) (c.Snapshot, any, error)
 	if prepared, ok := i.Prepared[id]; ok {
 		snap := Clone(prepared)
 		snap.ScenarioID = ""
+		snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_ENGINEERS", Message: "Используется демонстрационный состав инженеров"})
 		return snap, map[string]any{"source": "contract fixture", "development_stub": true}, nil
 	}
 	d, ok := Lookup(id)
@@ -79,7 +80,21 @@ func (i *Importer) Demo(ctx context.Context, id string) (c.Snapshot, any, error)
 		return c.Snapshot{}, nil, e
 	}
 	defer f.Close()
-	return i.Import(ctx, f, d.RegionID, d.Date)
+	snap, meta, err := i.Import(ctx, f, d.RegionID, d.Date)
+	if err != nil {
+		return snap, meta, err
+	}
+	zone, _ := time.LoadLocation(d.Timezone)
+	day, _ := time.ParseInLocation("2006-01-02", d.Date, zone)
+	snap.Engineers = engineers(d.RegionID, day)
+	snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_ENGINEERS", Message: "Используется демонстрационный состав инженеров"})
+	for j := range snap.Issues {
+		if snap.Issues[j].Code == "ENGINEERS_REQUIRED" {
+			snap.Issues = append(snap.Issues[:j], snap.Issues[j+1:]...)
+			break
+		}
+	}
+	return snap, meta, nil
 }
 
 // FormatError separates unreadable CSV (400) from invalid input values (422).
@@ -116,7 +131,7 @@ func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string)
 	if e != nil {
 		return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Некорректная дата")
 	}
-	snap := c.Snapshot{Revision: 1, RegionID: region, Date: date, Timezone: d.Timezone, OfficeLocationID: region + "-office", Locations: []c.Location{}, Orders: []c.Order{}, Engineers: engineers(region, day), Issues: []c.Issue{}}
+	snap := c.Snapshot{Revision: 1, RegionID: region, Date: date, Timezone: d.Timezone, OfficeLocationID: region + "-office", Locations: []c.Location{}, Orders: []c.Order{}, Engineers: []c.Engineer{}, Issues: []c.Issue{{Code: "ENGINEERS_REQUIRED", Message: "Загрузите состав инженеров перед планированием"}}}
 	raw, e := io.ReadAll(io.LimitReader(r, 10*1024*1024+1))
 	if e != nil {
 		return snap, nil, e

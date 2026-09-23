@@ -14,13 +14,20 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 	}
 	normalized := event
 	switch event.Type {
-	case contracts.EventUrgentOrderAdded:
+	case contracts.EventUrgentOrderAdded, contracts.EventOrdinaryOrderAdded:
 		if payload.Order == nil {
-			return normalized, nil, contracts.InvalidInput("urgent_order_added requires order", nil)
+			return normalized, nil, contracts.InvalidInput("new order event requires order", nil)
 		}
 		order := cloneOrders([]contracts.Order{*payload.Order})[0]
-		if order.ID == "" || order.LocationID == "" || order.WorkType != contracts.WorkTypeEmergency || order.Priority != contracts.PriorityUrgent || order.Status != contracts.OrderStatusActive || order.Execution != nil || order.ServiceSec != 4800 || !order.ReceivedAt.Equal(event.OccurredAt) || order.Window.End.Before(order.Window.Start) {
-			return normalized, nil, contracts.InvalidInput("invalid emergency order", nil)
+		if order.ID == "" || order.LocationID == "" || order.Status != contracts.OrderStatusActive || order.Execution != nil || order.ServiceSec <= 0 || !order.ReceivedAt.Equal(event.OccurredAt) || order.Window.End.Before(order.Window.Start) {
+			return normalized, nil, contracts.InvalidInput("invalid new order", nil)
+		}
+		if event.Type == contracts.EventUrgentOrderAdded {
+			if order.WorkType != contracts.WorkTypeEmergency || order.Priority != contracts.PriorityUrgent || order.ServiceSec != 4800 {
+				return normalized, nil, contracts.InvalidInput("invalid new order", nil)
+			}
+		} else if order.Priority != contracts.PriorityNormal || (order.WorkType != contracts.WorkTypeConnection && order.WorkType != contracts.WorkTypeRepair && order.WorkType != contracts.WorkTypeAdditional) {
+			return normalized, nil, contracts.InvalidInput("invalid ordinary order", nil)
 		}
 		order.SourceOrder = 1
 		for _, existing := range snapshot.Orders {
@@ -41,14 +48,14 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			}
 			out, err := service.geo.Geocode(ctx, contracts.GeocodeRequest{RegionID: snapshot.RegionID, Locations: []contracts.LocationInput{*payload.Location}})
 			if err != nil {
-				return normalized, nil, dependencyError("geocode emergency", err)
+				return normalized, nil, dependencyError("geocode new order", err)
 			}
 			if len(out.Items) != 1 || out.Items[0].LocationID != order.LocationID || out.Items[0].Location == nil || out.Items[0].Issue != nil {
-				return normalized, nil, contracts.EventConflict("cannot resolve emergency address", nil)
+				return normalized, nil, contracts.EventConflict("Адрес не найден или неоднозначен. Уточните город, улицу и номер дома.", nil)
 			}
 			loc = *out.Items[0].Location
 			if loc.ID != order.LocationID || math.IsNaN(loc.Point.Lat) || math.IsNaN(loc.Point.Lon) || loc.Point.Lat < -90 || loc.Point.Lat > 90 || loc.Point.Lon < -180 || loc.Point.Lon > 180 {
-				return normalized, nil, contracts.InvalidInput("invalid emergency coordinates", nil)
+				return normalized, nil, contracts.InvalidInput("invalid new address coordinates", nil)
 			}
 			snapshot.Locations = append(snapshot.Locations, loc)
 		}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
@@ -35,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/scenarios/import", s.importCSV)
 	m.HandleFunc("GET /api/v1/scenarios/{id}", s.scenario)
 	m.HandleFunc("PATCH /api/v1/scenarios/{id}/engineers/{engineer_id}", s.patch)
+	m.HandleFunc("POST /api/v1/scenarios/{id}/engineers/import", s.importEngineers)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/plans", s.build)
 	m.HandleFunc("POST /api/v1/plans/{id}/events", s.event)
 	m.HandleFunc("GET /api/v1/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +51,9 @@ func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		r.Body = http.MaxBytesReader(w, r.Body, 11*1024*1024)
-		m.ServeHTTP(w, r)
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+		defer cancel()
+		m.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 func decode(r *http.Request, v any) error {
@@ -239,19 +244,12 @@ func validateEvent(e c.Event) error {
 		return invalid("Требуются ID и время события с точностью до секунды")
 	}
 	switch e.Type {
-	case "urgent_order_added":
+	case "urgent_order_added", "ordinary_order_added":
 		var p c.UrgentOrderAdded
 		if err := payload(e.Payload, &p); err != nil {
 			return err
 		}
-		o := p.Order
-		if o.ID == "" || o.LocationID == "" || o.WorkType != c.WorkTypeEmergency || o.Priority != c.PriorityUrgent || o.Status != c.OrderStatusActive || o.Execution != nil || o.ServiceSec != 4800 || !o.ReceivedAt.Equal(e.OccurredAt) || o.Window.Start.IsZero() || o.Window.End.Before(o.Window.Start) || o.RequiredSkills == nil || o.EquipmentRequired == nil {
-			return invalid("Некорректная новая авария")
-		}
-		if p.Location != nil && p.Location.ID != o.LocationID {
-			return invalid("location.id не совпадает с order.location_id")
-		}
-		return equipment(o.EquipmentRequired)
+		return validateNewOrder(e, p)
 	case "order_cancelled":
 		var p c.OrderCancelled
 		if err := payload(e.Payload, &p); err != nil {

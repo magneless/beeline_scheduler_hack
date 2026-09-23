@@ -155,42 +155,57 @@ func (s *geoServiceImpl) BuildMatrix(ctx context.Context, input contracts.Matrix
 
 	for _, transport := range input.Profiles {
 		matrix := make([][]contracts.TravelCell, n)
-		for i := 0; i < n; i++ {
+		for i := range matrix {
 			matrix[i] = make([]contracts.TravelCell, n)
-			for j := 0; j < n; j++ {
-				if i == j {
-					// Diagonal: reachable with zero values.
-					zero := int64(0)
-					matrix[i][j] = contracts.TravelCell{
-						Reachable:   true,
-						DurationSec: &zero,
-						DistanceM:   &zero,
+		}
+		var results []RouteResult
+		var err error
+		if batch, ok := s.provider.(MatrixProvider); ok {
+			results, err = batch.RouteMatrix(ctx, func() []contracts.Point {
+				p := make([]contracts.Point, n)
+				for i, l := range input.Locations {
+					p[i] = l.Point
+				}
+				return p
+			}(), transport)
+			if err == nil && len(results) != n*n {
+				err = fmt.Errorf("matrix result has %d cells, want %d", len(results), n*n)
+			}
+		} else {
+			results = make([]RouteResult, n*n)
+			for i := 0; i < n && err == nil; i++ {
+				for j := 0; j < n; j++ {
+					if i == j {
+						results[i*n+j] = RouteResult{Reachable: true}
+						continue
 					}
+					results[i*n+j], err = s.provider.Route(ctx, input.Locations[i].Point, input.Locations[j].Point, transport)
+					if err != nil {
+						break
+					}
+				}
+			}
+		}
+		if err != nil {
+			return contracts.TravelMatrix{}, &contracts.ContractError{Code: "GEO_UNAVAILABLE", Message: fmt.Sprintf("route matrix computation failed (%s): %v", transport, err), Details: map[string]any{}}
+		}
+		for i := 0; i < n; i++ {
+			for j := 0; j < n; j++ {
+				r := results[i*n+j]
+				if i == j {
+					zero := int64(0)
+					matrix[i][j] = contracts.TravelCell{Reachable: true, DurationSec: &zero, DistanceM: &zero}
 					continue
 				}
-
-				result, err := s.provider.Route(ctx, input.Locations[i].Point, input.Locations[j].Point, transport)
-				if err != nil {
-					// Provider failure → entire call fails.
-					return contracts.TravelMatrix{}, &contracts.ContractError{
-						Code:    "GEO_UNAVAILABLE",
-						Message: fmt.Sprintf("route computation failed [%d][%d] (%s→%s, %s): %v", i, j, locationIDs[i], locationIDs[j], transport, err),
-						Details: map[string]any{},
-					}
-				}
-
-				if !result.Reachable {
-					// Unreachable: both values null.
+				if !r.Reachable {
 					matrix[i][j] = contracts.TravelCell{Reachable: false}
-				} else {
-					dur := result.DurationSec
-					dist := result.DistanceM
-					matrix[i][j] = contracts.TravelCell{
-						Reachable:   true,
-						DurationSec: &dur,
-						DistanceM:   &dist,
-					}
+					continue
 				}
+				if r.DurationSec < 0 || r.DistanceM < 0 {
+					return contracts.TravelMatrix{}, &contracts.ContractError{Code: "GEO_UNAVAILABLE", Message: "provider returned invalid route values", Details: map[string]any{}}
+				}
+				d, m := r.DurationSec, r.DistanceM
+				matrix[i][j] = contracts.TravelCell{Reachable: true, DurationSec: &d, DistanceM: &m}
 			}
 		}
 		profiles[transport] = matrix

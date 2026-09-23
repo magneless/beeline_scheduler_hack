@@ -2,6 +2,7 @@ import { apiGet, apiPatch, apiPost } from 'shared/api/instance/httpClient';
 import { type Engineer, type ScenarioView } from 'shared/api/types/contracts';
 
 import {
+    getEngineerImportUrl,
     getEngineerUrl,
     getScenarioImportUrl,
     getScenariosUrl,
@@ -72,4 +73,15 @@ export const patchEngineer = ({
     }
 
     return apiPatch<ScenarioView>(getEngineerUrl(scenarioId, engineerId), body);
+};
+
+export const importEngineers = (input: {
+    scenarioId: string;
+    file: File;
+    expectedRevision: number;
+}) => {
+    const body = new FormData();
+    body.append('file', input.file);
+    body.append('expected_revision', String(input.expectedRevision));
+    return apiPost<ScenarioView>(getEngineerImportUrl(input.scenarioId), body);
 };

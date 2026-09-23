@@ -54,5 +54,27 @@ export const MapView = ({
         });
     }, [markers, polylines, selectedId, fitToken]);
 
-    return <div ref={containerRef} className={styles.root} />;
+    return (
+        <div className={styles.root}>
+            <div ref={containerRef} className={styles.canvas} />
+            <div className={styles.attribution}>
+                Маршруты: ©{' '}
+                <a
+                    href="https://www.openstreetmap.org/copyright"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    OpenStreetMap
+                </a>
+                {' · '}
+                <a
+                    href="https://www.openstreetmap.org/fixthemap"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    Исправить карту
+                </a>
+            </div>
+        </div>
+    );
 };

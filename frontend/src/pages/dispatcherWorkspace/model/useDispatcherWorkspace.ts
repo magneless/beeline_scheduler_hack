@@ -75,10 +75,6 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     const showRunBanner =
         eventPending && Boolean(runStatus) && runStatus !== 'succeeded';
 
-    const handleEmergency = (occurredAt: string) => {
-        planEvent.apply({ kind: 'urgent', occurredAt });
-    };
-
     const handleOrderEvent = (input: PlanEventInput) => {
         planEvent.apply(input);
     };
@@ -113,9 +109,8 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         eventPending,
         showRunBanner,
         buildPending: buildPlan.pending,
-        crewPending: crew.pending || eventPending,
+        crewPending: crew.pending || eventPending || buildPlan.pending,
         handleClearCrew: selection.clearCrew,
-        handleEmergency,
         handleBuildPlan: buildPlan.build,
         handleOrderEvent: queries.plan ? handleOrderEvent : undefined,
         handlePatchEngineer,

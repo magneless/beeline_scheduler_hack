@@ -57,6 +57,10 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		return contracts.PlanResult{}, err
 	}
 
+	if input.Event.Type == contracts.EventOrdinaryOrderAdded {
+		return service.replanOrdinary(ctx, target, base, replay, appliedEvent)
+	}
+
 	remaining, expired := prepareRemainingOrders(target, replay.lockedOrders, input.Event.OccurredAt)
 	engineers := availableEngineers(target)
 	eligible := make([]contracts.Engineer, 0, len(engineers))

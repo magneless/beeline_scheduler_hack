@@ -30,3 +30,8 @@ type RouteProvider interface {
 	// Returns error only on provider-level failure.
 	Route(ctx context.Context, from, to contracts.Point, transport contracts.Transport) (RouteResult, error)
 }
+
+// MatrixProvider optionally computes a complete matrix in one provider call.
+type MatrixProvider interface {
+	RouteMatrix(ctx context.Context, points []contracts.Point, transport contracts.Transport) ([]RouteResult, error)
+}

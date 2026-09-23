@@ -33,7 +33,7 @@ func TestImportNormsRowsAndReorderedGeocoding(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(s.Orders) != 4 || len(s.Issues) != 1 || len(s.Locations) != 5 {
+	if len(s.Orders) != 4 || len(s.Issues) != 2 || len(s.Engineers) != 0 || len(s.Locations) != 5 {
 		t.Fatalf("unexpected counts: %+v", s)
 	}
 	for n, sec := range []int64{4800, 4200, 1200, 1800} {
@@ -44,7 +44,7 @@ func TestImportNormsRowsAndReorderedGeocoding(t *testing.T) {
 	if s.Orders[0].Window.Start.Hour() != 7 || s.Orders[0].ReceivedAt.Hour() != 21 {
 		t.Fatal("Moscow conversion wrong")
 	}
-	if *s.Issues[0].SourceRow != 6 {
+	if *s.Issues[len(s.Issues)-1].SourceRow != 6 {
 		t.Fatal("source row lost")
 	}
 }

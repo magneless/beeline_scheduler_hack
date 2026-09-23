@@ -187,6 +187,7 @@ export type ApiError = {
 
 export type EventType =
     | 'urgent_order_added'
+    | 'ordinary_order_added'
     | 'order_cancelled'
     | 'engineer_unavailable'
     | 'order_status_changed';

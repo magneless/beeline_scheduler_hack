@@ -3,6 +3,7 @@ export {
     createScenario,
     getScenario,
     importScenario,
+    importEngineers,
     patchEngineer,
     type EngineerPatch,
 } from './endpoints/scenarios/endpoints/scenarioCommands';

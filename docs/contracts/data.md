@@ -124,3 +124,7 @@ Go-2 принимает команду через HTTP, атомарно рег�
 2. Подключить заглушки `PlanService` и `Geocoder`: проверенный `PlanResult`, координаты по ID и оговорённые ошибки.
 3. На примере из [backend_flow.json](examples/backend_flow.json) проверить цепочку: команда → запуск → `PlanService` → `CommitPlan` → сохранённый план. HTTP-ответы для Frontend — в [frontend_flow.json](examples/frontend_flow.json).
 4. Проверить повтор команды и конфликт версии: один запуск / результат при повторе; отсутствие частичного сохранения при ошибке.
+
+### Импорт состава инженеров
+
+`POST /api/v1/scenarios/{scenario_id}/engineers/import` — multipart-поля `file` (CSV с `;`) и `expected_revision` (положительное целое). Колонки: `id;skills;transport;shift_start;shift_end;available;router;tv_box`. Навыки разделяются запятыми; смены — `HH:mm` в часовом поясе и дате сценария. Ответ `200 ScenarioView` с новой ревизией и `current_plan_id=null`. Старые snapshots и планы сохраняются. Невалидный CSV отклоняется целиком, конфликт ревизии/начатое исполнение/активный расчёт возвращает `409`. Обычный импорт заказов оставляет `engineers=[]` и `ENGINEERS_REQUIRED`; генерация состава допускается только для демосценариев.

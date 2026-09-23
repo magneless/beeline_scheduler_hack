@@ -43,7 +43,7 @@ export const DispatcherWorkspacePage = () => {
                 panelOpen={workspace.panelOpen}
                 timezone={workspace.timezone}
                 defaultOccurredAt={workspace.occurredAtDefault}
-                onEmergency={workspace.handleEmergency}
+                onNewOrder={workspace.handleOrderEvent!}
                 onRebuild={workspace.handleBuildPlan}
                 onToggleSchedule={workspace.toggleSchedule}
                 onTogglePanel={workspace.togglePanel}
@@ -72,6 +72,8 @@ export const DispatcherWorkspacePage = () => {
                     crewsCount={workspace.crewsCount}
                     orders={workspace.snapshot?.orders ?? []}
                     engineers={workspace.snapshot?.engineers ?? []}
+                    scenarioId={scenarioId}
+                    revision={workspace.snapshot?.revision ?? 0}
                     selectedOrderId={workspace.selectedOrderId}
                     selectedEngineerId={workspace.selectedEngineerId}
                     engineerByOrder={workspace.engineerByOrder}

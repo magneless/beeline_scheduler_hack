@@ -411,7 +411,7 @@ func (s *Store) CommitPlan(ctx context.Context, in c.PlanCommit) (c.Plan, error)
 		if !draft.AsOf.Equal(cmd.Replan.Event.OccurredAt) {
 			return invalid()
 		}
-		if cmd.Replan.Event.Type != "urgent_order_added" && !same(result.AppliedEvent.Payload, cmd.Replan.Event.Payload) {
+		if cmd.Replan.Event.Type != "urgent_order_added" && cmd.Replan.Event.Type != "ordinary_order_added" && !same(result.AppliedEvent.Payload, cmd.Replan.Event.Payload) {
 			return invalid()
 		}
 		if _, e = tx.ExecContext(ctx, "INSERT INTO snapshots VALUES($1,$2,$3)", sid, target.Revision, encode(target)); e != nil {

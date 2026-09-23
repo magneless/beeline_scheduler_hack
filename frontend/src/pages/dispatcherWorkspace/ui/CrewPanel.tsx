@@ -1,8 +1,11 @@
-import { Search } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { type Engineer } from 'shared/api/types/contracts';
+import { type Engineer, HttpError, importEngineers } from 'shared/api';
 import { type TypeOrNull } from 'shared/lib/types';
 import { cn } from 'shared/lib/utils';
+import { Button } from 'shared/ui/button';
 import { Input } from 'shared/ui/input';
 import { Tabs, TabsList, TabsTrigger } from 'shared/ui/tabs';
 
@@ -14,6 +17,8 @@ import { type EngineerPatchInput } from '../model/types';
 
 type CrewPanelProps = {
     engineers: Engineer[];
+    scenarioId: string;
+    revision: number;
     selectedEngineerId: TypeOrNull<string>;
     timezone: string;
     date: string;
@@ -32,6 +37,8 @@ type CrewPanelProps = {
 
 export const CrewPanel = ({
     engineers,
+    scenarioId,
+    revision,
     selectedEngineerId,
     timezone,
     date,
@@ -48,10 +55,83 @@ export const CrewPanel = ({
     onUnavailable,
 }: CrewPanelProps) => {
     const panel = useCrewPanel({ engineers, assignedCounts, onPatch });
+    const queryClient = useQueryClient();
+    const importMutation = useMutation({
+        mutationFn: (file: File) =>
+            importEngineers({ scenarioId, file, expectedRevision: revision }),
+        onSuccess: (scenario) => {
+            queryClient.setQueryData(
+                ['scenarios', scenarioId, 'current'],
+                scenario
+            );
+            queryClient.invalidateQueries({ queryKey: ['plans', scenarioId] });
+            toast.success('Состав бригад заменён');
+        },
+        onError: (error) => {
+            const message =
+                error instanceof HttpError &&
+                error.body.code === 'STALE_VERSION'
+                    ? 'Сценарий уже изменился. Обновите страницу и повторите импорт.'
+                    : error instanceof Error
+                      ? error.message
+                      : 'Не удалось загрузить состав';
+            toast.error(message);
+        },
+    });
 
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 space-y-2 px-3">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                    Импорт полностью заменит текущий состав бригад.
+                    {!canEdit && (
+                        <div className="mt-1">
+                            Импорт доступен до начала событий.
+                        </div>
+                    )}
+                    <div className="mt-2 flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                                importMutation.isPending || !canEdit || pending
+                            }
+                            asChild
+                        >
+                            <label className="cursor-pointer">
+                                <Upload className="size-3.5" />
+                                {importMutation.isPending
+                                    ? 'Загрузка…'
+                                    : 'Загрузить CSV'}
+                                <input
+                                    className="hidden"
+                                    type="file"
+                                    disabled={
+                                        !canEdit ||
+                                        pending ||
+                                        importMutation.isPending
+                                    }
+                                    accept=".csv,text/csv"
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) {
+                                            importMutation.mutate(file);
+                                        }
+                                        event.target.value = '';
+                                    }}
+                                />
+                            </label>
+                        </Button>
+                        <a
+                            className="text-xs underline"
+                            href="/sample-engineers.csv"
+                            download
+                        >
+                            Скачать шаблон
+                        </a>
+                    </div>
+                </div>
                 <div className="relative">
                     <Search
                         className={cn(

@@ -90,6 +90,7 @@ export const reasonCodeLabel: Record<string, string> = {
     NO_AVAILABLE_ENGINEER: 'Нет свободной бригады',
     NO_REACHABLE_ROUTE: 'Недосягаемый адрес',
     NO_FEASIBLE_SLOT: 'Нет слота в окне',
+    NO_FEASIBLE_INSERTION: 'Нет свободного интервала',
     NOT_ASSIGNED_BY_SOLVER: 'Алгоритм не нашёл место',
 };
 
@@ -104,6 +105,10 @@ export const changeReasonLabel: Record<string, string> = {
 
 export const issueCodeLabel: Record<string, string> = {
     INVALID_INPUT: 'Ошибка строки',
+    EXISTING_PLAN_CONFLICT: 'Требуется уточнение старого плана',
+    ENGINEERS_REQUIRED: 'Загрузите состав бригад',
+    DEMO_ENGINEERS: 'Демонстрационный состав',
+    DEMO_GEO: 'Демонстрационные геоданные',
     EXECUTION_STATE_REQUIRED: 'Уточните время завершения',
     ACTUAL_CONSTRAINT_VIOLATION: 'Нарушение ограничения',
     GEO_UNAVAILABLE: 'Адрес не распознан',

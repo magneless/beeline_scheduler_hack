@@ -4,7 +4,22 @@ import {
 } from 'shared/api/types/contracts';
 
 export type PlanEventInput =
-    | { kind: 'urgent'; occurredAt: string }
+    | {
+          kind: 'new_order';
+          occurredAt: string;
+          orderType: 'urgent' | 'ordinary';
+          locationId?: string;
+          address?: string;
+          workType: import('shared/api/types/contracts').WorkType;
+          requiredSkills: string[];
+          transport: import('shared/api/types/contracts').Transport | null;
+          windowStart: string;
+          windowEnd: string;
+          serviceSec: number;
+          equipment: Partial<
+              Record<import('shared/api/types/contracts').Equipment, number>
+          >;
+      }
     | { kind: 'cancel'; occurredAt: string; reason: CancelReason }
     | {
           kind: 'status';

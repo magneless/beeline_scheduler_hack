@@ -11,6 +11,8 @@ export const getScenarioUrl = (scenarioId: string, revision?: number) => {
 
 export const getEngineerUrl = (scenarioId: string, engineerId: string) =>
     `/scenarios/${scenarioId}/engineers/${engineerId}`;
+export const getEngineerImportUrl = (scenarioId: string) =>
+    `/scenarios/${scenarioId}/engineers/import`;
 
 export const getBuildPlanUrl = (scenarioId: string) =>
     `/scenarios/${scenarioId}/plans`;

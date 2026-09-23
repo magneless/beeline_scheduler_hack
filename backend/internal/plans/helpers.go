@@ -21,7 +21,7 @@ func cloneOrders(values []contracts.Order) []contracts.Order {
 	result := make([]contracts.Order, len(values))
 	for i, value := range values {
 		result[i] = value
-		result[i].RequiredSkills = append([]string(nil), value.RequiredSkills...)
+		result[i].RequiredSkills = nonNil(append([]string(nil), value.RequiredSkills...))
 		result[i].EquipmentRequired = cloneEquipment(value.EquipmentRequired)
 		if value.Execution != nil {
 			copy := *value.Execution
@@ -35,7 +35,7 @@ func cloneEngineers(values []contracts.Engineer) []contracts.Engineer {
 	result := make([]contracts.Engineer, len(values))
 	for i, value := range values {
 		result[i] = value
-		result[i].Skills = append([]string(nil), value.Skills...)
+		result[i].Skills = nonNil(append([]string(nil), value.Skills...))
 		result[i].EquipmentStock = cloneEquipment(value.EquipmentStock)
 	}
 	return result
@@ -63,6 +63,8 @@ func cloneSolveRequest(value contracts.SolveRequest) contracts.SolveRequest {
 		value.EngineerStates[i].EquipmentAvailable = cloneEquipment(value.EngineerStates[i].EquipmentAvailable)
 	}
 	value.AlreadyUsedEngineerIDs = append([]string(nil), value.AlreadyUsedEngineerIDs...)
+	value.FixedRoutes = clonePlanRoutes(value.FixedRoutes)
+	value.ProtectedLegIDs = append([]string(nil), value.ProtectedLegIDs...)
 	value.TravelMatrix = cloneMatrix(value.TravelMatrix)
 	return value
 }
