@@ -145,7 +145,10 @@ export type PlanChange = {
         | 'status_changed';
 };
 
+export type SolveMode = 'baseline' | 'optimized';
+
 export type Plan = {
+    solve_mode?: SolveMode;
     id: string;
     scenario_id: string;
     snapshot_revision: number;

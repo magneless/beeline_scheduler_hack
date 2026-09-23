@@ -14,6 +14,10 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 		return contracts.PlanResult{}, contracts.InvalidInput("request_id, scenario_id and positive snapshot_revision are required", nil)
 	}
 
+	mode, err := service.resolveMode(input.SolveMode, nil)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
 	snapshot, err := service.data.GetSnapshot(ctx, input.ScenarioID, input.SnapshotRevision)
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("get snapshot", err)
@@ -30,6 +34,10 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 	if input.ExpectedCurrentPlanID != nil {
 		previous, e := service.data.GetPlan(ctx, *input.ExpectedCurrentPlanID)
+		if e != nil {
+			return contracts.PlanResult{}, e
+		}
+		mode, e = service.resolveMode(input.SolveMode, &previous)
 		if e != nil {
 			return contracts.PlanResult{}, e
 		}
@@ -57,7 +65,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 	profiles := profilesFor(engineers)
 	if len(engineers) == 0 {
-		return service.buildWithoutEngineers(snapshot, orders)
+		return service.buildWithoutEngineers(snapshot, orders, mode)
 	}
 	matrix, err := service.geo.BuildMatrix(ctx, contracts.MatrixRequest{Locations: locations, Profiles: profiles, GeoContextID: nil})
 	if err != nil {
@@ -86,7 +94,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 
 	optimizedRequest := cloneSolveRequest(baseRequest)
-	optimizedRequest.Mode = service.mode
+	optimizedRequest.Mode = mode
 	optimized, err := service.planner.Solve(ctx, optimizedRequest)
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("solve optimized plan", err)
@@ -106,6 +114,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	baselineMetrics := calculateMetrics(baseline.Routes, baseline.Unassigned)
 	unassigned := nonNil(append([]contracts.UnassignedOrder(nil), optimized.Unassigned...))
 	draft := contracts.PlanDraft{
+		SolveMode:         mode,
 		ScenarioID:        snapshot.ScenarioID,
 		SnapshotRevision:  snapshot.Revision,
 		BasePlanID:        nil,
@@ -130,7 +139,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 			draft.CancelledOrderIDs = append(draft.CancelledOrderIDs, o.ID)
 		}
 	}
-	if service.mode == contracts.SolveModeBaseline {
+	if mode == contracts.SolveModeBaseline {
 		draft.Issues = append(draft.Issues, contracts.Issue{Code: "BASELINE_ONLY", Message: "Выбран базовый алгоритм планирования"})
 	}
 	return contracts.PlanResult{

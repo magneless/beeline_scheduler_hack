@@ -3,7 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { buildPlan } from 'shared/api';
-import { type Run, type Snapshot } from 'shared/api/types/contracts';
+import {
+    type Run,
+    type Snapshot,
+    type SolveMode,
+} from 'shared/api/types/contracts';
 import {
     commandErrorMessage,
     isStaleVersionError,
@@ -12,6 +16,7 @@ import { runPlanCommand } from 'shared/lib/planCommand';
 import { type TypeOrNull } from 'shared/lib/types';
 
 type UseBuildPlanParams = {
+    solveMode?: SolveMode;
     scenarioId: string;
     snapshot: Snapshot | undefined;
     planId: TypeOrNull<string> | undefined;
@@ -23,6 +28,7 @@ export const useBuildPlan = ({
     snapshot,
     planId,
     onReload,
+    solveMode,
 }: UseBuildPlanParams) => {
     const queryClient = useQueryClient();
     const [runStatus, setRunStatus] = useState<TypeOrNull<Run['status']>>(null);
@@ -50,6 +56,7 @@ export const useBuildPlan = ({
                         scenarioId,
                         requestId: crypto.randomUUID(),
                         snapshotRevision: snapshot.revision,
+                        solveMode,
                         expectedCurrentPlanId: planId ?? null,
                     }),
                 setRunStatus

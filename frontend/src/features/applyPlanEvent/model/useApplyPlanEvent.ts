@@ -3,7 +3,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { postPlanEvent } from 'shared/api';
-import { type Plan, type Run, type Snapshot } from 'shared/api/types/contracts';
+import {
+    type Plan,
+    type Run,
+    type Snapshot,
+    type SolveMode,
+} from 'shared/api/types/contracts';
 import {
     commandErrorMessage,
     isStaleVersionError,
@@ -14,6 +19,7 @@ import { type TypeOrNull } from 'shared/lib/types';
 import { type PlanEventInput } from './types';
 
 type UseApplyPlanEventParams = {
+    solveMode?: SolveMode;
     scenarioId: string;
     planId: TypeOrNull<string> | undefined;
     snapshot: Snapshot | undefined;
@@ -39,6 +45,7 @@ export const useApplyPlanEvent = ({
     plan,
     selectedOrderId,
     onReload,
+    solveMode,
 }: UseApplyPlanEventParams) => {
     const queryClient = useQueryClient();
     const [runStatus, setRunStatus] = useState<TypeOrNull<Run['status']>>(null);
@@ -75,6 +82,7 @@ export const useApplyPlanEvent = ({
                         planId,
                         requestId: crypto.randomUUID(),
                         snapshotRevision: snapshot.revision,
+                        solveMode,
                         event: {
                             id: crypto.randomUUID(),
                             occurred_at: input.occurredAt,
@@ -115,6 +123,7 @@ export const useApplyPlanEvent = ({
                         planId,
                         requestId: crypto.randomUUID(),
                         snapshotRevision: snapshot.revision,
+                        solveMode,
                         event: {
                             id: crypto.randomUUID(),
                             occurred_at: input.occurredAt,
@@ -133,6 +142,7 @@ export const useApplyPlanEvent = ({
                         planId,
                         requestId: crypto.randomUUID(),
                         snapshotRevision: snapshot.revision,
+                        solveMode,
                         event: {
                             id: crypto.randomUUID(),
                             occurred_at: input.occurredAt,
@@ -153,6 +163,7 @@ export const useApplyPlanEvent = ({
                     planId,
                     requestId: crypto.randomUUID(),
                     snapshotRevision: snapshot.revision,
+                    solveMode,
                     event: {
                         id: crypto.randomUUID(),
                         occurred_at: input.occurredAt,

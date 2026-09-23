@@ -178,12 +178,17 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) build(w http.ResponseWriter, r *http.Request) {
 	var in struct {
+		SolveMode c.SolveMode     `json:"solve_mode"`
 		RequestID string          `json:"request_id"`
 		Revision  int64           `json:"snapshot_revision"`
 		Expected  json.RawMessage `json:"expected_current_plan_id"`
 	}
 	if e := decode(r, &in); e != nil {
 		failure(w, e)
+		return
+	}
+	if in.SolveMode != "" && in.SolveMode != c.SolveModeBaseline && in.SolveMode != c.SolveModeOptimized {
+		failure(w, invalid("solve_mode должен быть baseline или optimized"))
 		return
 	}
 	if strings.TrimSpace(in.RequestID) == "" || in.Revision < 1 || len(in.Expected) == 0 {
@@ -195,18 +200,23 @@ func (s *Server) build(w http.ResponseWriter, r *http.Request) {
 		failure(w, invalid("Некорректный expected_current_plan_id"))
 		return
 	}
-	cmd := storage.Command{Kind: "build", Build: &c.BuildPlanRequest{RequestID: in.RequestID, ScenarioID: r.PathValue("id"), SnapshotRevision: in.Revision, ExpectedCurrentPlanID: expected}}
+	cmd := storage.Command{Kind: "build", Build: &c.BuildPlanRequest{SolveMode: in.SolveMode, RequestID: in.RequestID, ScenarioID: r.PathValue("id"), SnapshotRevision: in.Revision, ExpectedCurrentPlanID: expected}}
 	id, e := s.Store.Register(r.Context(), cmd)
 	respond(w, 202, map[string]string{"run_id": id}, e)
 }
 func (s *Server) event(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		RequestID string  `json:"request_id"`
-		Revision  int64   `json:"snapshot_revision"`
-		Event     c.Event `json:"event"`
+		SolveMode c.SolveMode `json:"solve_mode"`
+		RequestID string      `json:"request_id"`
+		Revision  int64       `json:"snapshot_revision"`
+		Event     c.Event     `json:"event"`
 	}
 	if e := decode(r, &in); e != nil {
 		failure(w, e)
+		return
+	}
+	if in.SolveMode != "" && in.SolveMode != c.SolveModeBaseline && in.SolveMode != c.SolveModeOptimized {
+		failure(w, invalid("solve_mode должен быть baseline или optimized"))
 		return
 	}
 	if strings.TrimSpace(in.RequestID) == "" || in.Revision < 1 {
@@ -224,7 +234,7 @@ func (s *Server) event(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	cmd := storage.Command{Kind: "replan", Replan: &c.ReplanRequest{RequestID: in.RequestID, ScenarioID: p.ScenarioID, SnapshotRevision: in.Revision, BasePlanID: p.ID, Event: in.Event}}
+	cmd := storage.Command{Kind: "replan", Replan: &c.ReplanRequest{SolveMode: in.SolveMode, RequestID: in.RequestID, ScenarioID: p.ScenarioID, SnapshotRevision: in.Revision, BasePlanID: p.ID, Event: in.Event}}
 	id, e := s.Store.Register(r.Context(), cmd)
 	respond(w, 202, map[string]string{"run_id": id}, e)
 }

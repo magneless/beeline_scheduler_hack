@@ -3,6 +3,7 @@ import {
     type Plan,
     type PlanEvent,
     type Run,
+    type SolveMode,
 } from 'shared/api/types/contracts';
 import { type TypeOrNull } from 'shared/lib/types';
 
@@ -16,11 +17,13 @@ import {
 export const buildPlan = (input: {
     scenarioId: string;
     requestId: string;
+    solveMode?: SolveMode;
     snapshotRevision: number;
     expectedCurrentPlanId: TypeOrNull<string>;
 }) =>
     apiPost<{ run_id: string }>(getBuildPlanUrl(input.scenarioId), {
         request_id: input.requestId,
+        solve_mode: input.solveMode,
         snapshot_revision: input.snapshotRevision,
         expected_current_plan_id: input.expectedCurrentPlanId,
     });
@@ -32,11 +35,13 @@ export const getPlan = (planId: string) => apiGet<Plan>(getPlanUrl(planId));
 export const postPlanEvent = (input: {
     planId: string;
     requestId: string;
+    solveMode?: SolveMode;
     snapshotRevision: number;
     event: PlanEvent;
 }) =>
     apiPost<{ run_id: string }>(getPlanEventsUrl(input.planId), {
         request_id: input.requestId,
+        solve_mode: input.solveMode,
         snapshot_revision: input.snapshotRevision,
         event: input.event,
     });

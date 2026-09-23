@@ -29,6 +29,9 @@ export const DispatcherWorkspacePage = () => {
             ].join(' ')}
         >
             <WorkspaceTopbar
+                solveMode={workspace.solveMode}
+                savedSolveMode={workspace.savedSolveMode}
+                onSolveMode={workspace.setSolveMode}
                 snapshot={workspace.snapshot}
                 metrics={workspace.plan?.metrics}
                 canEvent={workspace.canEvent}

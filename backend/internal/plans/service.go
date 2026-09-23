@@ -65,3 +65,27 @@ func New(data PlanDataReader, geo GeoService, planner Planner, options Options) 
 	}
 	return &Service{data: data, geo: geo, planner: planner, timeLimitMS: options.TimeLimitMS, mode: options.Mode, issues: append([]contracts.Issue{}, options.Issues...)}, nil
 }
+
+// Resolve per-request options without mutating the shared service. Older plans
+// recorded baseline selection as an issue instead of an explicit field.
+func (service *Service) resolveMode(requested contracts.SolveMode, base *contracts.Plan) (contracts.SolveMode, error) {
+	mode := requested
+	if mode == "" && base != nil {
+		mode = base.SolveMode
+		if mode == "" {
+			for _, issue := range base.Issues {
+				if issue.Code == "BASELINE_ONLY" {
+					mode = contracts.SolveModeBaseline
+					break
+				}
+			}
+		}
+	}
+	if mode == "" {
+		mode = service.mode
+	}
+	if mode != contracts.SolveModeBaseline && mode != contracts.SolveModeOptimized {
+		return "", contracts.InvalidInput("solve_mode должен быть baseline или optimized", nil)
+	}
+	return mode, nil
+}

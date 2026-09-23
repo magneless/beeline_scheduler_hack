@@ -25,8 +25,8 @@ type DataStore interface {
 | `POST /scenarios/import` | CSV, `region_id`, `date` → `201 ScenarioView` |
 | `GET /scenarios/{id}` | необязательный `revision` → `200 ScenarioView` |
 | `PATCH /scenarios/{id}/engineers/{engineer_id}` | `expected_revision`, изменяемые поля, включая `equipment_stock` → `200 ScenarioView`; при блокирующем состоянии `409 EVENT_CONFLICT` |
-| `POST /scenarios/{id}/plans` | `request_id`, `snapshot_revision`, `expected_current_plan_id` → `202 {run_id}`; если состояние не блокирует Build |
-| `POST /plans/{id}/events` | `request_id`, `snapshot_revision`, `event` → `202 {run_id}` |
+| `POST /scenarios/{id}/plans` | `request_id`, `snapshot_revision`, `expected_current_plan_id`, `solve_mode?: baseline \| optimized` → `202 {run_id}`; если состояние не блокирует Build |
+| `POST /plans/{id}/events` | `request_id`, `snapshot_revision`, `event`, `solve_mode?: baseline \| optimized` → `202 {run_id}` |
 | `GET /runs/{id}` | — → `200 Run` |
 | `GET /plans/{id}` | — → `200 Plan` |
 
@@ -45,8 +45,8 @@ type PlanService interface {
 
 | Тип | Что передаёт / получает Go-2 |
 |---|---|
-| `BuildPlanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `expected_current_plan_id: string?` |
-| `ReplanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `base_plan_id`, `event: Event`; для новой заявки или изменения статуса данные/время берутся из события |
+| `BuildPlanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `expected_current_plan_id: string?`, `solve_mode?: baseline \| optimized` |
+| `ReplanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `base_plan_id`, `event: Event`, `solve_mode?: baseline \| optimized`; для новой заявки или изменения статуса данные/время берутся из события |
 | `PlanResult` | `draft: PlanDraft`, `target_snapshot: Snapshot`, `applied_event: Event?` — типы из [common.md](common.md) |
 
 `scenario_id` берётся из URL либо сохранённого базового плана. `snapshot_revision` — ревизия **до** команды. Go-4 возвращает проверенный результат без сохранения и без нового `plan.id`. Go-2 передаёт его в собственный `CommitPlan`; только после успешного сохранения выставляет `Run.status=succeeded`.
@@ -100,7 +100,7 @@ Frontend не предоставляет Go-2 вызываемый сервис.
 |---|---|
 | `request_id` | Ключ повторного выполнения команды |
 | `expected_revision` | Ревизия исходных данных до расчёта |
-| `expected_current_plan_id: string?` | Текущий план до расчёта; `null` для первого |
+| `expected_current_plan_id: string?`, `solve_mode?: baseline \| optimized` | Текущий план до расчёта; `null` для первого |
 | `result: PlanResult` | Проверенный результат Go-4 с целевым снимком и применённым событием |
 
 Порядок `CommitPlan`:

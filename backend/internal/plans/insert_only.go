@@ -12,7 +12,7 @@ import (
 
 // An ordinary addition freezes every old visit. Execution history is kept outside
 // the inserter: it consumes the remaining stock and must not be scheduled again.
-func (service *Service) replanOrdinary(ctx context.Context, target contracts.Snapshot, base contracts.Plan, replay replayResult, event contracts.Event) (contracts.PlanResult, error) {
+func (service *Service) replanOrdinary(ctx context.Context, target contracts.Snapshot, base contracts.Plan, replay replayResult, event contracts.Event, mode contracts.SolveMode) (contracts.PlanResult, error) {
 	fresh := target.Orders[len(target.Orders)-1]
 	finish := func(routes []contracts.Route, unassigned []contracts.UnassignedOrder, termination contracts.Termination, conflict bool) (contracts.PlanResult, error) {
 		unassigned = append(append([]contracts.UnassignedOrder{}, base.Unassigned...), unassigned...)
@@ -42,7 +42,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 				}
 			}
 		}
-		draft := contracts.PlanDraft{ScenarioID: target.ScenarioID, SnapshotRevision: target.Revision, BasePlanID: ptr(base.ID), AsOf: event.OccurredAt, Routes: nonNil(routes), Unassigned: unassigned, CancelledOrderIDs: nonNil(append([]string{}, base.CancelledOrderIDs...)), CompletedOrderIDs: completed, EquipmentRemaining: stock, Issues: issues, Metrics: metrics, Changes: calculateChanges(base.Routes, routes, nil), Termination: termination}
+		draft := contracts.PlanDraft{SolveMode: mode, ScenarioID: target.ScenarioID, SnapshotRevision: target.Revision, BasePlanID: ptr(base.ID), AsOf: event.OccurredAt, Routes: nonNil(routes), Unassigned: unassigned, CancelledOrderIDs: nonNil(append([]string{}, base.CancelledOrderIDs...)), CompletedOrderIDs: completed, EquipmentRemaining: stock, Issues: issues, Metrics: metrics, Changes: calculateChanges(base.Routes, routes, nil), Termination: termination}
 		return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &event}, nil
 	}
 	fallback := func(conflict bool) (contracts.PlanResult, error) {

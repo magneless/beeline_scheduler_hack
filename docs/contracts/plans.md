@@ -80,8 +80,10 @@ Go-4 передаёт только ещё не начатые заявки со 
 
 | Тип | Поля |
 |---|---|
-| `BuildPlanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `expected_current_plan_id: string?` |
-| `ReplanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64` — исходная ревизия до события, `base_plan_id`, `event: Event` |
+| `BuildPlanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64`, `expected_current_plan_id: string?`, `solve_mode?: baseline \| optimized` |
+| `ReplanRequest` | `request_id`, `scenario_id`, `snapshot_revision: int64` — исходная ревизия до события, `base_plan_id`, `event: Event`, `solve_mode?: baseline \| optimized` |
+
+`solve_mode` выбирает алгоритм конкретного расчёта и сохраняется в `PlanDraft` / `Plan`. Если поле не передано, используется алгоритм предыдущего плана, затем настройка сервера `SOLVER_MODE` (по умолчанию `optimized`). Для старых планов признак `BASELINE_ONLY` означает `baseline`. Недопустимое значение возвращает `INVALID_INPUT` (HTTP 422). Выбор входит в проверку идемпотентности. При `ordinary_order_added` всегда применяется `insert_only`, чтобы сохранить старые визиты; выбранный `solve_mode` остаётся настройкой следующих пересчётов.
 
 Тело события определено в [общих типах](common.md). Для `Replan` сценарий, текущая ревизия и ревизия базового плана должны совпадать; `base_plan_id` должен быть текущим планом при сохранении.
 
@@ -91,8 +93,8 @@ Go-4 передаёт только ещё не начатые заявки со 
 
 1. Прочитать точную ревизию снимка. Подготовить активные заявки и доступных инженеров; старт — офис и начало смены, `equipment_available=equipment_stock`. Начальные отмены исключить из назначения.
 2. Получить матрицу для используемых транспортных профилей.
-3. Вызвать базовый и оптимизированный расчёты на одинаковой задаче и матрице.
-4. Проверить оба результата, получить геометрию оптимизированного плана и рассчитать метрики.
+3. Вызвать базовый и выбранный расчёты на одинаковой задаче и матрице.
+4. Проверить оба результата, получить геометрию выбранного плана и рассчитать метрики.
 5. Вернуть `PlanResult`: полный план, `baseline_metrics`, исходный `target_snapshot`, `applied_event=null`, `base_plan_id=null`, `changes=[]`. `equipment_remaining` содержит стартовую выдачу всех инженеров, `completed_order_ids=[]`, `completed_count=0`.
 
 `as_of` обычного плана — начало местного дня. Метод ничего не сохраняет; сохранением занимается Go-2.

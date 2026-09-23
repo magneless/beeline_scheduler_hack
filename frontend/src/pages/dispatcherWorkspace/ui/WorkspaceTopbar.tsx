@@ -6,6 +6,7 @@ import {
     type Metrics,
     type Run,
     type Snapshot,
+    type SolveMode,
 } from 'shared/api/types/contracts';
 import { regionLabel, runStatusLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
@@ -16,6 +17,9 @@ import { OrderForm } from './OrderForm';
 import { RegionSwitcher } from './RegionSwitcher';
 
 type WorkspaceTopbarProps = {
+    solveMode: SolveMode;
+    savedSolveMode?: SolveMode;
+    onSolveMode: (mode: SolveMode) => void;
     snapshot: Snapshot | undefined;
     metrics: Metrics | undefined;
     canEvent: boolean;
@@ -34,6 +38,9 @@ type WorkspaceTopbarProps = {
 };
 
 export const WorkspaceTopbar = ({
+    solveMode,
+    savedSolveMode,
+    onSolveMode,
     snapshot,
     metrics,
     canEvent,
@@ -104,6 +111,35 @@ export const WorkspaceTopbar = ({
                         className="text-xs text-muted-foreground"
                     >
                         {runStatusLabel[runStatus]}
+                    </span>
+                ) : null}
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    Алгоритм
+                    <select
+                        aria-label="Алгоритм расчёта маршрутов"
+                        value={solveMode}
+                        onChange={(event) =>
+                            onSolveMode(event.target.value as SolveMode)
+                        }
+                        disabled={!snapshot || buildPending || eventPending}
+                        title="Применяется при следующем расчёте маршрутов"
+                        className={[
+                            'h-9 max-w-[180px] rounded-[8px] border border-border bg-white px-2',
+                            'text-xs font-medium text-foreground focus:outline-primary disabled:opacity-50',
+                        ].join(' ')}
+                    >
+                        <option value="optimized">Оптимизированный</option>
+                        <option value="baseline">Базовый (по порядку)</option>
+                    </select>
+                </label>
+                {savedSolveMode && savedSolveMode !== solveMode ? (
+                    <span
+                        role="status"
+                        className="text-xs text-muted-foreground"
+                    >
+                        {canRebuild
+                            ? 'Нужно пересобрать план'
+                            : 'Применится при следующем событии'}
                     </span>
                 ) : null}
                 {canRebuild && metrics ? (

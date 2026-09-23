@@ -48,6 +48,7 @@ type PlanChange struct {
 	Reason  string      `json:"reason"`
 }
 type PlanDraft struct {
+	SolveMode          SolveMode                      `json:"solve_mode,omitempty"`
 	ScenarioID         string                         `json:"scenario_id"`
 	SnapshotRevision   int64                          `json:"snapshot_revision"`
 	BasePlanID         *string                        `json:"base_plan_id"`
@@ -102,17 +103,19 @@ type PlanCommit struct {
 	Result                PlanResult `json:"result"`
 }
 type BuildPlanRequest struct {
-	RequestID             string  `json:"request_id"`
-	ScenarioID            string  `json:"scenario_id"`
-	SnapshotRevision      int64   `json:"snapshot_revision"`
-	ExpectedCurrentPlanID *string `json:"expected_current_plan_id"`
+	SolveMode             SolveMode `json:"solve_mode,omitempty"`
+	RequestID             string    `json:"request_id"`
+	ScenarioID            string    `json:"scenario_id"`
+	SnapshotRevision      int64     `json:"snapshot_revision"`
+	ExpectedCurrentPlanID *string   `json:"expected_current_plan_id"`
 }
 type ReplanRequest struct {
-	RequestID        string `json:"request_id"`
-	ScenarioID       string `json:"scenario_id"`
-	SnapshotRevision int64  `json:"snapshot_revision"`
-	BasePlanID       string `json:"base_plan_id"`
-	Event            Event  `json:"event"`
+	SolveMode        SolveMode `json:"solve_mode,omitempty"`
+	RequestID        string    `json:"request_id"`
+	ScenarioID       string    `json:"scenario_id"`
+	SnapshotRevision int64     `json:"snapshot_revision"`
+	BasePlanID       string    `json:"base_plan_id"`
+	Event            Event     `json:"event"`
 }
 type Run struct {
 	ID         string         `json:"id"`

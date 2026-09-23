@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
     type PlanEventInput,
@@ -6,7 +6,7 @@ import {
 } from 'features/applyPlanEvent';
 import { useBuildPlan } from 'features/buildPlan';
 import { type CrewPatchInput, useUpdateCrew } from 'features/updateCrew';
-import { type Run } from 'shared/api/types/contracts';
+import { type Run, type SolveMode } from 'shared/api/types/contracts';
 import { runStatusLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
 
@@ -61,13 +61,33 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         ]
     );
 
+    const savedSolveMode =
+        queries.plan?.solve_mode ??
+        (queries.plan?.issues.some((issue) => issue.code === 'BASELINE_ONLY')
+            ? 'baseline'
+            : 'optimized');
+    const [algorithmChoice, setAlgorithmChoice] = useState<{
+        scenarioId: string;
+        planId: string | null;
+        mode: SolveMode;
+    }>();
+    const solveMode =
+        algorithmChoice?.scenarioId === scenarioId &&
+        algorithmChoice.planId === queries.planId
+            ? algorithmChoice.mode
+            : savedSolveMode;
+    const setSolveMode = (mode: SolveMode) =>
+        setAlgorithmChoice({ scenarioId, planId: queries.planId, mode });
+
     const buildPlan = useBuildPlan({
+        solveMode,
         scenarioId,
         snapshot: queries.currentSnapshot,
         planId: queries.planId,
         onReload: queries.reload,
     });
     const planEvent = useApplyPlanEvent({
+        solveMode,
         scenarioId,
         planId: queries.planId,
         snapshot: queries.currentSnapshot,
@@ -123,6 +143,9 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     };
 
     return {
+        solveMode,
+        setSolveMode,
+        savedSolveMode: queries.plan ? savedSolveMode : undefined,
         snapshot: queries.snapshot,
         plan: queries.plan,
         compareMetrics: queries.compareMetrics,

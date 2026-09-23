@@ -85,7 +85,7 @@ Go-2 сопоставляет классификаторы ВК / Beekeeper и H
 
 Ожидание перед работой определяется интервалом от `arrival_at` до `start_at`. Поездки и работы одного инженера не пересекаются. План содержит маршруты задействованных инженеров, включая имеющих только сохранённую часть дня.
 
-`PlanDraft` содержит `scenario_id`, `snapshot_revision`, `base_plan_id?`, `as_of`, `routes`, `unassigned`, `cancelled_order_ids`, `completed_order_ids`, `equipment_remaining: map[string]map[Equipment]int64`, `issues`, `metrics`, `baseline_metrics?`, `changes: PlanChange[]`, `termination: completed | time_limit`.
+`PlanDraft` содержит `solve_mode: baseline | optimized` (может отсутствовать у старых планов), `scenario_id`, `snapshot_revision`, `base_plan_id?`, `as_of`, `routes`, `unassigned`, `cancelled_order_ids`, `completed_order_ids`, `equipment_remaining: map[string]map[Equipment]int64`, `issues`, `metrics`, `baseline_metrics?`, `changes: PlanChange[]`, `termination: completed | time_limit`.
 
 `PlanResult = {draft: PlanDraft, target_snapshot: Snapshot, applied_event: Event?}` — внутренний результат Go-4 для сохранения. `Plan` — сохранённый `PlanDraft` с добавленным `id`. В HTTP поля `PlanDraft` располагаются непосредственно в `Plan`; служебный `target_snapshot` в него не включается.
 

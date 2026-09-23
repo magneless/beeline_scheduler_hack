@@ -26,6 +26,10 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("get base plan", err)
 	}
+	mode, err := service.resolveMode(input.SolveMode, &base)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
 	if base.ID != input.BasePlanID || base.ScenarioID != input.ScenarioID || base.SnapshotRevision != input.SnapshotRevision {
 		return contracts.PlanResult{}, contracts.InvalidInput("base plan does not match requested scenario and revision", map[string]any{"base_plan_id": input.BasePlanID})
 	}
@@ -58,7 +62,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	}
 
 	if input.Event.Type == contracts.EventOrdinaryOrderAdded {
-		return service.replanOrdinary(ctx, target, base, replay, appliedEvent)
+		return service.replanOrdinary(ctx, target, base, replay, appliedEvent, mode)
 	}
 
 	remaining, expired := prepareRemainingOrders(target, replay.lockedOrders, input.Event.OccurredAt)
@@ -98,7 +102,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			return contracts.PlanResult{}, err
 		}
 		solveRequest := contracts.SolveRequest{
-			Mode:                   service.mode,
+			Mode:                   mode,
 			Orders:                 remaining,
 			Engineers:              engineers,
 			EngineerStates:         states,
@@ -135,6 +139,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	}
 	basePlanID := input.BasePlanID
 	draft := contracts.PlanDraft{
+		SolveMode:         mode,
 		ScenarioID:        target.ScenarioID,
 		SnapshotRevision:  target.Revision,
 		BasePlanID:        &basePlanID,
@@ -188,7 +193,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			draft.Changes = append(draft.Changes, contracts.PlanChange{OrderID: payload.OrderID, Before: before[payload.OrderID], After: after[payload.OrderID], Reason: contracts.PlanChangeStatusChanged})
 		}
 	}
-	if service.mode == contracts.SolveModeBaseline {
+	if mode == contracts.SolveModeBaseline {
 		draft.Issues = append(draft.Issues, contracts.Issue{Code: "BASELINE_ONLY", Message: "Выбран базовый алгоритм планирования"})
 	}
 	return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &appliedEvent}, nil
