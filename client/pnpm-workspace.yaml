@@ -1,0 +1,4 @@
+allowBuilds:
+  msw: set this to true or false
+neverBuiltDependencies:
+  - msw

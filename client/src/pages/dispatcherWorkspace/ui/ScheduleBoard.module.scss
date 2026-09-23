@@ -1,0 +1,521 @@
+.board {
+    --row: 40px;
+    --hours: 28px;
+
+    position: relative;
+    padding: 14px 16px 40px;
+}
+
+.dense {
+    --row: 32px;
+}
+
+.head {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    margin-bottom: 14px;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
+    align-items: center;
+}
+
+.search {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    width: min(240px, 100%);
+    padding: 0 10px;
+    background: var(--muted);
+    border-radius: 999px;
+}
+
+.search svg {
+    width: 14px;
+    height: 14px;
+    color: var(--muted-foreground);
+}
+
+.search input {
+    width: 100%;
+    height: 28px;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+    background: transparent;
+    border: 0;
+}
+
+.filter {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    background: var(--muted);
+    border: 0;
+    border-radius: 999px;
+}
+
+.filterOn {
+    color: var(--foreground);
+    background: var(--primary);
+}
+
+.zoom {
+    position: absolute;
+    right: 16px;
+    bottom: 10px;
+    z-index: 6;
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    padding: 2px;
+    background: var(--muted);
+    border-radius: 999px;
+}
+
+.zoomBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--foreground);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+}
+
+.zoomBtn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.zoomBtn:hover {
+    background: var(--card);
+}
+
+.zoomRead {
+    min-width: 40px;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.panning,
+.panning .block,
+.panning .person {
+    cursor: grabbing;
+}
+
+.ready,
+.ready .block {
+    cursor: grab;
+}
+
+.chart {
+    position: relative;
+    display: grid;
+    grid-template-rows: var(--hours) minmax(var(--row), 1fr);
+    grid-template-columns: 156px minmax(0, 1fr);
+    max-height: min(28vh, calc(var(--hours) + 6 * var(--row) + 14px));
+    background: rgb(26 26 26 / 2.5%);
+    border-radius: 18px;
+}
+
+.caption {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    box-shadow: 1px 0 0 rgb(26 26 26 / 8%);
+}
+
+.hoursRail {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.hours {
+    position: relative;
+    height: var(--hours);
+}
+
+.hour {
+    position: absolute;
+    top: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+.people {
+    padding-left: 4px;
+    overflow: auto hidden;
+    scrollbar-width: none;
+    box-shadow: 1px 0 0 rgb(26 26 26 / 8%);
+}
+
+.people::-webkit-scrollbar {
+    display: none;
+}
+
+.person {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    height: var(--row);
+    padding: 0 8px 0 0;
+    margin: 0;
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+}
+
+.personActive {
+    background: rgb(255 204 0 / 16%);
+}
+
+.personText {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.personName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.personJobs {
+    font-size: 11px;
+    color: var(--muted-foreground);
+}
+
+.dense .personJobs {
+    display: none;
+}
+
+.dense .personName {
+    font-size: 12px;
+}
+
+.live {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    background: #1f9d55;
+    border-radius: 99px;
+}
+
+.jobs {
+    display: none;
+    flex-shrink: 0;
+    min-width: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    text-align: right;
+}
+
+.dense .jobs {
+    display: block;
+}
+
+.grid {
+    min-width: 0;
+    overflow: auto;
+    scrollbar-color: rgb(26 26 26 / 22%) transparent;
+    scrollbar-width: thin;
+}
+
+.grid::-webkit-scrollbar {
+    width: 8px;
+    height: 10px;
+}
+
+.grid::-webkit-scrollbar-thumb {
+    background: rgb(26 26 26 / 28%);
+    border-radius: 999px;
+}
+
+.canvas {
+    position: relative;
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent 0,
+        transparent calc(var(--hour) - 1px),
+        rgb(26 26 26 / 6%) calc(var(--hour) - 1px),
+        rgb(26 26 26 / 6%) var(--hour)
+    );
+}
+
+.track {
+    position: relative;
+    height: var(--row);
+    overflow: hidden;
+}
+
+.trackActive {
+    background: rgb(255 204 0 / 10%);
+    border-radius: 10px;
+}
+
+.pastVeil {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    height: 100%;
+    pointer-events: none;
+    background: rgb(255 255 255 / 28%);
+}
+
+.now {
+    position: absolute;
+    top: 0;
+    z-index: 3;
+    width: 2px;
+    height: 100%;
+    pointer-events: none;
+    background: var(--destructive);
+}
+
+.block {
+    position: absolute;
+    top: 6px;
+    z-index: 2;
+    height: calc(var(--row) - 12px);
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: calc(var(--row) - 12px);
+    color: #fff;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 0;
+    border-radius: 999px;
+}
+
+.dense .block {
+    top: 5px;
+    height: calc(var(--row) - 10px);
+    padding: 0 6px;
+    line-height: calc(var(--row) - 10px);
+}
+
+.past {
+    opacity: 0.42;
+}
+
+.selected {
+    z-index: 4;
+    box-shadow:
+        0 0 0 2px #fff,
+        0 0 0 4px var(--foreground);
+}
+
+.workconnection {
+    color: #1a1a1a;
+    background: var(--primary);
+}
+
+.travel {
+    background: repeating-linear-gradient(
+        -45deg,
+        rgb(255 204 0 / 55%),
+        rgb(255 204 0 / 55%) 4px,
+        transparent 4px,
+        transparent 8px
+    );
+}
+
+.workemergency {
+    background: var(--destructive);
+}
+
+.workrepair {
+    background: var(--foreground);
+}
+
+.workadditional {
+    background: #a3a39a;
+}
+
+.hint {
+    position: relative;
+    z-index: 6;
+}
+
+.hintBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    background: var(--muted);
+    border: 0;
+    border-radius: 999px;
+}
+
+.hintBtn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.hintBtn:hover {
+    color: var(--foreground);
+}
+
+.hintPop {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 20;
+    display: none;
+    width: 260px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--foreground);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+}
+
+.hintList {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.hintList + .hintList {
+    padding-top: 10px;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.hintList li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+.hintMark,
+.hintDot {
+    flex-shrink: 0;
+}
+
+.hintMark {
+    width: 18px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.hintMarkWork {
+    background: var(--primary);
+}
+
+.hintMarkTravel {
+    background: repeating-linear-gradient(
+        -45deg,
+        #f5c518,
+        #f5c518 3px,
+        transparent 3px,
+        transparent 6px
+    );
+    border: 1px solid #f5c518;
+}
+
+.hintMarkIdle {
+    background: transparent;
+    border: 1px dashed var(--border);
+}
+
+.hintDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+}
+
+.hintDotConnection {
+    background: var(--primary);
+}
+
+.hintDotEmergency {
+    background: var(--destructive);
+}
+
+.hintDotRepair {
+    background: var(--foreground);
+}
+
+.hintDotAdditional {
+    background: #a3a39a;
+}
+
+.hintKeys {
+    padding-top: 10px;
+    margin: 10px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+    border-top: 1px solid var(--border);
+}
+
+.hint:hover .hintPop,
+.hint:focus-within .hintPop {
+    display: block;
+}
+
+.empty {
+    font-size: 13px;
+    color: var(--muted-foreground);
+}
