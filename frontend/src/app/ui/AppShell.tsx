@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, Map } from 'lucide-react';
 
@@ -16,9 +16,33 @@ const railButtonClass = (active: boolean) =>
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
     );
 
+const lastMapKey = 'dispatcher:last-map-path';
+const isMapPath = (path: string) => /^\/s\/[^/]+\/?$/.test(path);
+const readLastMap = () => {
+    try {
+        const path = sessionStorage.getItem(lastMapKey);
+        return path && isMapPath(path) ? path : null;
+    } catch {
+        return null;
+    }
+};
+
 export const AppShell = ({ children }: AppShellProps) => {
     const { pathname } = useLocation();
-    const onMap = pathname.startsWith('/s/');
+    const onMap = isMapPath(pathname);
+    const [lastMapPath, setLastMapPath] = useState(readLastMap);
+    const mapPath = onMap ? pathname : lastMapPath;
+
+    useEffect(() => {
+        if (onMap) {
+            setLastMapPath(pathname);
+            try {
+                sessionStorage.setItem(lastMapKey, pathname);
+            } catch {
+                // Keep navigation working in memory when storage is unavailable.
+            }
+        }
+    }, [onMap, pathname]);
 
     return (
         <div className="flex h-screen gap-2 bg-muted p-2 max-sm:gap-1 max-sm:p-1">
@@ -44,16 +68,20 @@ export const AppShell = ({ children }: AppShellProps) => {
                     to="/"
                     className={railButtonClass(!onMap)}
                     aria-label="Районы"
+                    aria-current={!onMap ? 'page' : undefined}
                 >
                     <LayoutGrid className="size-5" />
                 </Link>
-                {onMap ? (
-                    <span
-                        className={railButtonClass(true)}
+                {mapPath ? (
+                    <Link
+                        to={mapPath}
+                        className={railButtonClass(onMap)}
                         aria-label="Карта смены"
+                        aria-current={onMap ? 'page' : undefined}
+                        title="Вернуться к карте смены"
                     >
                         <Map className="size-5" />
-                    </span>
+                    </Link>
                 ) : null}
             </aside>
             {children}
