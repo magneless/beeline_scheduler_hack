@@ -235,14 +235,21 @@ export const ZOOM_MIN = 56;
 export const ZOOM_MAX = 720;
 const ZOOM_FACTOR = 1.25;
 
-export const clampZoom = (pxPerHour: number) =>
-    Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pxPerHour));
+export const clampZoom = (pxPerHour: number, minimum = ZOOM_MIN) =>
+    Math.min(ZOOM_MAX, Math.max(minimum, pxPerHour));
 
-export const nextZoom = (pxPerHour: number, direction: 1 | -1) =>
-    clampZoom(pxPerHour * (direction > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR));
+export const nextZoom = (
+    pxPerHour: number,
+    direction: 1 | -1,
+    minimum = ZOOM_MIN
+) =>
+    clampZoom(
+        pxPerHour * (direction > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR),
+        minimum
+    );
 
 export const fitZoom = (hourCount: number, viewWidth: number) =>
-    clampZoom(viewWidth / Math.max(hourCount, 1));
+    Math.min(ZOOM_MAX, viewWidth / Math.max(hourCount, 1 / 60));
 
 export const hourTickStep = (pxPerHour: number) => {
     const hours = 72 / pxPerHour;

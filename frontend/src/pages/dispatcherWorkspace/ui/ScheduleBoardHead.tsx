@@ -21,6 +21,8 @@ const colorDotClass = {
 } as const;
 
 type ScheduleBoardHeadProps = {
+    title?: string;
+    summary?: string;
     dense: boolean;
     query: string;
     liveFilter: boolean;
@@ -29,6 +31,8 @@ type ScheduleBoardHeadProps = {
 };
 
 export const ScheduleBoardHead = ({
+    title = workspaceCopy.scheduleTitle,
+    summary,
     dense,
     query,
     liveFilter,
@@ -42,7 +46,12 @@ export const ScheduleBoardHead = ({
     return (
         <div className={styles.head}>
             <div className={styles.toolbar}>
-                <p className={styles.title}>{workspaceCopy.scheduleTitle}</p>
+                <p className={styles.title}>{title}</p>
+                {summary ? (
+                    <span className="ml-auto mr-3 text-[11px] text-muted-foreground">
+                        {summary}
+                    </span>
+                ) : null}
                 <div className={styles.hint}>
                     <button
                         type="button"

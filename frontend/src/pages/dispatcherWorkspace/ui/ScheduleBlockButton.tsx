@@ -20,6 +20,7 @@ const WORK_CLASS: Record<WorkType, string> = {
 };
 
 type ScheduleBlockButtonProps = {
+    stop?: { sequence: number; description: string };
     lane: ScheduleLane;
     block: ScheduleBlock;
     focusAt: DateTime;
@@ -28,6 +29,7 @@ type ScheduleBlockButtonProps = {
 };
 
 export const ScheduleBlockButton = ({
+    stop,
     lane,
     block,
     focusAt,
@@ -48,6 +50,14 @@ export const ScheduleBlockButton = ({
             ? `${workTypeLabel[block.workType]} ${stamp}`
             : workspaceCopy.scheduleTravel;
 
+    const displayLabel =
+        stop && block.kind === 'work' ? `${stop.sequence} · ${label}` : label;
+    const description = stop
+        ? block.kind === 'work'
+            ? stop.description
+            : `${label} · ${stop.description}`
+        : label;
+
     const handleClick = () => {
         if (block.orderId) {
             onSelectOrder(block.orderId);
@@ -57,7 +67,14 @@ export const ScheduleBlockButton = ({
     return (
         <button
             type="button"
-            title={label}
+            title={description}
+            aria-label={description}
+            aria-pressed={block.orderId === selectedOrderId}
+            data-stop-order={
+                stop && block.kind === 'work' ? block.orderId : undefined
+            }
+            data-block-kind={block.kind}
+            data-sequence={stop?.sequence}
             className={cn(
                 styles.block,
                 block.kind === 'travel' ? styles.travel : '',
@@ -68,7 +85,7 @@ export const ScheduleBlockButton = ({
             style={blockOffset(lane, block)}
             onClick={handleClick}
         >
-            {block.kind === 'work' ? label : ''}
+            {block.kind === 'work' ? displayLabel : ''}
         </button>
     );
 };

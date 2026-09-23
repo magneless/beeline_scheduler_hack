@@ -8,6 +8,7 @@ import { ScheduleBoardHead } from './ScheduleBoardHead';
 import { ScheduleLanePerson } from './ScheduleLanePerson';
 import { ScheduleZoomBar } from './ScheduleZoomBar';
 import { workspaceCopy } from '../lib/config';
+import { routeColor } from '../lib/routeColors';
 import { useScheduleBoard } from '../model/useScheduleBoard';
 
 import { type ScheduleLane } from '../model/types';
@@ -15,6 +16,11 @@ import { type ScheduleLane } from '../model/types';
 import styles from './ScheduleBoard.module.scss';
 
 type ScheduleBoardProps = {
+    itinerary?: {
+        stops: Record<string, { sequence: number; description: string }>;
+        summary: string;
+        departure: string;
+    };
     lanes: ScheduleLane[];
     focusAt: DateTime;
     selectedOrderId: TypeOrNull<string>;
@@ -24,6 +30,7 @@ type ScheduleBoardProps = {
 };
 
 export const ScheduleBoard = ({
+    itinerary,
     lanes,
     focusAt,
     selectedOrderId,
@@ -31,18 +38,26 @@ export const ScheduleBoard = ({
     onSelectOrder,
     onSelectEngineer,
 }: ScheduleBoardProps) => {
-    const board = useScheduleBoard({ lanes, focusAt, selectedEngineerId });
+    const board = useScheduleBoard({
+        lanes,
+        focusAt,
+        selectedEngineerId,
+        selectedOrderId,
+    });
 
     return (
         <div
             className={cn(
                 styles.board,
+                itinerary ? styles.itinerary : '',
                 board.dense ? styles.dense : '',
                 board.panning ? styles.panning : '',
                 board.hand && !board.panning ? styles.ready : ''
             )}
         >
             <ScheduleBoardHead
+                title={itinerary ? 'Порядок визитов' : undefined}
+                summary={itinerary?.summary}
                 dense={board.dense}
                 query={board.query}
                 liveFilter={board.laneFilter === 'live'}
@@ -52,6 +67,8 @@ export const ScheduleBoard = ({
             {board.visibleLanes.length && board.start && board.end ? (
                 <div
                     ref={board.chartRef}
+                    tabIndex={0}
+                    aria-label="Временная шкала"
                     className={styles.chart}
                     style={{
                         ['--row' as string]: `${board.rowPx}px`,
@@ -60,12 +77,14 @@ export const ScheduleBoard = ({
                     }}
                 >
                     <div className={styles.caption}>
-                        {formatCount(lanes.length, [
-                            'бригада',
-                            'бригады',
-                            'бригад',
-                        ])}
-                        {board.liveCount
+                        {itinerary
+                            ? itinerary.departure
+                            : formatCount(lanes.length, [
+                                  'бригада',
+                                  'бригады',
+                                  'бригад',
+                              ])}
+                        {!itinerary && board.liveCount
                             ? workspaceCopy.scheduleOnLine(board.liveCount)
                             : ''}
                     </div>
@@ -102,19 +121,40 @@ export const ScheduleBoard = ({
                         className={styles.people}
                         onScroll={board.syncFromPeople}
                     >
-                        {board.visibleLanes.map((lane) => (
-                            <ScheduleLanePerson
-                                key={lane.engineerId}
-                                lane={lane}
-                                name={board.laneName(lane)}
-                                dense={board.dense}
-                                active={selectedEngineerId === lane.engineerId}
-                                focusAt={focusAt}
-                                onSelect={() =>
-                                    onSelectEngineer(lane.engineerId)
-                                }
-                            />
-                        ))}
+                        {board.visibleLanes.map((lane) =>
+                            itinerary ? (
+                                <div
+                                    key={lane.engineerId}
+                                    className={styles.person}
+                                >
+                                    <span
+                                        className="ml-2 size-2 shrink-0 rounded-full"
+                                        style={{
+                                            background: routeColor(
+                                                lane.engineerId
+                                            ),
+                                        }}
+                                    />
+                                    <span className={styles.personName}>
+                                        {board.laneName(lane)}
+                                    </span>
+                                </div>
+                            ) : (
+                                <ScheduleLanePerson
+                                    key={lane.engineerId}
+                                    lane={lane}
+                                    name={board.laneName(lane)}
+                                    dense={board.dense}
+                                    active={
+                                        selectedEngineerId === lane.engineerId
+                                    }
+                                    focusAt={focusAt}
+                                    onSelect={() =>
+                                        onSelectEngineer(lane.engineerId)
+                                    }
+                                />
+                            )
+                        )}
                     </div>
                     <div
                         ref={board.gridRef}
@@ -157,6 +197,13 @@ export const ScheduleBoard = ({
                                     {lane.blocks.map((block) => (
                                         <ScheduleBlockButton
                                             key={block.id}
+                                            stop={
+                                                block.orderId
+                                                    ? itinerary?.stops[
+                                                          block.orderId
+                                                      ]
+                                                    : undefined
+                                            }
                                             lane={lane}
                                             block={block}
                                             focusAt={focusAt}
@@ -178,6 +225,16 @@ export const ScheduleBoard = ({
                     {workspaceCopy.scheduleEmpty}
                 </div>
             )}
+            {itinerary &&
+            selectedOrderId &&
+            itinerary.stops[selectedOrderId] ? (
+                <p
+                    className={styles.visitDetail}
+                    title={itinerary.stops[selectedOrderId].description}
+                >
+                    {itinerary.stops[selectedOrderId].description}
+                </p>
+            ) : null}
             <ScheduleZoomBar
                 zoomLabel={board.zoomLabel}
                 onZoomOut={board.handleZoomOut}

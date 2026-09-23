@@ -519,3 +519,30 @@
     font-size: 13px;
     color: var(--muted-foreground);
 }
+
+.itinerary .chart {
+    grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.itinerary .person {
+    cursor: default;
+}
+
+.itinerary .past {
+    opacity: 1;
+}
+
+.itinerary .pastVeil,
+.itinerary .now {
+    display: none;
+}
+
+.visitDetail {
+    padding: 8px 0 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}

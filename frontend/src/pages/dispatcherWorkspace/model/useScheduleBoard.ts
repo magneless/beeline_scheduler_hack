@@ -19,6 +19,7 @@ import {
     laneIsLive,
     nextZoom,
     ZOOM_DEFAULT,
+    ZOOM_MIN,
 } from '../lib/utils';
 
 import { type ScheduleLane } from './types';
@@ -40,12 +41,14 @@ type UseScheduleBoardParams = {
     lanes: ScheduleLane[];
     focusAt: DateTime;
     selectedEngineerId: TypeOrNull<string>;
+    selectedOrderId?: TypeOrNull<string>;
 };
 
 export const useScheduleBoard = ({
     lanes,
     focusAt,
     selectedEngineerId,
+    selectedOrderId,
 }: UseScheduleBoardParams) => {
     const hoursRef = useRef<HTMLDivElement>(null);
     const peopleRef = useRef<HTMLDivElement>(null);
@@ -75,9 +78,7 @@ export const useScheduleBoard = ({
     const start = lanes[0]?.start;
     const end = lanes[0]?.end;
     const hourCount =
-        start && end
-            ? Math.max(Math.round(end.diff(start, 'hours').hours), 1)
-            : 12;
+        start && end ? Math.max(end.diff(start, 'hours').hours, 1 / 60) : 12;
     const canvasWidth = hourCount * pxPerHour;
     const ticks =
         start && end ? buildHourTicks(start, hourCount, pxPerHour) : [];
@@ -195,9 +196,16 @@ export const useScheduleBoard = ({
 
     const zoomBy = useCallback(
         (direction: 1 | -1, anchorClientX?: number) => {
-            applyZoom(nextZoom(pxRef.current, direction), anchorClientX);
+            const width = gridRef.current?.clientWidth;
+            const minimum = width
+                ? Math.min(ZOOM_MIN, fitZoom(hourCount, width))
+                : ZOOM_MIN;
+            applyZoom(
+                nextZoom(pxRef.current, direction, minimum),
+                anchorClientX
+            );
         },
-        [applyZoom]
+        [applyZoom, hourCount]
     );
 
     const zoomFit = useCallback(() => {
@@ -207,6 +215,9 @@ export const useScheduleBoard = ({
             return;
         }
 
+        if (grid.clientWidth === 0) {
+            return;
+        }
         pendingLeft.current = 0;
         setPxPerHour(fitZoom(hourCount, grid.clientWidth));
     }, [hourCount]);
@@ -285,12 +296,40 @@ export const useScheduleBoard = ({
     }, [rowPx, selectedEngineerId, visibleLanes]);
 
     useEffect(() => {
+        const grid = gridRef.current;
+        const block = lanes
+            .flatMap((lane) => lane.blocks)
+            .find(
+                (item) =>
+                    item.kind === 'work' && item.orderId === selectedOrderId
+            );
+        if (!grid || !block || !start) {
+            return;
+        }
+        const left = block.start.diff(start, 'hours').hours * pxRef.current;
+        const right = block.end.diff(start, 'hours').hours * pxRef.current;
+        if (
+            left < grid.scrollLeft ||
+            right > grid.scrollLeft + grid.clientWidth
+        ) {
+            grid.scrollLeft = Math.max(0, left - 24);
+            syncFromGrid();
+        }
+    }, [lanes, selectedOrderId, start]);
+
+    useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (isEditableTarget(event.target)) {
+            if (
+                !chartRef.current?.contains(document.activeElement) ||
+                isEditableTarget(event.target)
+            ) {
                 return;
             }
 
             if (event.code === 'Space') {
+                if ((event.target as HTMLElement).closest('button')) {
+                    return;
+                }
                 event.preventDefault();
                 spaceRef.current = true;
                 setHand(true);
