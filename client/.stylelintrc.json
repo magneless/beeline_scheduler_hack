@@ -1,0 +1,29 @@
+{
+    "extends": [
+        "stylelint-config-standard",
+        "stylelint-config-standard-scss",
+        "stylelint-config-recess-order"
+    ],
+    "ignoreFiles": [
+        "src/app/styles/index.css",
+        "dist/**",
+        "public/mockServiceWorker.js"
+    ],
+    "rules": {
+        "selector-class-pattern": "^[a-z]+([A-Z][a-z]*)*$",
+        "prettier/prettier": true,
+        "selector-pseudo-class-no-unknown": [
+            true,
+            {
+                "ignorePseudoClasses": ["global", "local"]
+            }
+        ],
+        "scss/dollar-variable-pattern": "^[a-z][a-zA-Z0-9]*$",
+        "color-function-alias-notation": null,
+        "color-function-notation": null,
+        "alpha-value-notation": null,
+        "no-descending-specificity": null,
+        "media-feature-range-notation": null
+    },
+    "plugins": ["stylelint-prettier"]
+}

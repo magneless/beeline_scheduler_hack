@@ -1,0 +1,30 @@
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - '3000:3000'
+    environment:
+      VITE_API_MODE: mock
+      VITE_API_URL: /api/v1
+      VITE_YANDEX_MAPS_KEY: ${VITE_YANDEX_MAPS_KEY:-}
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+
+  client-preview:
+    profiles: ['preview']
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: preview
+      args:
+        VITE_API_MODE: mock
+        VITE_API_URL: /api/v1
+        VITE_YANDEX_MAPS_KEY: ${VITE_YANDEX_MAPS_KEY:-}
+    ports:
+      - '8080:80'

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# SPA: нет отдельных HTML-маршрутов для индексации.
+Disallow: /api/

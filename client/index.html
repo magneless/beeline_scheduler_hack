@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/png" href="/beeline.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="Рабочее место диспетчера Билайн: районы, карта, заявки, бригады и слоты смены."
+        />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Билайн · Планирование смены</title>
+        <style>
+            html,
+            body,
+            #root {
+                height: 100%;
+                margin: 0;
+            }
+            #root {
+                background: #f4f4f0;
+            }
+            .boot {
+                display: grid;
+                place-items: center;
+                height: 100%;
+                font: 600 14px/1.4 system-ui, sans-serif;
+                color: #73736c;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root">
+            <div class="boot">Загрузка смены…</div>
+        </div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>
