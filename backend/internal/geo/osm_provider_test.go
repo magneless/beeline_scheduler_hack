@@ -109,3 +109,63 @@ func TestOSMContextCancellation(t *testing.T) {
 		t.Fatal("expected cancellation")
 	}
 }
+
+func TestParseRussianAddressVariants(t *testing.T) {
+	tests := []struct{ name, input, city, street, house string }{
+		{"yunyh lenincev", "г. Москва, ул Юных Ленинцев, д 83с 4", "москва", "улица юных ленинцев", "83 с4"},
+		{"biryulevskaya", "г. Москва, ул Бирюлёвская, д 1с1", "москва", "улица бирюлевская", "1 с1"},
+		{"simferopolsky", "г.Москва проезд Симферопольский, д.7", "москва", "проезд симферопольский", "7"},
+		{"volgogradsky", "Город Москва, пр-кт.Волгоградский, д. 128 к 5", "москва", "проспект волгоградский", "128 к5"},
+		{"gurevsky", "Город Москва, проезд.Гурьевский, д. 23 к 1", "москва", "проезд гурьевский", "23 к1"},
+		{"institutskaya", "Город Москва, ул.3-я Институтская, д. 5 к 2", "москва", "улица 3-я институтская", "5 к2"},
+		{"domodedovo", "Домодедово, проезд.Советский 1-й, д. 1А", "домодедово", "проезд советский 1-й", "1а"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseRussianAddress(tt.input)
+			if !got.ok || got.city != tt.city || got.street != tt.street || got.house != tt.house {
+				t.Fatalf("parse(%q) = %+v", tt.input, got)
+			}
+		})
+	}
+}
+
+func TestOSMNormalizedGeocodeMatchesOnlyCompleteAddress(t *testing.T) {
+	var gotQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"type":"FeatureCollection","features":[
+{"geometry":{"type":"Point","coordinates":[37.774,55.702]},"properties":{"city":"Москва","street":"улица Юных Ленинцев","housenumber":"83 к4"}},
+{"geometry":{"type":"Point","coordinates":[37.775,55.703]},"properties":{"city":"Москва","street":"улица Юных Ленинцев","housenumber":"83 с4"}},
+{"geometry":{"type":"Point","coordinates":[37.776,55.704]},"properties":{"city":"Оренбург","street":"улица Юных Ленинцев","housenumber":"83 с4"}}]}`))
+	}))
+	defer srv.Close()
+	p, err := NewOSMProvider(OSMOptions{PhotonURL: srv.URL, CarURL: srv.URL, FootURL: srv.URL, MinInterval: time.Nanosecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	locations, err := p.Geocode(context.Background(), "г. Москва, ул Юных Ленинцев, д 83с 4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotQuery.Get("q") != "москва улица юных ленинцев 83 с4" || gotQuery.Get("countrycode") != "RU" {
+		t.Fatalf("normalized query = %v", gotQuery)
+	}
+	if len(locations) != 1 || locations[0].Point.Lat != 55.703 || locations[0].Point.Lon != 37.775 || locations[0].Address != "г. Москва, ул Юных Ленинцев, д 83с 4" {
+		t.Fatalf("locations = %+v", locations)
+	}
+}
+
+func TestAddressMatchesRejectsWrongCityStreetAndBuilding(t *testing.T) {
+	wanted := parseRussianAddress("г. Москва, ул Юных Ленинцев, д 83с 4")
+	for _, tc := range []struct{ name, city, street, house string }{
+		{"wrong city", "Оренбург", "улица Юных Ленинцев", "83 с4"}, {"wrong street", "Москва", "улица Ленина", "83 с4"}, {"wrong building", "Москва", "улица Юных Ленинцев", "83 к4"}, {"missing house", "Москва", "улица Юных Ленинцев", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if addressMatches("", wanted, tc.city, tc.street, tc.house) {
+				t.Fatal("unexpected address match")
+			}
+		})
+	}
+}

@@ -28,6 +28,8 @@ export const useScenarioSetup = () => {
     return {
         datasets,
         pending: openRegion.pending || importOrders.pending,
+        openRegionError: openRegion.error,
+        retryOpenRegion: openRegion.retry,
         isImporting: importOrders.pending,
         openRegion: openRegion.open,
         importOrders: importOrders.importFile,

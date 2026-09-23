@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -250,7 +251,18 @@ func (p *OSMProvider) Geocode(ctx context.Context, address string) ([]contracts.
 	if strings.TrimSpace(address) == "" {
 		return nil, fmt.Errorf("empty address")
 	}
+	parts := parseRussianAddress(address)
 	endpoint := strings.TrimRight(p.o.PhotonURL, "/") + "/api/?q=" + url.QueryEscape(address) + "&limit=5"
+	if parts.ok {
+		v := url.Values{}
+		// Photon /structured currently rejects spaced Russian house numbers
+		// such as "128 к5". Use the normalized free-text query and validate
+		// every returned address component below.
+		v.Set("q", parts.city+" "+parts.street+" "+parts.house)
+		v.Set("countrycode", "RU")
+		v.Set("limit", "5")
+		endpoint = strings.TrimRight(p.o.PhotonURL, "/") + "/api/?" + v.Encode()
+	}
 	var response struct {
 		Type     string `json:"type"`
 		Features []struct {
@@ -273,8 +285,6 @@ func (p *OSMProvider) Geocode(ctx context.Context, address string) ([]contracts.
 	}
 	out := make([]contracts.Location, 0, len(response.Features))
 	seen := map[contracts.Point]bool{}
-	exact := []contracts.Location{}
-	exactSeen := map[contracts.Point]bool{}
 	for _, feature := range response.Features {
 		coord := feature.Geometry.Coordinates
 		if feature.Geometry.Type != "Point" || len(coord) != 2 || !validPoint(coord[1], coord[0]) {
@@ -282,21 +292,14 @@ func (p *OSMProvider) Geocode(ctx context.Context, address string) ([]contracts.
 		}
 		point := contracts.Point{Lat: coord[1], Lon: coord[0]}
 		props := feature.Properties
-		if addressContains(address, props.City) && addressContains(address, props.Street) && addressContains(address, props.House) && !exactSeen[point] {
-			exact = append(exact, contracts.Location{Address: address, Point: point})
-			exactSeen[point] = true
+		if addressMatches(address, parts, props.City, props.Street, props.House) && !seen[point] {
+			out = append(out, contracts.Location{Address: address, Point: point})
+			seen[point] = true
 		}
-		if seen[point] {
-			continue
-		}
-		seen[point] = true
-		out = append(out, contracts.Location{Address: address, Point: point})
-	}
-	if len(exact) > 0 {
-		return exact, nil
 	}
 	return out, nil
 }
+
 func (p *OSMProvider) routeBase(profile contracts.Transport) (string, error) {
 	switch profile {
 	case contracts.TransportCar:
@@ -441,27 +444,106 @@ func (p *OSMProvider) RouteMatrix(ctx context.Context, points []contracts.Point,
 	return out, nil
 }
 
-// Photon also returns fuzzy street/house matches. Prefer candidates whose city,
-// street and complete house number all occur in the supplied address. Otherwise
-// retain the ambiguity so the service asks the dispatcher to refine the address.
-func addressContains(address, component string) bool {
-	normalize := func(value string) []string {
-		value = strings.ToLower(strings.ReplaceAll(value, "ё", "е"))
-		tokens := strings.FieldsFunc(value, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-		out := []string{}
-		for _, token := range tokens {
-			switch token {
-			case "г", "город", "ул", "улица", "д", "дом":
-				continue
-			}
-			out = append(out, token)
+// Photon returns nearby and fuzzy matches too. Only accept the complete
+// requested city, street and house; a street centroid is not a house location.
+type russianAddress struct {
+	city, street, house string
+	ok                  bool
+}
+
+var (
+	houseMarkerRE  = regexp.MustCompile(`(?i)(?:^|[ ,])(?:дом|д)\.?\s*([^,;]+)$`)
+	houseTailRE    = regexp.MustCompile(`(?i)(?:^|[ ,])([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?(?:\s*(?:корпус|корп|к|строение|стр|с)\.?\s*[0-9]+[а-яa-z]?){0,2})$`)
+	housePartsRE   = regexp.MustCompile(`^([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?)(?:к([0-9]+[а-яa-z]?))?(?:с([0-9]+[а-яa-z]?))?$`)
+	streetMarkerRE = regexp.MustCompile(`(?:^| )(?:улица|ул|пр-кт|проспект|просп|проезд|переулок|пер|шоссе|ш|площадь|пл|набережная|наб|бульвар|бул) `)
+)
+
+func addressWords(s string) []string {
+	s = strings.ReplaceAll(strings.ToLower(s), "ё", "е")
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
+	})
+}
+
+func normAddressPart(s string) string {
+	words := addressWords(s)
+	out := make([]string, 0, len(words))
+	for _, word := range words {
+		switch word {
+		case "г", "город":
+			continue
+		case "ул":
+			word = "улица"
+		case "пр-кт", "просп":
+			word = "проспект"
+		case "пер":
+			word = "переулок"
+		case "ш":
+			word = "шоссе"
+		case "пл":
+			word = "площадь"
+		case "наб":
+			word = "набережная"
+		case "бул":
+			word = "бульвар"
 		}
-		return out
+		out = append(out, word)
 	}
-	wanted := normalize(component)
-	if len(wanted) == 0 {
+	return strings.Join(out, " ")
+}
+
+func normHouse(s string) string {
+	s = strings.ReplaceAll(strings.ToLower(s), "ё", "е")
+	s = strings.NewReplacer("корпус", "к", "корп", "к", "строение", "с", "стр", "с", ".", "").Replace(s)
+	s = strings.Join(strings.Fields(s), "")
+	parts := housePartsRE.FindStringSubmatch(s)
+	if parts == nil {
+		return ""
+	}
+	house := parts[1]
+	if parts[2] != "" {
+		house += " к" + parts[2]
+	}
+	if parts[3] != "" {
+		house += " с" + parts[3]
+	}
+	return house
+}
+
+func parseRussianAddress(address string) russianAddress {
+	raw := strings.TrimSpace(address)
+	m := houseMarkerRE.FindStringSubmatchIndex(raw)
+	if m == nil {
+		m = houseTailRE.FindStringSubmatchIndex(raw)
+	}
+	if m == nil {
+		return russianAddress{}
+	}
+	house := normHouse(raw[m[2]:m[3]])
+	before := strings.Trim(raw[:m[0]], " ,;")
+	segments := strings.SplitN(before, ",", 2)
+	var city, street string
+	if len(segments) == 2 {
+		city, street = normAddressPart(segments[0]), normAddressPart(segments[1])
+	} else {
+		before = normAddressPart(before)
+		if marker := streetMarkerRE.FindStringIndex(before); marker != nil {
+			city, street = strings.TrimSpace(before[:marker[0]]), strings.TrimSpace(before[marker[0]:])
+		}
+	}
+	if city == "" || street == "" || house == "" {
+		return russianAddress{}
+	}
+	return russianAddress{city: city, street: street, house: house, ok: true}
+}
+
+func addressMatches(_ string, wanted russianAddress, city, street, house string) bool {
+	if !wanted.ok || normAddressPart(city) != wanted.city || normHouse(house) != wanted.house {
 		return false
 	}
-	haystack := " " + strings.Join(normalize(address), " ") + " "
-	return strings.Contains(haystack, " "+strings.Join(wanted, " ")+" ")
+	// OSM can place a street type or ordinal before or after the name.
+	left, right := strings.Fields(normAddressPart(street)), strings.Fields(wanted.street)
+	sort.Strings(left)
+	sort.Strings(right)
+	return strings.Join(left, " ") == strings.Join(right, " ")
 }

@@ -104,8 +104,8 @@ func TestPhotonExactAddressExcludesFuzzyHouses(t *testing.T) {
 		t.Fatalf("points=%+v error=%v", points, err)
 	}
 	points, err = provider.Geocode(context.Background(), "Тверская")
-	if err != nil || len(points) != 3 {
-		t.Fatalf("ambiguous address silently resolved: %+v %v", points, err)
+	if err != nil || len(points) != 0 {
+		t.Fatalf("incomplete address must not resolve: %+v %v", points, err)
 	}
 }
 

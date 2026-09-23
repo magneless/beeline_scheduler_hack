@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -13,6 +14,7 @@ export const useOpenDemoRegion = ({
 }: UseOpenDemoRegionParams = {}) => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const [lastDatasetId, setLastDatasetId] = useState<string>();
 
     const mutation = useMutation({
         mutationFn: createScenario,
@@ -39,7 +41,16 @@ export const useOpenDemoRegion = ({
     });
 
     return {
-        open: (datasetId: string) => mutation.mutate(datasetId),
+        open: (datasetId: string) => {
+            setLastDatasetId(datasetId);
+            mutation.mutate(datasetId);
+        },
+        retry: () => {
+            if (lastDatasetId) {
+                mutation.mutate(lastDatasetId);
+            }
+        },
         pending: mutation.isPending,
+        error: mutation.error,
     };
 };

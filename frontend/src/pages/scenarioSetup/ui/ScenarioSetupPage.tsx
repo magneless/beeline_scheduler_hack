@@ -7,8 +7,15 @@ import { SetupImportBar } from './SetupImportBar';
 import { useScenarioSetup } from '../model/useScenarioSetup';
 
 export const ScenarioSetupPage = () => {
-    const { datasets, pending, isImporting, openRegion, importOrders } =
-        useScenarioSetup();
+    const {
+        datasets,
+        pending,
+        isImporting,
+        openRegion,
+        openRegionError,
+        retryOpenRegion,
+        importOrders,
+    } = useScenarioSetup();
 
     const handleOpenRegion = (dataset: DemoDataset) => {
         openRegion(dataset.id);
@@ -33,6 +40,42 @@ export const ScenarioSetupPage = () => {
             />
             <div className="relative z-10 flex h-full flex-col justify-center px-10 py-10 lg:px-16">
                 <SetupHero />
+                {pending && !isImporting ? (
+                    <div
+                        className={cn(
+                            'mt-5 rounded-2xl border border-primary/30',
+                            'bg-primary/10 px-4 py-3 text-sm text-foreground'
+                        )}
+                        role="status"
+                    >
+                        Открываем сценарий. Определяем координаты адресов —
+                        первая загрузка может занять несколько минут.
+                    </div>
+                ) : null}
+                {openRegionError ? (
+                    <div
+                        className={cn(
+                            'mt-5 flex flex-wrap items-center justify-between gap-3',
+                            'rounded-2xl border border-destructive/30',
+                            'bg-destructive/10 px-4 py-3 text-sm text-foreground'
+                        )}
+                        role="alert"
+                    >
+                        <span>
+                            {openRegionError instanceof Error
+                                ? openRegionError.message
+                                : 'Не удалось открыть сценарий.'}
+                        </span>
+                        <button
+                            type="button"
+                            className="rounded-full bg-card px-3 py-1.5 font-semibold hover:bg-accent"
+                            onClick={retryOpenRegion}
+                            disabled={pending}
+                        >
+                            Повторить
+                        </button>
+                    </div>
+                ) : null}
                 <SetupImportBar
                     datasets={datasets}
                     pending={pending}

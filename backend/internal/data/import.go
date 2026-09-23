@@ -80,7 +80,8 @@ func (i *Importer) Demo(ctx context.Context, id string) (c.Snapshot, any, error)
 		return c.Snapshot{}, nil, e
 	}
 	defer f.Close()
-	snap, meta, err := i.Import(ctx, f, d.RegionID, d.Date)
+	officeOverride := demoOffices[d.RegionID]
+	snap, meta, err := i.importWithOffice(ctx, f, d.RegionID, d.Date, &officeOverride)
 	if err != nil {
 		return snap, meta, err
 	}
@@ -108,6 +109,20 @@ type ImportMetadata struct {
 	SourceRows     [][]string               `json:"source_rows"`
 	Assumptions    []string                 `json:"assumptions"`
 	Mappings       map[string]Normalization `json:"mappings"`
+	OfficeOverride *OfficeOverride          `json:"office_override,omitempty"`
+}
+
+type OfficeOverride struct {
+	Original string  `json:"original"`
+	Resolved string  `json:"resolved"`
+	Source   string  `json:"source"`
+	Point    c.Point `json:"point"`
+}
+
+var demoOffices = map[string]OfficeOverride{
+	"east":         {"г. Москва, ул Юных Ленинцев, д 83с 4", "Москва, улица Юных Ленинцев, дом 83, корпус 4", "https://www.openstreetmap.org/way/85397778", c.Point{Lat: 55.7022013, Lon: 37.7739593}},
+	"southeast":    {"г. Москва, ул Бирюлёвская, д 1с1", "Москва, Бирюлёвская улица, дом 1, корпус 2", "https://www.openstreetmap.org/way/29012609", c.Point{Lat: 55.6022148, Lon: 37.6670521}},
+	"southcentral": {"г.Москва проезд Симферопольский, д.7", "Москва, Симферопольский проезд, дом 7", "https://www.openstreetmap.org/way/655680993", c.Point{Lat: 55.6647568, Lon: 37.6158385}},
 }
 
 type Normalization struct {
@@ -119,6 +134,10 @@ type Normalization struct {
 }
 
 func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string) (c.Snapshot, any, error) {
+	return i.importWithOffice(ctx, r, region, date, nil)
+}
+
+func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, date string, override *OfficeOverride) (c.Snapshot, any, error) {
 	d, ok := Lookup(region)
 	if !ok {
 		return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Неизвестный region_id")
@@ -166,8 +185,11 @@ func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string)
 			return snap, nil, &FormatError{"Отсутствует колонка " + name}
 		}
 	}
-	meta := ImportMetadata{MappingVersion: MappingVersion, RegionID: region, SourceRows: [][]string{}, Assumptions: []string{"Время источника московское; дата должна совпадать с выбранной", "Поступление исходных заявок без времени — начало местного дня", "Инженеры, навыки, транспорт и оборудование — фиксированная синтетическая модель v1"}}
+	meta := ImportMetadata{MappingVersion: MappingVersion, RegionID: region, SourceRows: [][]string{}, Assumptions: []string{"Время источника московское; дата должна совпадать с выбранной", "Поступление исходных заявок без времени — начало местного дня", "Состав инженеров импортируется отдельно; в демонаборах используется синтетическая бригада"}}
 	meta.Mappings = map[string]Normalization{}
+	if override != nil {
+		meta.OfficeOverride = override
+	}
 	locations := []c.LocationInput{}
 	seen := map[string]bool{}
 	office := ""
@@ -244,16 +266,46 @@ func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string)
 	if office == "" {
 		return snap, nil, c.NewError("INVALID_INPUT", "Отсутствует адрес офиса")
 	}
-	locations = append(locations, c.LocationInput{ID: snap.OfficeLocationID, Address: office})
-	result, e := i.Geo.Geocode(ctx, c.GeocodeRequest{RegionID: region, Locations: locations})
+	// Resolve the office before requesting any order addresses. This makes a
+	// bad office fail fast and avoids spending time on a request that cannot
+	// produce a usable scenario.
+	officeInput := c.LocationInput{ID: snap.OfficeLocationID, Address: office}
+	resolved := map[string]c.Location{}
+	if override != nil {
+		override.Original = office
+		officeInput.Address = override.Resolved
+		officeInput.Point = &override.Point
+		resolved[officeInput.ID] = c.Location{ID: officeInput.ID, Address: officeInput.Address, Point: *officeInput.Point}
+	} else {
+		officeResult, geocodeErr := i.Geo.Geocode(ctx, c.GeocodeRequest{RegionID: region, Locations: []c.LocationInput{officeInput}})
+		if geocodeErr != nil {
+			return snap, nil, geocodeErr
+		}
+		if len(officeResult.Items) != 1 || officeResult.Items[0].LocationID != officeInput.ID || (officeResult.Items[0].Location == nil) == (officeResult.Items[0].Issue == nil) {
+			return snap, nil, c.NewError("GEO_UNAVAILABLE", "Некорректный ответ геокодера для офиса")
+		}
+		if officeResult.Items[0].Issue != nil {
+			return snap, nil, c.NewError("INVALID_INPUT", fmt.Sprintf("Не удалось определить офис %q. Проверьте адрес офиса и укажите полный город, улицу и дом", office))
+		}
+		loc := *officeResult.Items[0].Location
+		if loc.ID != officeInput.ID || math.IsNaN(loc.Point.Lat) || math.IsNaN(loc.Point.Lon) || loc.Point.Lat < -90 || loc.Point.Lat > 90 || loc.Point.Lon < -180 || loc.Point.Lon > 180 {
+			return snap, nil, c.NewError("GEO_UNAVAILABLE", "Некорректный ответ геокодера для офиса")
+		}
+		resolved[loc.ID] = loc
+	}
+	locations = append(locations, officeInput)
+	orderLocations := locations[:len(locations)-1]
+	var result c.GeocodeResult
+	if len(orderLocations) > 0 {
+		result, e = i.Geo.Geocode(ctx, c.GeocodeRequest{RegionID: region, Locations: orderLocations})
+	}
 	if e != nil {
 		return snap, nil, e
 	}
 	expected := map[string]bool{}
-	for _, l := range locations {
+	for _, l := range orderLocations {
 		expected[l.ID] = true
 	}
-	resolved := map[string]c.Location{}
 	answered := map[string]bool{}
 	for _, item := range result.Items {
 		if !expected[item.LocationID] || answered[item.LocationID] || (item.Location == nil) == (item.Issue == nil) {
@@ -280,7 +332,10 @@ func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string)
 		return snap, nil, c.NewError("GEO_UNAVAILABLE", "Геокодер пропустил адреса")
 	}
 	if _, ok := resolved[snap.OfficeLocationID]; !ok {
-		return snap, nil, c.NewError("INVALID_INPUT", "Не удалось определить офис")
+		return snap, nil, c.NewError("INVALID_INPUT", fmt.Sprintf("Не удалось определить офис %q. Проверьте адрес офиса и укажите полный город, улицу и дом", office))
+	}
+	if override != nil && region != "southcentral" {
+		snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_OFFICE_OVERRIDE", Message: fmt.Sprintf("Адрес офиса из CSV %q не подтверждён. Для демо выбран офис %q (%s)", office, override.Resolved, override.Source)})
 	}
 	for _, l := range locations {
 		if resolvedLoc, ok := resolved[l.ID]; ok {
