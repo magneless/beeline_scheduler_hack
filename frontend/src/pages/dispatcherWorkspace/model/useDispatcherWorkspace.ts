@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import {
     type PlanEventInput,
@@ -11,6 +11,7 @@ import { runStatusLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
 
 import { useWorkspaceQueries } from './queries';
+import { useDispatcherWorkspaceStore } from './store';
 import { useWorkspaceSelection } from './useWorkspaceSelection';
 import { buildMapModel } from '../lib/utils';
 import { buildWorkspaceView } from '../lib/viewModel';
@@ -18,6 +19,9 @@ import { buildWorkspaceView } from '../lib/viewModel';
 export const useDispatcherWorkspace = (scenarioId: string) => {
     const selection = useWorkspaceSelection();
     const queries = useWorkspaceQueries(scenarioId);
+    useEffect(() => {
+        useDispatcherWorkspaceStore.getState().resetSelection();
+    }, [scenarioId]);
 
     const mapModel = useMemo(
         () =>
@@ -25,10 +29,18 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
                 ? buildMapModel(
                       queries.snapshot,
                       queries.plan,
-                      selection.selectedEngineerId
+                      selection.selectedEngineerId,
+                      selection.panelTab === 'orders' &&
+                          selection.filter === 'unassigned'
                   )
                 : { markers: [], polylines: [] },
-        [queries.snapshot, queries.plan, selection.selectedEngineerId]
+        [
+            queries.snapshot,
+            queries.plan,
+            selection.selectedEngineerId,
+            selection.panelTab,
+            selection.filter,
+        ]
     );
 
     const view = useMemo(
@@ -75,6 +87,22 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     const showRunBanner =
         eventPending && Boolean(runStatus) && runStatus !== 'succeeded';
 
+    const selectOrder = (id: TypeOrNull<string>) => {
+        const engineerId = id ? view.engineerByOrder.get(id) : undefined;
+        if (id) {
+            selection.focusEngineer(engineerId ?? null);
+        }
+        selection.selectOrder(id);
+        if (!engineerId) {
+            selection.setFilter(selection.filter);
+        }
+    };
+    const showUnassigned = () => {
+        selection.focusEngineer(null);
+        selection.selectOrder(null);
+        selection.setFilter('unassigned');
+    };
+
     const handleOrderEvent = (input: PlanEventInput) => {
         planEvent.apply(input);
     };
@@ -101,9 +129,24 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         compareSource: queries.compareSource,
         isLoading: queries.isLoading,
         mapModel,
-        mapFitToken: queries.snapshot?.region_id ?? scenarioId,
+        mapFitToken: [
+            scenarioId,
+            selection.selectedEngineerId ?? 'overview',
+            selection.panelTab === 'orders' ? selection.filter : 'all',
+        ].join(':'),
         ...view,
         ...selection,
+        selectOrder,
+        setFilter: (filter: typeof selection.filter) => {
+            selection.focusEngineer(null);
+            selection.setFilter(filter);
+        },
+        onMarkerClick: (id: string) => {
+            if (id !== 'office') {
+                selectOrder(id);
+            }
+        },
+        showUnassigned,
         runStatus,
         runStatusLabel: runStatus ? runStatusLabel[runStatus] : undefined,
         eventPending,

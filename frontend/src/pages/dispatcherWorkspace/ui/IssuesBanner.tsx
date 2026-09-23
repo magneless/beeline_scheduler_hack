@@ -10,25 +10,33 @@ type IssuesBannerProps = {
     onSelect?: (entityId: string) => void;
 };
 
+const issueMessage = (issue: Issue) => {
+    const address = issue.message.match(/"([^"]+)"/)?.[1];
+    if (issue.message.startsWith('ambiguous address')) {
+        return `Уточните адрес: ${address ?? 'найдено несколько совпадений'}`;
+    }
+    if (issue.message.startsWith('no geocoding results')) {
+        return `Адрес не найден: ${address ?? 'уточните улицу и дом'}`;
+    }
+    if (issue.code === 'DEMO_OFFICE_OVERRIDE') {
+        return 'В демосценарии использован подтверждённый адрес офиса.';
+    }
+    return issue.message;
+};
+
 export const IssuesBanner = ({ issues, onSelect }: IssuesBannerProps) => {
     if (!issues.length) {
         return null;
     }
 
     return (
-        <div
-            className={cn(
-                'pointer-events-auto rounded-[22px] bg-card px-4 py-3',
-                'max-h-[40vh] overflow-y-auto'
-            )}
-            style={{ boxShadow: 'var(--shadow-soft)' }}
-        >
+        <div className={cn('bg-white px-2 py-2', 'overflow-y-auto')}>
             <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                 {workspaceCopy.issuesTitle}
             </p>
             <div className="mt-2 flex flex-col gap-1">
                 {issues.map((issue, index) => {
-                    const title = issueCodeLabel[issue.code] ?? issue.code;
+                    const title = issueCodeLabel[issue.code] ?? 'Замечание';
                     const clickable = issue.entity_id && onSelect;
                     const handleClick = () => {
                         if (issue.entity_id && onSelect) {
@@ -43,7 +51,7 @@ export const IssuesBanner = ({ issues, onSelect }: IssuesBannerProps) => {
                             variant="ghost"
                             disabled={!clickable}
                             className={cn(
-                                'h-auto w-full justify-start rounded-2xl px-2 py-1.5',
+                                'h-auto w-full justify-start rounded-[16px] px-2 py-1.5',
                                 'text-left text-xs whitespace-normal',
                                 clickable ? 'hover:bg-muted' : 'cursor-default'
                             )}
@@ -56,7 +64,7 @@ export const IssuesBanner = ({ issues, onSelect }: IssuesBannerProps) => {
                                 </span>
                             ) : null}
                             <span className="mt-0.5 block text-muted-foreground">
-                                {issue.message}
+                                {issueMessage(issue)}
                             </span>
                         </Button>
                     );

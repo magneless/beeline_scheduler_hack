@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarRange, PanelRight } from 'lucide-react';
+import { CalendarRange, PanelLeft, Plus, RotateCw } from 'lucide-react';
 
 import { type PlanEventInput } from 'features/applyPlanEvent';
 import {
@@ -9,19 +9,15 @@ import {
 } from 'shared/api/types/contracts';
 import { regionLabel, runStatusLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
-import { cn, formatCount, formatDay, formatKm } from 'shared/lib/utils';
+import { formatDay } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 
 import { OrderForm } from './OrderForm';
 import { RegionSwitcher } from './RegionSwitcher';
-import { TopbarMetric } from './TopbarMetric';
-import { workspaceCopy } from '../lib/config';
 
 type WorkspaceTopbarProps = {
     snapshot: Snapshot | undefined;
     metrics: Metrics | undefined;
-    compare: TypeOrNull<Metrics> | undefined;
-    compareSource?: TypeOrNull<'baseline' | 'previous'>;
     canEvent: boolean;
     canRebuild: boolean;
     buildPending: boolean;
@@ -37,31 +33,9 @@ type WorkspaceTopbarProps = {
     onTogglePanel: () => void;
 };
 
-const formatCompareHint = (
-    before: number | string | undefined,
-    now: number | string,
-    source: TypeOrNull<'baseline' | 'previous'> | undefined
-) => {
-    if (before === undefined || before === now) {
-        return undefined;
-    }
-
-    if (source === 'baseline') {
-        return workspaceCopy.wasBaseline(before);
-    }
-
-    if (source === 'previous') {
-        return workspaceCopy.wasPrevious(before);
-    }
-
-    return workspaceCopy.was(before);
-};
-
 export const WorkspaceTopbar = ({
     snapshot,
     metrics,
-    compare,
-    compareSource,
     canEvent,
     canRebuild,
     buildPending,
@@ -77,124 +51,93 @@ export const WorkspaceTopbar = ({
     onTogglePanel,
 }: WorkspaceTopbarProps) => {
     const [orderFormOpen, setOrderFormOpen] = useState(false);
-
-    const regionName = snapshot
-        ? (regionLabel[snapshot.region_id] ?? snapshot.region_id)
-        : workspaceCopy.shiftFallback;
-    const dayLabel = snapshot
-        ? `${formatDay(snapshot.date)} · ${formatCount(snapshot.orders.length, [
-              'заявка',
-              'заявки',
-              'заявок',
-          ])}`
-        : workspaceCopy.loading;
-    const metricsFallback =
-        runStatus && runStatus !== 'succeeded'
-            ? runStatusLabel[runStatus]
-            : workspaceCopy.mapHint;
-
     return (
-        <div className="pointer-events-none absolute inset-x-4 top-4 z-30 flex items-start gap-2">
-            <div
-                className={cn(
-                    'pointer-events-auto flex max-w-[28%] min-w-0 items-center',
-                    'gap-2 rounded-full bg-card px-4 py-2'
-                )}
-                style={{ boxShadow: 'var(--shadow-soft)' }}
-            >
-                <span className="shrink-0 text-sm font-bold">{regionName}</span>
-                <span className="truncate text-sm text-muted-foreground">
-                    {dayLabel}
-                </span>
-            </div>
-            <div
-                className={cn(
-                    'pointer-events-auto mx-auto flex min-w-0 flex-wrap items-center',
-                    'justify-center gap-x-3 gap-y-1 rounded-full bg-card px-4 py-2'
-                )}
-                style={{ boxShadow: 'var(--shadow-soft)' }}
-            >
+        <header
+            className={[
+                'relative z-30 flex shrink-0 flex-wrap items-center',
+                'justify-between gap-3 border-b border-slate-200 bg-white px-5',
+                'py-4',
+            ].join(' ')}
+        >
+            <div className="flex min-w-0 items-center gap-3">
+                <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-9 rounded-[8px] text-slate-500"
+                    onClick={onTogglePanel}
+                    aria-label={
+                        panelOpen
+                            ? 'Скрыть рабочую панель'
+                            : 'Показать рабочую панель'
+                    }
+                    aria-expanded={panelOpen}
+                >
+                    <PanelLeft className="size-5" />
+                </Button>
+                <div>
+                    <h1 className="text-lg leading-tight font-bold tracking-tight text-slate-900">
+                        Диспетчерская
+                    </h1>
+                    <p className="mt-1 text-xs text-slate-500">
+                        {snapshot
+                            ? `${regionLabel[snapshot.region_id] ?? snapshot.region_id} · ${formatDay(snapshot.date)}`
+                            : 'Загрузка смены…'}
+                    </p>
+                </div>
                 {metrics ? (
-                    <>
-                        <TopbarMetric
-                            value={String(metrics.assigned_count)}
-                            label={workspaceCopy.metricAssigned}
-                            hint={formatCompareHint(
-                                compare?.assigned_count,
-                                metrics.assigned_count,
-                                compareSource
-                            )}
-                        />
-                        <TopbarMetric
-                            value={String(metrics.unassigned_count)}
-                            label={workspaceCopy.metricUnassigned}
-                            hint={formatCompareHint(
-                                compare?.unassigned_count,
-                                metrics.unassigned_count,
-                                compareSource
-                            )}
-                        />
-                        <TopbarMetric
-                            value={String(metrics.completed_count)}
-                            label={workspaceCopy.metricCompleted}
-                            hint={formatCompareHint(
-                                compare?.completed_count,
-                                metrics.completed_count,
-                                compareSource
-                            )}
-                        />
-                        <TopbarMetric
-                            value={String(metrics.used_engineer_count)}
-                            label={workspaceCopy.metricCrews}
-                            hint={formatCompareHint(
-                                compare?.used_engineer_count,
-                                metrics.used_engineer_count,
-                                compareSource
-                            )}
-                        />
-                        <TopbarMetric
-                            value={formatKm(metrics.total_distance_m)}
-                            label={workspaceCopy.metricDistance}
-                            hint={formatCompareHint(
-                                compare
-                                    ? formatKm(compare.total_distance_m)
-                                    : undefined,
-                                formatKm(metrics.total_distance_m),
-                                compareSource
-                            )}
-                        />
-                    </>
-                ) : (
-                    <span className="text-sm text-muted-foreground">
-                        {metricsFallback}
+                    <span className="ml-3 hidden border-l border-slate-200 pl-4 text-xs text-slate-500 xl:block">
+                        <strong className="font-semibold text-slate-800">
+                            {metrics.assigned_count}
+                        </strong>{' '}
+                        в плане <span className="mx-2">·</span>
+                        <strong className="font-semibold text-slate-800">
+                            {metrics.completed_count}
+                        </strong>{' '}
+                        выполнено
                     </span>
-                )}
+                ) : null}
             </div>
-            <div className="pointer-events-auto relative ml-auto flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                {(buildPending || eventPending) && runStatus ? (
+                    <span role="status" className="text-xs text-slate-500">
+                        {runStatusLabel[runStatus]}
+                    </span>
+                ) : null}
                 {canRebuild && metrics ? (
                     <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
                         disabled={buildPending || eventPending}
                         onClick={onRebuild}
+                        className="rounded-[8px] text-slate-600"
                     >
-                        {buildPending
-                            ? workspaceCopy.rebuildPending
-                            : workspaceCopy.rebuildPlan}
+                        <RotateCw className="size-3.5" />
+                        {buildPending ? 'Считаем…' : 'Пересобрать'}
                     </Button>
                 ) : null}
+                <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!metrics}
+                    onClick={onToggleSchedule}
+                    aria-pressed={scheduleOpen}
+                    className="rounded-[8px] border-slate-200"
+                >
+                    <CalendarRange className="size-4" />
+                    {scheduleOpen ? 'Скрыть расписание' : 'Расписание'}
+                </Button>
+                <RegionSwitcher currentRegionId={snapshot?.region_id} />
                 {canEvent ? (
                     <div className="relative">
                         <Button
                             size="sm"
-                            variant="outline"
                             disabled={eventPending || buildPending}
-                            title="Добавить обычную или аварийную заявку"
-                            onClick={() => setOrderFormOpen((v) => !v)}
+                            onClick={() => setOrderFormOpen((value) => !value)}
+                            aria-expanded={orderFormOpen}
+                            className="rounded-[8px]"
                         >
-                            {eventPending
-                                ? workspaceCopy.emergencyPending
-                                : 'Новая заявка'}
+                            <Plus className="size-4" />
+                            Новая заявка
                         </Button>
                         {orderFormOpen && snapshot ? (
                             <OrderForm
@@ -211,25 +154,7 @@ export const WorkspaceTopbar = ({
                         ) : null}
                     </div>
                 ) : null}
-                <Button
-                    size="sm"
-                    variant={scheduleOpen ? 'default' : 'outline'}
-                    onClick={onToggleSchedule}
-                >
-                    <CalendarRange className="size-4" />
-                    {workspaceCopy.slots}
-                </Button>
-                <Button
-                    size="icon"
-                    variant={panelOpen ? 'default' : 'outline'}
-                    className="size-9"
-                    onClick={onTogglePanel}
-                    aria-label={workspaceCopy.panelAria}
-                >
-                    <PanelRight className="size-4" />
-                </Button>
-                <RegionSwitcher currentRegionId={snapshot?.region_id} />
             </div>
-        </div>
+        </header>
     );
 };

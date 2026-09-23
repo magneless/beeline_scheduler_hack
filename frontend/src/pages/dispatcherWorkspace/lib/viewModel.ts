@@ -80,7 +80,16 @@ export const buildWorkspaceView = ({
 
             return true;
         }) ?? [];
-    const issues = [...(snapshot?.issues ?? []), ...(activePlan?.issues ?? [])];
+    const issues = [
+        ...new Map(
+            [...(snapshot?.issues ?? []), ...(activePlan?.issues ?? [])].map(
+                (issue) => [
+                    `${issue.code}:${issue.entity_id ?? ''}:${issue.source_row ?? ''}:${issue.message}`,
+                    issue,
+                ]
+            )
+        ).values(),
+    ];
     const canEditEngineers =
         !activePlan?.base_plan_id &&
         !(snapshot?.orders.some((order) => order.execution) ?? false);

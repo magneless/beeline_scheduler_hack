@@ -88,7 +88,8 @@ export const OrderPanel = ({
                     <Input
                         value={panel.query}
                         placeholder={workspaceCopy.orderSearch}
-                        className="h-8 bg-muted pl-8 text-xs"
+                        aria-label="Поиск заявок"
+                        className="h-8 bg-slate-50 pl-8 text-xs"
                         onChange={panel.handleQueryChange}
                     />
                 </div>
@@ -101,13 +102,16 @@ export const OrderPanel = ({
                             </span>
                         </TabsTrigger>
                         <TabsTrigger value="unassigned">
-                            {workspaceCopy.orderFilterOpen}
+                            Без бригады
                             <span className="tabular-nums text-[11px] text-muted-foreground">
                                 {panel.openCount}
                             </span>
                         </TabsTrigger>
-                        <TabsTrigger value="closed">
-                            {workspaceCopy.orderFilterClosed}
+                        <TabsTrigger
+                            value="closed"
+                            title="Выполненные и отменённые заявки"
+                        >
+                            Закрыты
                             <span className="tabular-nums text-[11px] text-muted-foreground">
                                 {panel.closedCount}
                             </span>
@@ -119,7 +123,7 @@ export const OrderPanel = ({
                         type="button"
                         variant="ghost"
                         className={cn(
-                            'h-auto w-full justify-between gap-2 rounded-2xl',
+                            'h-auto w-full justify-between gap-2 rounded-[16px]',
                             'bg-accent px-3 py-2 text-left whitespace-normal hover:bg-accent'
                         )}
                         onClick={onClearCrew}

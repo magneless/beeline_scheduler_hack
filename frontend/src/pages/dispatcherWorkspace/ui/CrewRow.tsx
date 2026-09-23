@@ -13,10 +13,10 @@ import {
 import { Badge } from 'shared/ui/badge';
 import { Button } from 'shared/ui/button';
 
-import { CrewAvatar } from './CrewAvatar';
 import { EngineerForm } from './EngineerForm';
 import { EventTimeField } from './EventTimeField';
 import { workspaceCopy } from '../lib/config';
+import { routeColor } from '../lib/routeColors';
 
 import { type EngineerPatchInput } from '../model/types';
 
@@ -69,7 +69,7 @@ export const CrewRow = ({
     const statusLabel = !engineer.available
         ? workspaceCopy.crewUnavailable
         : jobs
-          ? formatCount(jobs, ['заявка', 'заявки', 'заявок'])
+          ? formatCount(jobs, ['задание', 'задания', 'заданий'])
           : workspaceCopy.crewFree;
     const distanceLabel =
         distance !== undefined ? ` · ${formatKm(distance)}` : '';
@@ -106,18 +106,34 @@ export const CrewRow = ({
     return (
         <article
             ref={rowRef}
+            data-engineer-id={engineer.id}
             className={cn(
-                'rounded-2xl px-2.5 py-2',
-                active ? 'bg-primary/18' : 'hover:bg-muted'
+                'rounded-[12px] border px-2.5 py-2',
+                active
+                    ? 'border-blue-200 bg-blue-50'
+                    : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
             )}
         >
             <Button
                 type="button"
                 variant="ghost"
-                className="h-auto w-full items-center justify-start gap-2.5 px-0 py-0 text-left whitespace-normal"
+                className={[
+                    'h-auto w-full items-center justify-start gap-2.5 px-0 py-0',
+                    'text-left whitespace-normal',
+                ].join(' ')}
                 onClick={handleSelect}
+                aria-label={`Показать маршрут: ${name}`}
+                aria-pressed={active}
             >
-                <CrewAvatar engineerId={engineer.id} size="sm" />
+                <span
+                    className={[
+                        'flex size-8 shrink-0 items-center justify-center',
+                        'rounded-[12px] text-xs font-bold text-white',
+                    ].join(' ')}
+                    style={{ backgroundColor: routeColor(engineer.id) }}
+                >
+                    {engineer.id.match(/(\d+)$/)?.[1] ?? name.slice(0, 1)}
+                </span>
                 <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-bold">
@@ -130,77 +146,92 @@ export const CrewRow = ({
                     <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         {transportLabel[engineer.transport]}
                         {distanceLabel}
-                        {baselineLabel}
                     </span>
                 </span>
             </Button>
             {active ? (
                 <div className="mt-2 ml-[2.75rem] space-y-1.5">
+                    <span
+                        className={[
+                            'inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px]',
+                            'font-semibold text-blue-800',
+                        ].join(' ')}
+                    >
+                        На карте
+                    </span>
                     <p className="text-[11px] text-muted-foreground">
                         Смена {formatClock(engineer.shift.start, timezone)}–
                         {formatClock(engineer.shift.end, timezone)}
                     </p>
-                    <div className="flex flex-wrap gap-1">
-                        {engineer.skills.map((skill) => (
-                            <Badge
-                                key={skill}
-                                variant="secondary"
-                                className="px-2 py-0.5 text-[10px]"
-                            >
-                                {skillLabel[skill] ?? skill}
-                            </Badge>
-                        ))}
-                        {stockItems.map(([code, count]) => (
-                            <Badge
-                                key={code}
-                                variant="default"
-                                className="px-2 py-0.5 text-[10px]"
-                            >
-                                {equipmentLabel[code]} {count}
-                            </Badge>
-                        ))}
-                    </div>
-                    {editing && onPatch ? (
-                        <EngineerForm
-                            key={engineer.id}
-                            engineer={engineer}
-                            date={date}
-                            timezone={timezone}
-                            pending={pending}
-                            onCancel={onEdit}
-                            onSave={onPatch}
-                        />
-                    ) : (
-                        <div className="space-y-2">
-                            {canEdit ? (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={onEdit}
+                    <details className="rounded-[8px] border border-slate-200 bg-white px-2 py-1.5">
+                        <summary
+                            title={baselineLabel || undefined}
+                            className="cursor-pointer text-[11px] font-medium text-slate-600"
+                        >
+                            Параметры бригады
+                        </summary>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            {engineer.skills.map((skill) => (
+                                <Badge
+                                    key={skill}
+                                    variant="secondary"
+                                    className="px-2 py-0.5 text-[10px]"
                                 >
-                                    {workspaceCopy.crewEdit}
-                                </Button>
-                            ) : null}
-                            {canEvent && onUnavailable ? (
-                                <div className="min-w-0 space-y-2">
-                                    <EventTimeField
-                                        value={occurredAt}
-                                        timezone={timezone}
-                                        onChange={setOccurredAt}
-                                    />
+                                    {skillLabel[skill] ?? skill}
+                                </Badge>
+                            ))}
+                            {stockItems.map(([code, count]) => (
+                                <Badge
+                                    key={code}
+                                    variant="default"
+                                    className="px-2 py-0.5 text-[10px]"
+                                >
+                                    {equipmentLabel[code]} {count}
+                                </Badge>
+                            ))}
+                        </div>
+                        {editing && onPatch ? (
+                            <EngineerForm
+                                key={engineer.id}
+                                engineer={engineer}
+                                date={date}
+                                timezone={timezone}
+                                pending={pending}
+                                onCancel={onEdit}
+                                onSave={onPatch}
+                            />
+                        ) : (
+                            <div className="space-y-2">
+                                {canEdit ? (
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-auto w-full whitespace-normal px-3 py-2 text-left"
-                                        disabled={pending}
-                                        onClick={handleUnavailable}
+                                        onClick={onEdit}
                                     >
-                                        {workspaceCopy.crewMakeUnavailable}
+                                        {workspaceCopy.crewEdit}
                                     </Button>
-                                </div>
-                            ) : null}
-                        </div>
-                    )}
+                                ) : null}
+                                {canEvent && onUnavailable ? (
+                                    <div className="min-w-0 space-y-2">
+                                        <EventTimeField
+                                            value={occurredAt}
+                                            timezone={timezone}
+                                            onChange={setOccurredAt}
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-auto w-full whitespace-normal px-3 py-2 text-left"
+                                            disabled={pending}
+                                            onClick={handleUnavailable}
+                                        >
+                                            {workspaceCopy.crewMakeUnavailable}
+                                        </Button>
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
+                    </details>
                 </div>
             ) : null}
         </article>

@@ -13,12 +13,16 @@ export const markerGeometrySignature = (marker: MapMarker) =>
         marker.open ? 1 : 0,
         marker.tone ?? '',
         marker.label ?? '',
+        marker.color ?? '',
+        marker.sequence ?? '',
+        marker.muted ? 1 : 0,
     ].join('|');
 
 export const polylineGeometrySignature = (line: MapPolyline) =>
     [
         line.id,
         line.tone ?? '',
+        line.color ?? '',
         ...line.points.map(({ lat, lon }) => `${lat},${lon}`),
     ].join('|');
 

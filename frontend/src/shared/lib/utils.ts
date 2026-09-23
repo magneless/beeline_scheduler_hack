@@ -34,7 +34,10 @@ export const formatCount = (count: number, forms: [string, string, string]) => {
     return `${count} ${forms[2]}`;
 };
 
-export const displayEngineer = (id: string) => engineerName[id] ?? id;
+export const displayEngineer = (id: string) => {
+    const number = id.match(/(?:^|-)eng-0*(\d+)$/)?.[1];
+    return engineerName[id] ?? (number ? `Бригада ${number}` : id);
+};
 
 export const toDateTimeLocal = (iso: string, timezone: string) =>
     DateTime.fromISO(iso, { setZone: true })

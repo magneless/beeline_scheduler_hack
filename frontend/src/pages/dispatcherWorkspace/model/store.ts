@@ -8,8 +8,8 @@ export const useDispatcherWorkspaceStore = create<DispatcherWorkspaceStore>(
         selectedEngineerId: null,
         filter: 'all',
         panelOpen: true,
-        scheduleOpen: true,
-        panelTab: 'orders',
+        scheduleOpen: false,
+        panelTab: 'crews',
         selectOrder: (selectedOrderId) =>
             set({
                 selectedOrderId,
@@ -19,6 +19,8 @@ export const useDispatcherWorkspaceStore = create<DispatcherWorkspaceStore>(
         selectEngineer: (selectedEngineerId) =>
             set({
                 selectedEngineerId,
+                selectedOrderId: null,
+                filter: 'all',
                 panelOpen: true,
             }),
         setFilter: (filter) => set({ filter }),
@@ -31,7 +33,8 @@ export const useDispatcherWorkspaceStore = create<DispatcherWorkspaceStore>(
                 selectedOrderId: null,
                 selectedEngineerId: null,
                 filter: 'all',
-                panelTab: 'orders',
+                panelTab: 'crews',
+                scheduleOpen: false,
             }),
     })
 );

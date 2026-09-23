@@ -108,6 +108,7 @@ export const issueCodeLabel: Record<string, string> = {
     EXISTING_PLAN_CONFLICT: 'Требуется уточнение старого плана',
     ENGINEERS_REQUIRED: 'Загрузите состав бригад',
     DEMO_ENGINEERS: 'Демонстрационный состав',
+    DEMO_OFFICE_OVERRIDE: 'Демонстрационный офис',
     DEMO_GEO: 'Демонстрационные геоданные',
     EXECUTION_STATE_REQUIRED: 'Уточните время завершения',
     ACTUAL_CONSTRAINT_VIOLATION: 'Нарушение ограничения',

@@ -82,56 +82,64 @@ export const CrewPanel = ({
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 space-y-2 px-3">
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                    Импорт полностью заменит текущий состав бригад.
-                    {!canEdit && (
-                        <div className="mt-1">
-                            Импорт доступен до начала событий.
-                        </div>
-                    )}
-                    <div className="mt-2 flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={
-                                importMutation.isPending || !canEdit || pending
-                            }
-                            asChild
-                        >
-                            <label className="cursor-pointer">
-                                <Upload className="size-3.5" />
-                                {importMutation.isPending
-                                    ? 'Загрузка…'
-                                    : 'Загрузить CSV'}
-                                <input
-                                    className="hidden"
-                                    type="file"
-                                    disabled={
-                                        !canEdit ||
-                                        pending ||
-                                        importMutation.isPending
-                                    }
-                                    accept=".csv,text/csv"
-                                    onChange={(event) => {
-                                        const file = event.target.files?.[0];
-                                        if (file) {
-                                            importMutation.mutate(file);
+                <details className="rounded-[12px] border border-slate-200 bg-white p-2 text-xs text-slate-600">
+                    <summary className="cursor-pointer select-none font-medium text-slate-700">
+                        Управление бригадами
+                    </summary>
+                    <div className="mt-2 rounded-[8px] border border-amber-200 bg-amber-50 p-2 text-amber-900">
+                        Импорт полностью заменит текущий состав бригад.
+                        {!canEdit && (
+                            <div className="mt-1">
+                                Импорт доступен до начала событий.
+                            </div>
+                        )}
+                        <div className="mt-2 flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={
+                                    importMutation.isPending ||
+                                    !canEdit ||
+                                    pending
+                                }
+                                asChild
+                            >
+                                <label className="cursor-pointer">
+                                    <Upload className="size-3.5" />
+                                    {importMutation.isPending
+                                        ? 'Загрузка…'
+                                        : 'Загрузить CSV'}
+                                    <input
+                                        className="hidden"
+                                        type="file"
+                                        disabled={
+                                            !canEdit ||
+                                            pending ||
+                                            importMutation.isPending
                                         }
-                                        event.target.value = '';
-                                    }}
-                                />
-                            </label>
-                        </Button>
-                        <a
-                            className="text-xs underline"
-                            href="/sample-engineers.csv"
-                            download
-                        >
-                            Скачать шаблон
-                        </a>
+                                        accept=".csv,text/csv"
+                                        onChange={(event) => {
+                                            const file =
+                                                event.target.files?.[0];
+                                            if (file) {
+                                                importMutation.mutate(file);
+                                            }
+                                            event.target.value = '';
+                                        }}
+                                    />
+                                </label>
+                            </Button>
+                            <a
+                                className="text-xs underline"
+                                href="/sample-engineers.csv"
+                                download
+                            >
+                                Скачать шаблон
+                            </a>
+                        </div>
                     </div>
-                </div>
+                </details>
                 <div className="relative">
                     <Search
                         className={cn(
@@ -142,7 +150,8 @@ export const CrewPanel = ({
                     <Input
                         value={panel.query}
                         placeholder={workspaceCopy.crewSearch}
-                        className="h-8 bg-muted pl-8 text-xs"
+                        aria-label="Поиск бригад"
+                        className="h-8 bg-slate-50 pl-8 text-xs"
                         onChange={panel.handleQueryChange}
                     />
                 </div>

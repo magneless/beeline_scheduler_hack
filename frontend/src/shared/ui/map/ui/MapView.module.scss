@@ -5,7 +5,7 @@
     min-height: 100%;
     contain: layout paint;
     overflow: hidden;
-    background: #e8e8e4;
+    background: #eef1f0;
 }
 
 /* Yandex injects custom <ymaps> nodes for chrome. */
@@ -64,8 +64,80 @@
     border-radius: 5px;
 }
 
-/* stylelint-disable-next-line selector-class-pattern -- Leaflet control class */
+/* stylelint-disable selector-class-pattern -- Global classes owned by the Leaflet adapter. */
 .root :global(.leaflet-control-zoom) {
-    margin-top: 76px;
-    margin-left: 16px;
+    margin-top: 12px;
+    margin-right: 12px;
+    margin-left: 0;
 }
+
+.root :global(.leaflet-control-zoom a),
+.root :global(.leaflet-control-route-fit) button,
+.root :global(button.leaflet-control-route-fit) {
+    width: 34px;
+    height: 34px;
+    color: #27332f;
+    background: #fff;
+    border: 1px solid #dfe4e1;
+    box-shadow: 0 3px 12px rgb(29 48 40 / 14%);
+}
+
+.root :global(.leaflet-control-route-fit) {
+    margin: 12px;
+}
+
+.root :global(.leaflet-control-route-fit) button,
+.root :global(button.leaflet-control-route-fit) {
+    width: auto;
+    padding: 0 11px;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    border-radius: 9px;
+}
+
+.root :global(.osm-map .leaflet-tile-pane) {
+    filter: saturate(0.15) brightness(1.08) contrast(0.9);
+}
+
+.root :global(.osm-marker-icon) {
+    background: transparent;
+    border: 0;
+}
+
+.root :global(.osm-marker) {
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    color: #fff;
+    background: var(--marker-color);
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 7px rgb(29 48 40 / 24%);
+}
+
+.root :global(.osm-office) {
+    font-size: 12px;
+    color: #27332f;
+    background: #fff;
+    border: 2px solid #27332f;
+}
+
+.root :global(.osm-marker-muted) {
+    border-color: rgb(255 255 255 / 70%);
+    box-shadow: none;
+}
+
+.root :global(.osm-marker-selected) {
+    outline: 3px solid rgb(39 51 47 / 34%);
+    outline-offset: 3px;
+}
+
+.root :global(.leaflet-control-scale) {
+    margin-bottom: 8px;
+    margin-left: 12px;
+}
+
+/* stylelint-enable selector-class-pattern */

@@ -6,31 +6,9 @@ import { type TypeOrNull } from 'shared/lib/types';
 import { type MapMarker, type MapPolyline } from 'shared/ui/map';
 
 import { crewPreviewNames } from './config';
+import { routeColor } from './routeColors';
 
 import { type ScheduleBlock, type ScheduleLane } from '../model/types';
-
-const ENGINEER_TONE = {
-    sokolov: 'gold',
-    melnikova: 'ice',
-    popov: 'lime',
-} as const;
-
-const ROUTE_TONES = ['gold', 'ice', 'lime'] as const;
-
-const routeTone = (engineerId: string) => {
-    const known = ENGINEER_TONE[engineerId as keyof typeof ENGINEER_TONE];
-
-    if (known) {
-        return known;
-    }
-
-    const hash = [...engineerId].reduce(
-        (sum, char) => sum + char.charCodeAt(0),
-        0
-    );
-
-    return ROUTE_TONES[hash % ROUTE_TONES.length];
-};
 
 export const assignmentOf = (
     orderId: string,
@@ -40,7 +18,8 @@ export const assignmentOf = (
 export const buildMapModel = (
     snapshot: Snapshot,
     plan: Plan | undefined,
-    selectedEngineerId?: TypeOrNull<string>
+    selectedEngineerId?: TypeOrNull<string>,
+    onlyUnassigned = false
 ) => {
     const activePlan =
         plan && plan.scenario_id === snapshot.scenario_id ? plan : undefined;
@@ -53,6 +32,18 @@ export const buildMapModel = (
                 (visit) => [visit.order_id, route.engineer_id] as const
             )
         ) ?? []
+    );
+    const selectedRoute = activePlan?.routes.find(
+        (route) => route.engineer_id === selectedEngineerId
+    );
+    const sequenceByOrder = new Map(
+        selectedRoute?.visits.map((visit, index) => [
+            visit.order_id,
+            index + 1,
+        ]) ?? []
+    );
+    const unassigned = new Set(
+        activePlan?.unassigned.map((item) => item.order_id) ?? []
     );
     const office = locationById.get(snapshot.office_location_id);
     const markers: MapMarker[] = [];
@@ -70,7 +61,14 @@ export const buildMapModel = (
     snapshot.orders.forEach((order) => {
         const location = locationById.get(order.location_id);
 
-        if (!location) {
+        if (
+            !location ||
+            order.status === 'cancelled' ||
+            order.status === 'completed'
+        ) {
+            return;
+        }
+        if (onlyUnassigned && !unassigned.has(order.id)) {
             return;
         }
 
@@ -91,7 +89,12 @@ export const buildMapModel = (
                 )
             ),
             tone: order.work_type,
-            label: workTypeLabel[order.work_type],
+            color: selectedEngineerId
+                ? routeColor(selectedEngineerId)
+                : undefined,
+            sequence: sequenceByOrder.get(order.id),
+            muted: !selectedEngineerId && !unassigned.has(order.id),
+            label: `${workTypeLabel[order.work_type]} · ${location.address}`,
         });
     });
 
@@ -99,12 +102,12 @@ export const buildMapModel = (
         activePlan?.routes
             .filter(
                 (route) =>
-                    !selectedEngineerId ||
+                    Boolean(selectedEngineerId) &&
                     route.engineer_id === selectedEngineerId
             )
             .map((route) => ({
                 id: route.engineer_id,
-                tone: routeTone(route.engineer_id),
+                color: routeColor(route.engineer_id),
                 points: route.legs.flatMap((leg, index) =>
                     index === 0 ? leg.geometry : leg.geometry.slice(1)
                 ),

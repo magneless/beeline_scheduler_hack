@@ -27,13 +27,35 @@ export const WorkspaceAlerts = ({
     buildErrorMessage,
     onRetryBuild,
 }: WorkspaceAlertsProps) => (
-    <div className="pointer-events-none absolute top-[68px] left-16 z-20 flex w-[min(320px,42%)] flex-col gap-2">
-        <IssuesBanner issues={issues} onSelect={onSelectOrder} />
-        <ChangesPanel
-            changes={changes}
-            orders={orders}
-            onSelect={onSelectOrder}
-        />
+    <div className="shrink-0 border-t border-slate-200 bg-slate-50/60 px-4 py-2">
+        {issues.length ? (
+            <details className="group text-xs">
+                <summary className="cursor-pointer py-2 text-slate-500 hover:text-slate-900">
+                    Замечания к данным{' '}
+                    <span className="ml-1 text-slate-400">{issues.length}</span>
+                </summary>
+                <div className="max-h-60 overflow-y-auto">
+                    <IssuesBanner issues={issues} onSelect={onSelectOrder} />
+                </div>
+            </details>
+        ) : null}
+        {changes.length ? (
+            <details className="text-xs">
+                <summary className="cursor-pointer py-2 text-slate-500 hover:text-slate-900">
+                    Последние изменения{' '}
+                    <span className="ml-1 text-slate-400">
+                        {changes.length}
+                    </span>
+                </summary>
+                <div className="max-h-60 overflow-y-auto">
+                    <ChangesPanel
+                        changes={changes}
+                        orders={orders}
+                        onSelect={onSelectOrder}
+                    />
+                </div>
+            </details>
+        ) : null}
         {buildErrorMessage ? (
             <div
                 className="pointer-events-auto rounded-[22px] bg-card px-4 py-3 text-sm"

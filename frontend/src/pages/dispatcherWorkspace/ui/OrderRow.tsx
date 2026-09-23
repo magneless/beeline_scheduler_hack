@@ -73,12 +73,12 @@ export const OrderRow = ({
         <article
             ref={row.rowRef}
             className={cn(
-                'rounded-2xl px-3 py-2.5',
+                'rounded-[12px] border px-3 py-2.5',
                 active
-                    ? 'bg-primary/18'
+                    ? 'border-blue-200 bg-blue-50'
                     : mine
-                      ? 'bg-primary/8'
-                      : 'hover:bg-muted'
+                      ? 'border-blue-100 bg-blue-50/50'
+                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
             )}
         >
             <Button
@@ -94,36 +94,41 @@ export const OrderRow = ({
                     )}
                 />
                 <span className="min-w-0 flex-1">
-                    <span className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-semibold">
-                            {workTypeLabel[order.work_type]}
-                            {order.priority === 'urgent' ? (
-                                <span className="ml-1.5 text-[11px] font-semibold text-destructive">
-                                    {priorityLabel.urgent}
-                                </span>
-                            ) : null}
+                    <span className="block">
+                        {address ? (
+                            <span className="block line-clamp-2 text-sm font-semibold leading-snug text-slate-800">
+                                {address.replace(
+                                    /^(?:г\.?\s*)?(?:Город\s+)?Москва,?\s*/i,
+                                    ''
+                                )}
+                            </span>
+                        ) : null}
+                        <span className="mt-0.5 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                                {workTypeLabel[order.work_type]}
+                                {order.priority === 'urgent' ? (
+                                    <span className="ml-1.5 text-[11px] font-semibold text-destructive">
+                                        {priorityLabel.urgent}
+                                    </span>
+                                ) : null}
+                            </span>
+                            <span
+                                className={cn(
+                                    'shrink-0 text-[11px] font-semibold',
+                                    open
+                                        ? 'text-destructive'
+                                        : 'text-muted-foreground'
+                                )}
+                            >
+                                {row.assignee}
+                            </span>
                         </span>
-                        <span
-                            className={cn(
-                                'shrink-0 text-[11px] font-semibold',
-                                open
-                                    ? 'text-destructive'
-                                    : 'text-muted-foreground'
-                            )}
-                        >
-                            {row.assignee}
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            Окно {formatClock(order.window.start, timezone)}–
+                            {formatClock(order.window.end, timezone)}
+                            {` · ${formatMinutes(order.service_sec)}`}
                         </span>
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                        {formatClock(order.window.start, timezone)}–
-                        {formatClock(order.window.end, timezone)}
-                        {` · ${formatMinutes(order.service_sec)}`}
-                    </span>
-                    {address ? (
-                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                            {address}
-                        </span>
-                    ) : null}
                 </span>
             </Button>
             {active ? (
@@ -137,21 +142,34 @@ export const OrderRow = ({
                             : statusLabel[order.status]}
                     </p>
                     {open ? (
-                        <p className="rounded-2xl bg-card px-3 py-2 text-xs">
+                        <p className="rounded-[16px] bg-card px-3 py-2 text-xs">
                             <strong className="block font-semibold">
                                 {reasonCodeLabel[open.reason_code] ??
-                                    open.reason_code}
+                                    'Требуется проверка назначения'}
                             </strong>
                             <span className="mt-1 block text-muted-foreground">
-                                {open.message}
+                                {/[а-яё]/i.test(open.message)
+                                    ? open.message
+                                    : 'Проверьте доступность бригад и окно визита. ' +
+                                      'Если выполнить заявку невозможно, укажите причину ниже.'}
                             </span>
                         </p>
                     ) : null}
                     {row.factors.length ? (
-                        <AssignmentFactors factors={row.factors} />
+                        <details className="text-xs">
+                            <summary className="cursor-pointer py-1 text-slate-500">
+                                Условия назначения
+                            </summary>
+                            <AssignmentFactors factors={row.factors} />
+                        </details>
                     ) : null}
                     {needsEnd ? (
-                        <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
+                        <p
+                            className={cn(
+                                'rounded-[16px] bg-destructive/10 px-3 py-2',
+                                'text-xs font-semibold text-destructive'
+                            )}
+                        >
                             {workspaceCopy.needsEnd}
                         </p>
                     ) : null}

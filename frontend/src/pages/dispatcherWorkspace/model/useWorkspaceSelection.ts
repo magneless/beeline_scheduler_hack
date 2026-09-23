@@ -59,6 +59,7 @@ export const useWorkspaceSelection = () => {
         toggleSchedule,
         selectOrder,
         toggleEngineer,
+        focusEngineer: selectEngineer,
         clearCrew,
         onMarkerClick,
     };

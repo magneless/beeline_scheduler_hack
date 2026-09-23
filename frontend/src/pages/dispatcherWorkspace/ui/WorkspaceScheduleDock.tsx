@@ -1,14 +1,12 @@
 import { type DateTime } from 'luxon';
 
 import { type TypeOrNull } from 'shared/lib/types';
-import { cn } from 'shared/lib/utils';
 
 import { ScheduleBoard } from './ScheduleBoard';
 
 import { type ScheduleLane } from '../model/types';
 
 type WorkspaceScheduleDockProps = {
-    panelOpen: boolean;
     lanes: ScheduleLane[];
     focusAt: DateTime;
     selectedOrderId: TypeOrNull<string>;
@@ -18,7 +16,6 @@ type WorkspaceScheduleDockProps = {
 };
 
 export const WorkspaceScheduleDock = ({
-    panelOpen,
     lanes,
     focusAt,
     selectedOrderId,
@@ -27,15 +24,10 @@ export const WorkspaceScheduleDock = ({
     onSelectEngineer,
 }: WorkspaceScheduleDockProps) => (
     <div
-        className={cn(
-            'pointer-events-none absolute bottom-8 left-16 z-20',
-            panelOpen ? 'right-[396px]' : 'right-4'
-        )}
+        className="shrink-0 overflow-hidden border-t border-slate-200 bg-white"
+        aria-label="Расписание бригад"
     >
-        <div
-            className="pointer-events-auto overflow-visible rounded-[28px] bg-card"
-            style={{ boxShadow: 'var(--shadow-soft)' }}
-        >
+        <div className="overflow-visible bg-white">
             <ScheduleBoard
                 lanes={lanes}
                 focusAt={focusAt}

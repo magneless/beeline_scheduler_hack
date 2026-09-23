@@ -50,6 +50,12 @@ export const useOrderPanel = ({
     const visible = useMemo(() => {
         const needle = query.trim().toLowerCase();
         const filtered = orders.filter((order) => {
+            if (
+                selectedEngineerId &&
+                engineerByOrder.get(order.id) !== selectedEngineerId
+            ) {
+                return false;
+            }
             if (filter === 'unassigned' && !unassigned.has(order.id)) {
                 return false;
             }

@@ -1,3 +1,6 @@
+import { type ReactNode } from 'react';
+import { ArrowUpRight, CircleCheck } from 'lucide-react';
+
 import {
     type Engineer,
     type Equipment,
@@ -22,6 +25,9 @@ import {
 } from '../model/types';
 
 type WorkspaceSidePanelProps = {
+    children?: ReactNode;
+    hasPlan: boolean;
+    onShowUnassigned: () => void;
     panelTab: WorkspacePanelTab;
     ordersCount: number;
     crewsCount: number;
@@ -59,6 +65,9 @@ type WorkspaceSidePanelProps = {
 };
 
 export const WorkspaceSidePanel = ({
+    children,
+    hasPlan,
+    onShowUnassigned,
     panelTab,
     ordersCount,
     crewsCount,
@@ -101,20 +110,66 @@ export const WorkspaceSidePanel = ({
     return (
         <aside
             className={cn(
-                'absolute top-[68px] right-4 bottom-8 z-20',
-                'flex w-[368px] flex-col overflow-hidden rounded-[28px] bg-card'
+                'relative z-10 flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white',
+                'w-[340px] max-lg:w-[300px] max-sm:w-full max-sm:max-h-[58vh]'
             )}
-            style={{ boxShadow: 'var(--shadow-soft)' }}
+            aria-label="Рабочая панель диспетчера"
         >
+            <div className="shrink-0 px-5 pt-5 pb-4">
+                <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+                    Задачи диспетчера
+                </p>
+                <h2 className="mt-1.5 text-base font-semibold text-slate-900">
+                    {hasPlan
+                        ? 'Маршруты готовы к проверке'
+                        : 'Подготовьте план на день'}
+                </h2>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                    Проверьте заявки без бригады. Принимайте новые обращения и
+                    отмечайте изменения на выезде.
+                </p>
+                {hasPlan ? (
+                    unassigned.size ? (
+                        <button
+                            type="button"
+                            onClick={onShowUnassigned}
+                            className={[
+                                'mt-4 flex w-full items-center justify-between gap-3',
+                                'rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-3',
+                                'text-left hover:bg-amber-100',
+                            ].join(' ')}
+                            aria-label={`Разобрать заявки без бригады: ${unassigned.size}`}
+                        >
+                            <span>
+                                <strong className="block text-sm font-semibold text-amber-950">
+                                    {unassigned.size} без бригады
+                                </strong>
+                                <span className="mt-0.5 block text-xs text-amber-800">
+                                    Посмотреть причины
+                                </span>
+                            </span>
+                            <ArrowUpRight className="size-4 text-amber-800" />
+                        </button>
+                    ) : (
+                        <p className="mt-4 flex items-center gap-2 text-xs text-emerald-700">
+                            <CircleCheck className="size-4" />
+                            Все заявки распределены
+                        </p>
+                    )
+                ) : null}
+            </div>
             <Tabs
                 value={panelTab}
                 onValueChange={handleTabChange}
-                className="mx-3 mt-3"
+                className="mx-4 shrink-0"
             >
-                <TabsList className="grid grid-cols-2 p-1">
+                <TabsList className="grid grid-cols-2 rounded-[8px] bg-slate-100 p-1">
                     <TabsTrigger
                         value="orders"
-                        className="py-2 data-[state=active]:bg-primary"
+                        className={[
+                            'rounded-md py-2 text-xs data-[state=active]:bg-white',
+                            'data-[state=active]:text-slate-900',
+                        ].join(' ')}
                     >
                         {workspaceCopy.ordersTab}
                         <span
@@ -128,7 +183,10 @@ export const WorkspaceSidePanel = ({
                     </TabsTrigger>
                     <TabsTrigger
                         value="crews"
-                        className="py-2 data-[state=active]:bg-primary"
+                        className={[
+                            'rounded-md py-2 text-xs data-[state=active]:bg-white',
+                            'data-[state=active]:text-slate-900',
+                        ].join(' ')}
                     >
                         {workspaceCopy.crewsTab}
                         <span
@@ -186,6 +244,7 @@ export const WorkspaceSidePanel = ({
                     />
                 )}
             </div>
+            {children}
         </aside>
     );
 };

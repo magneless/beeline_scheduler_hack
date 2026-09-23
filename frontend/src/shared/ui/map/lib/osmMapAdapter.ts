@@ -11,25 +11,25 @@ import { createRenderScheduler, mapLayersSignature } from './mapPerf';
 import 'leaflet/dist/leaflet.css';
 
 const COLORS: Record<string, string> = {
-    office: '#ffcc00',
-    emergency: '#e30611',
-    connection: '#ffcc00',
-    repair: '#1a1a1a',
-    additional: '#a3a39a',
-    gold: '#ffcc00',
-    ice: '#1a1a1a',
-    lime: '#c4a000',
+    office: '#27332f',
+    emergency: '#d64545',
+    connection: '#3578c4',
+    repair: '#7b61a8',
+    additional: '#7d8b85',
+    gold: '#277a62',
+    ice: '#3578c4',
+    lime: '#a57716',
 };
-const latLng = (p: { lat: number; lon: number }): L.LatLngExpression => [
+const point = (p: { lat: number; lon: number }): L.LatLngExpression => [
     p.lat,
     p.lon,
 ];
 const allPoints = (p: MapViewProps) =>
     [
-        ...p.markers.map((x) => x.point),
-        ...p.polylines.flatMap((x) => x.points),
-    ].filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lon));
-const status = (container: HTMLElement, retry: () => void) => {
+        ...p.markers.map((m) => m.point),
+        ...p.polylines.flatMap((l) => l.points),
+    ].filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon));
+const retryStatus = (container: HTMLElement, retry: () => void) => {
     const note = document.createElement('div');
     note.className = 'osmMapStatus';
     note.setAttribute('role', 'status');
@@ -44,15 +44,44 @@ const status = (container: HTMLElement, retry: () => void) => {
     note.append(text, button);
     container.append(note);
 };
-const style = (m: MapMarker, selected: boolean): L.CircleMarkerOptions => {
-    const color = COLORS[m.tone ?? m.kind] ?? COLORS.office;
-    return {
-        color: m.kind === 'office' ? '#1a1a1a' : selected ? '#fff' : color,
-        fillColor: color,
-        fillOpacity: 0.9,
-        weight: selected ? 4 : m.kind === 'office' ? 3 : 2,
-        radius: m.kind === 'office' ? (selected ? 12 : 10) : selected ? 9 : 7,
-    };
+const markerVisual = (m: MapMarker, selected: boolean) => {
+    const color =
+        m.color ??
+        (m.muted
+            ? '#8a918e'
+            : m.open
+              ? '#d49424'
+              : (COLORS[m.tone ?? m.kind] ?? COLORS.office));
+    const size = m.kind === 'office' ? 28 : m.sequence ? 28 : m.muted ? 10 : 14;
+    const icon = document.createElement('div');
+    icon.className = [
+        'osm-marker',
+        m.kind === 'office' ? 'osm-office' : '',
+        m.muted ? 'osm-marker-muted' : '',
+        m.open ? 'osm-marker-open' : '',
+        selected ? 'osm-marker-selected' : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+    icon.style.setProperty('--marker-color', color);
+    icon.style.width = `${size}px`;
+    icon.style.height = `${size}px`;
+    icon.textContent =
+        m.kind === 'office' ? 'О' : m.sequence ? String(m.sequence) : '';
+    icon.title = m.kind === 'office' ? 'Офис' : (m.label ?? 'Остановка');
+    icon.setAttribute('aria-label', icon.title);
+    icon.setAttribute('data-marker-id', m.id);
+    icon.setAttribute('role', m.kind === 'office' ? 'img' : 'button');
+    if (m.kind === 'order') {
+        icon.tabIndex = 0;
+        icon.setAttribute('aria-pressed', String(selected));
+    }
+    return L.divIcon({
+        className: 'osm-marker-icon',
+        html: icon,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+    });
 };
 
 export const createOsmMapAdapter = (): MapAdapter => ({
@@ -67,8 +96,11 @@ export const createOsmMapAdapter = (): MapAdapter => ({
             tileErrors = 0;
         const scheduler = createRenderScheduler(),
             layers = L.layerGroup(),
-            markers = new Map<string, L.CircleMarker>(),
-            lines = new Map<string, L.Polyline>();
+            markers = new Map<string, L.Marker>(),
+            lines = new Map<
+                string,
+                { casing: L.Polyline; stroke: L.Polyline }
+            >();
         container.classList.add('osm-map');
         const map = L.map(container, {
             center: [55.75, 37.62],
@@ -80,13 +112,47 @@ export const createOsmMapAdapter = (): MapAdapter => ({
             keyboard: true,
             touchZoom: true,
         });
+        const fit = () => {
+            const pts = allPoints(props);
+            if (pts.length) {
+                map.fitBounds(L.latLngBounds(pts.map(point)), {
+                    padding: [38, 38],
+                    maxZoom: 15,
+                });
+            }
+        };
         L.control
             .zoom({
-                position: 'topleft',
+                position: 'topright',
                 zoomInTitle: 'Приблизить',
                 zoomOutTitle: 'Отдалить',
             })
             .addTo(map);
+        const fitControl = new L.Control({ position: 'topright' });
+        fitControl.onAdd = () => {
+            const button = L.DomUtil.create(
+                'button',
+                'leaflet-control-route-fit'
+            );
+            button.type = 'button';
+            button.textContent = 'Показать маршрут';
+            button.title = 'Показать весь маршрут';
+            button.setAttribute('aria-label', button.title);
+            L.DomEvent.disableClickPropagation(button);
+            L.DomEvent.on(button, 'click keydown', (event: Event) => {
+                if (
+                    event.type === 'click' ||
+                    (event as KeyboardEvent).key === 'Enter' ||
+                    (event as KeyboardEvent).key === ' '
+                ) {
+                    event.preventDefault();
+                    fit();
+                }
+            });
+            return button;
+        };
+        fitControl.addTo(map);
+        L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
         const tiles = L.tileLayer(
             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             {
@@ -99,12 +165,12 @@ export const createOsmMapAdapter = (): MapAdapter => ({
             tileErrors = 0;
         });
         tiles.on('tileerror', () => {
-            tileErrors++;
+            tileErrors += 1;
         });
         tiles.on('load', () => {
             container.querySelector('.osmMapStatus')?.remove();
-            if (tileErrors > 0) {
-                status(container, () => {
+            if (tileErrors) {
+                retryStatus(container, () => {
                     container.querySelector('.osmMapStatus')?.remove();
                     tileErrors = 0;
                     tiles.redraw();
@@ -113,15 +179,6 @@ export const createOsmMapAdapter = (): MapAdapter => ({
         });
         tiles.addTo(map);
         layers.addTo(map);
-        const fit = () => {
-            const pts = allPoints(props);
-            if (pts.length) {
-                map.fitBounds(L.latLngBounds(pts.map(latLng)), {
-                    padding: [32, 32],
-                    maxZoom: 15,
-                });
-            }
-        };
         const sync = () => {
             if (destroyed) {
                 return;
@@ -148,7 +205,11 @@ export const createOsmMapAdapter = (): MapAdapter => ({
                 const selected = props.selectedId === m.id;
                 let layer = markers.get(m.id);
                 if (!layer) {
-                    layer = L.circleMarker(latLng(m.point), style(m, selected));
+                    layer = L.marker(point(m.point), {
+                        icon: markerVisual(m, selected),
+                        keyboard: false,
+                        interactive: m.kind === 'order',
+                    });
                     layer.on('click', (e) => {
                         L.DomEvent.stopPropagation(e.originalEvent);
                         props.onMarkerClick?.(m.id);
@@ -157,8 +218,8 @@ export const createOsmMapAdapter = (): MapAdapter => ({
                     markers.set(m.id, layer);
                     layer.getElement()?.addEventListener('keydown', (event) => {
                         if (
-                            event instanceof KeyboardEvent &&
-                            (event.key === 'Enter' || event.key === ' ')
+                            (event as KeyboardEvent).key === 'Enter' ||
+                            (event as KeyboardEvent).key === ' '
                         ) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -166,68 +227,80 @@ export const createOsmMapAdapter = (): MapAdapter => ({
                         }
                     });
                 }
-                layer.setLatLng(latLng(m.point));
-                layer.setStyle(style(m, selected));
-                const element = layer.getElement();
-                element?.setAttribute('data-marker-id', m.id);
-                element?.setAttribute(
-                    'role',
-                    m.kind === 'office' ? 'img' : 'button'
-                );
-                element?.setAttribute(
-                    'aria-label',
-                    m.kind === 'office'
-                        ? 'Офис'
-                        : `Заявка ${m.id}: ${m.label ?? ''}`
-                );
-                if (m.kind === 'order') {
-                    element?.setAttribute('tabindex', '0');
-                    element?.setAttribute('aria-pressed', String(selected));
-                }
-                if (m.label) {
-                    const label = document.createElement('span');
-                    label.textContent = m.label;
-                    layer.bindTooltip(label, {
-                        direction: 'top',
-                        offset: [0, -7],
-                    });
-                } else {
-                    layer.unbindTooltip();
-                }
+                layer.setLatLng(point(m.point));
+                layer.setIcon(markerVisual(m, selected));
                 if (
                     selected &&
                     selectedChanged &&
-                    !map.getBounds().pad(-0.1).contains(latLng(m.point))
+                    !map.getBounds().pad(-0.1).contains(point(m.point))
                 ) {
-                    map.panTo(latLng(m.point));
+                    map.panTo(point(m.point));
                 }
             });
-            const lineIds = new Set(props.polylines.map((x) => x.id));
-            lines.forEach((layer, id) => {
+            const lineIds = new Set(props.polylines.map((l) => l.id));
+            lines.forEach((pair, id) => {
                 if (!lineIds.has(id)) {
-                    layers.removeLayer(layer);
+                    layers.removeLayer(pair.casing);
+                    layers.removeLayer(pair.stroke);
                     lines.delete(id);
                 }
             });
             props.polylines.forEach((line: MapPolyline) => {
-                let layer = lines.get(line.id);
-                if (!layer) {
-                    layer = L.polyline(line.points.map(latLng), {
-                        interactive: false,
-                        color: COLORS[line.tone ?? 'gold'] ?? COLORS.gold,
-                        weight: 4,
-                        opacity: 0.85,
-                        lineCap: 'round',
-                        lineJoin: 'round',
-                    }).addTo(layers);
-                    lines.set(line.id, layer);
+                let pair = lines.get(line.id);
+                const color =
+                    line.color ?? COLORS[line.tone ?? 'gold'] ?? COLORS.gold;
+                if (!pair) {
+                    pair = {
+                        casing: L.polyline(line.points.map(point), {
+                            interactive: false,
+                            color: '#fff',
+                            weight: 9,
+                            opacity: 0.96,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                        }).addTo(layers),
+                        stroke: L.polyline(line.points.map(point), {
+                            interactive: false,
+                            color,
+                            weight: 5,
+                            opacity: 0.94,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                        }).addTo(layers),
+                    };
+                    pair.casing
+                        .getElement()
+                        ?.setAttribute('data-route-id', line.id);
+                    pair.stroke
+                        .getElement()
+                        ?.setAttribute('data-route-id', line.id);
+                    lines.set(line.id, pair);
                 }
-                layer.setLatLngs(line.points.map(latLng));
-                layer.setStyle({
-                    color: COLORS[line.tone ?? 'gold'] ?? COLORS.gold,
-                });
+                pair.casing.setLatLngs(line.points.map(point));
+                pair.stroke.setLatLngs(line.points.map(point));
+                pair.stroke.setStyle({ color, weight: 5, opacity: 0.94 });
             });
-            markers.forEach((layer) => layer.bringToFront());
+            markers.forEach((layer, id) => {
+                const marker = props.markers.find((item) => item.id === id);
+                layer.setZIndexOffset(
+                    marker?.id === props.selectedId
+                        ? 1000
+                        : marker?.kind === 'office'
+                          ? 500
+                          : 0
+                );
+            });
+            const fitButton = fitControl.getContainer();
+            if (fitButton) {
+                const label = props.polylines.length
+                    ? 'Показать весь маршрут'
+                    : 'Показать все заявки';
+                fitButton.textContent = props.polylines.length
+                    ? 'Весь маршрут'
+                    : 'Все заявки';
+                fitButton.title = label;
+                fitButton.setAttribute('aria-label', label);
+            }
             lastSignature = sig;
             lastSelected = props.selectedId;
         };

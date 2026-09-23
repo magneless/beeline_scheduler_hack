@@ -10,7 +10,7 @@ type AppShellProps = {
 
 const railButtonClass = (active: boolean) =>
     cn(
-        'flex size-11 items-center justify-center rounded-2xl transition-colors',
+        'flex size-11 items-center justify-center rounded-[16px] transition-colors',
         active
             ? 'bg-primary text-foreground'
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -21,9 +21,12 @@ export const AppShell = ({ children }: AppShellProps) => {
     const onMap = pathname.startsWith('/s/');
 
     return (
-        <div className="flex h-screen gap-3 bg-background p-3">
+        <div className="flex h-screen gap-2 bg-slate-100 p-2 max-sm:gap-1 max-sm:p-1">
             <aside
-                className="flex w-[72px] shrink-0 flex-col items-center gap-3 rounded-[28px] bg-card py-4"
+                className={[
+                    'flex w-14 shrink-0 flex-col items-center gap-3 rounded-[16px]',
+                    'border border-slate-200 bg-white py-3 max-sm:w-11',
+                ].join(' ')}
                 style={{ boxShadow: 'var(--shadow-soft)' }}
             >
                 <Link
@@ -34,7 +37,7 @@ export const AppShell = ({ children }: AppShellProps) => {
                     <img
                         src="/beeline.png"
                         alt="Билайн"
-                        className="size-11 object-contain"
+                        className="size-9 object-contain"
                     />
                 </Link>
                 <Link

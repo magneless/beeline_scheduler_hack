@@ -40,7 +40,7 @@ export const useBuildPlan = ({
             }
             if (snapshot.engineers.length === 0) {
                 throw new Error(
-                    'Добавьте хотя бы одну бригаду через CSV в панели «Бригады»'
+                    'Добавьте бригаду через CSV в разделе «Управление бригадами»'
                 );
             }
 

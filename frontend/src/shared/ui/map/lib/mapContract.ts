@@ -13,12 +13,16 @@ export type MapMarker = {
     open?: boolean;
     label?: string;
     tone?: 'emergency' | 'connection' | 'repair' | 'additional' | 'office';
+    color?: string;
+    sequence?: number;
+    muted?: boolean;
 };
 
 export type MapPolyline = {
     id: string;
     points: MapPoint[];
     tone?: 'gold' | 'ice' | 'lime';
+    color?: string;
 };
 
 export type MapViewProps = {
