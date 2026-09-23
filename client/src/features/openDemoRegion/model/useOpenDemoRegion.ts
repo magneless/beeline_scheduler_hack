@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { createScenario } from 'shared/api';
@@ -12,11 +12,26 @@ export const useOpenDemoRegion = ({
     errorFallback = 'Не удалось открыть район',
 }: UseOpenDemoRegionParams = {}) => {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const mutation = useMutation({
         mutationFn: createScenario,
         onSuccess: (scenario) => {
-            navigate(`/s/${scenario.snapshot.scenario_id}`);
+            const scenarioId = scenario.snapshot.scenario_id;
+
+            queryClient.setQueryData(
+                ['scenarios', scenarioId, 'current'],
+                scenario
+            );
+            queryClient.removeQueries({
+                queryKey: ['plans', scenarioId],
+            });
+            queryClient.removeQueries({
+                queryKey: ['scenarios', scenarioId],
+                predicate: (query) => query.queryKey[2] !== 'current',
+            });
+
+            navigate(`/s/${scenarioId}`);
         },
         onError: (error) => {
             toast.error(error instanceof Error ? error.message : errorFallback);

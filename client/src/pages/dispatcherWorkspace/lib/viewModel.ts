@@ -21,9 +21,13 @@ export const buildWorkspaceView = ({
     selectedOrderId,
     selectedEngineerId,
 }: BuildWorkspaceViewParams) => {
+    const activePlan =
+        plan && snapshot && plan.scenario_id === snapshot.scenario_id
+            ? plan
+            : undefined;
     const timezone = snapshot?.timezone ?? 'Europe/Moscow';
     const distances = Object.fromEntries(
-        plan?.metrics.per_engineer.map((item) => [
+        activePlan?.metrics.per_engineer.map((item) => [
             item.engineer_id,
             item.distance_m,
         ]) ?? []
@@ -35,11 +39,15 @@ export const buildWorkspaceView = ({
         ]) ?? []
     );
     const assignedCounts = Object.fromEntries(
-        plan?.routes.map((route) => [route.engineer_id, route.visits.length]) ??
-            []
+        activePlan?.routes.map((route) => [
+            route.engineer_id,
+            route.visits.length,
+        ]) ?? []
     );
     const lanes =
-        snapshot && plan ? buildSchedule(snapshot, plan, timezone) : [];
+        snapshot && activePlan
+            ? buildSchedule(snapshot, activePlan, timezone)
+            : [];
     const now = DateTime.now().setZone(timezone);
     const focusAt = lanes[0]
         ? focusClock(lanes[0].start, lanes[0].end, now)
@@ -47,19 +55,19 @@ export const buildWorkspaceView = ({
 
     const engineerByOrder = new Map<string, string>();
     const visitByOrder = new Map(
-        plan?.routes.flatMap((route) =>
+        activePlan?.routes.flatMap((route) =>
             route.visits.map((visit) => [visit.order_id, visit] as const)
         ) ?? []
     );
 
-    plan?.routes.forEach((route) => {
+    activePlan?.routes.forEach((route) => {
         route.visits.forEach((visit) => {
             engineerByOrder.set(visit.order_id, route.engineer_id);
         });
     });
 
     const unassigned = new Map(
-        plan?.unassigned.map((item) => [item.order_id, item]) ?? []
+        activePlan?.unassigned.map((item) => [item.order_id, item]) ?? []
     );
     const visibleOrders =
         snapshot?.orders.filter((order) => {
@@ -72,12 +80,12 @@ export const buildWorkspaceView = ({
 
             return true;
         }) ?? [];
-    const issues = [...(snapshot?.issues ?? []), ...(plan?.issues ?? [])];
+    const issues = [...(snapshot?.issues ?? []), ...(activePlan?.issues ?? [])];
     const canEditEngineers =
-        !plan?.base_plan_id &&
+        !activePlan?.base_plan_id &&
         !(snapshot?.orders.some((order) => order.execution) ?? false);
     const occurredAtDefault = snapshot
-        ? defaultOccurredAt(snapshot.date, timezone, plan?.as_of)
+        ? defaultOccurredAt(snapshot.date, timezone, activePlan?.as_of)
         : '';
     const addressByOrder = Object.fromEntries(
         (snapshot?.orders ?? []).map((order) => {
@@ -116,6 +124,6 @@ export const buildWorkspaceView = ({
             : undefined,
         ordersCount: snapshot?.orders.length ?? 0,
         crewsCount: snapshot?.engineers.length ?? 0,
-        canEvent: Boolean(plan),
+        canEvent: Boolean(activePlan),
     };
 };

@@ -105,6 +105,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         compareSource: queries.compareSource,
         isLoading: queries.isLoading,
         mapModel,
+        mapFitToken: queries.snapshot?.region_id ?? scenarioId,
         ...view,
         ...selection,
         runStatus,

@@ -42,11 +42,13 @@ export const buildMapModel = (
     plan: Plan | undefined,
     selectedEngineerId?: TypeOrNull<string>
 ) => {
+    const activePlan =
+        plan && plan.scenario_id === snapshot.scenario_id ? plan : undefined;
     const locationById = new Map(
         snapshot.locations.map((location) => [location.id, location])
     );
     const assignedTo = new Map(
-        plan?.routes.flatMap((route) =>
+        activePlan?.routes.flatMap((route) =>
             route.visits.map(
                 (visit) => [visit.order_id, route.engineer_id] as const
             )
@@ -84,7 +86,9 @@ export const buildMapModel = (
             point: location.point,
             kind: 'order',
             open: Boolean(
-                plan?.unassigned.some((item) => item.order_id === order.id)
+                activePlan?.unassigned.some(
+                    (item) => item.order_id === order.id
+                )
             ),
             tone: order.work_type,
             label: workTypeLabel[order.work_type],
@@ -92,7 +96,7 @@ export const buildMapModel = (
     });
 
     const polylines: MapPolyline[] =
-        plan?.routes
+        activePlan?.routes
             .filter(
                 (route) =>
                     !selectedEngineerId ||

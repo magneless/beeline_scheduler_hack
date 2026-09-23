@@ -20,10 +20,10 @@ export const DispatcherWorkspacePage = () => {
         >
             <div className="absolute inset-0">
                 <MapView
-                    key={scenarioId}
                     markers={workspace.mapModel.markers}
                     polylines={workspace.mapModel.polylines}
                     selectedId={workspace.selectedOrderId}
+                    fitToken={workspace.mapFitToken}
                     onMarkerClick={workspace.onMarkerClick}
                 />
             </div>

@@ -166,6 +166,7 @@ export const createYandexMapAdapter = (): MapAdapter => ({
         let ymapsApi: TypeOrNull<YMapsApi> = null;
         let pending = initial;
         let didFit = false;
+        let lastFitToken = initial.fitToken;
         let lastLayers = '';
         let lastSelected: TypeOrNull<string> | undefined = initial.selectedId;
         const markers = new Map<
@@ -312,15 +313,22 @@ export const createYandexMapAdapter = (): MapAdapter => ({
                 return;
             }
 
+            const tokenChanged = props.fitToken !== lastFitToken;
+
+            if (tokenChanged) {
+                didFit = false;
+                lastFitToken = props.fitToken;
+            }
+
             const nextLayers = mapLayersSignature(props);
             const layersChanged = nextLayers !== lastLayers;
             const selectionChanged = props.selectedId !== lastSelected;
 
-            if (!layersChanged && !selectionChanged) {
+            if (!layersChanged && !selectionChanged && !tokenChanged) {
                 return;
             }
 
-            if (layersChanged) {
+            if (layersChanged || tokenChanged) {
                 syncLines(props, ymapsApi);
                 syncMarkers(props, ymapsApi);
                 lastLayers = nextLayers;

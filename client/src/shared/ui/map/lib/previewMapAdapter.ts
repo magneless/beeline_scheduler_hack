@@ -60,6 +60,7 @@ export const createPreviewMapAdapter = (): MapAdapter => ({
         let props = initial;
         let lastLayers = '';
         let lastSelected = initial.selectedId;
+        let lastFitToken = initial.fitToken;
         let lockedBounds: GeoBounds | null = null;
         const scheduler = createRenderScheduler();
         const resizeScheduler = createRenderScheduler();
@@ -71,6 +72,11 @@ export const createPreviewMapAdapter = (): MapAdapter => ({
                 ...props.polylines.flatMap((line) => line.points),
                 ...props.markers.map((marker) => marker.point),
             ];
+
+            if (props.fitToken !== lastFitToken) {
+                lockedBounds = null;
+                lastFitToken = props.fitToken;
+            }
 
             if (!lockedBounds && allPoints.length > 0) {
                 lockedBounds = boundsFromPoints(allPoints);
@@ -209,8 +215,14 @@ export const createPreviewMapAdapter = (): MapAdapter => ({
             scheduler.schedule(() => {
                 const layers = mapLayersSignature(props);
                 const selectionChanged = props.selectedId !== lastSelected;
+                const tokenChanged = props.fitToken !== lastFitToken;
 
-                if (!force && layers === lastLayers && !selectionChanged) {
+                if (
+                    !force &&
+                    layers === lastLayers &&
+                    !selectionChanged &&
+                    !tokenChanged
+                ) {
                     return;
                 }
 

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { importScenario } from 'shared/api';
@@ -15,10 +15,12 @@ export const useImportOrders = ({
     onSkippedRows = (countLabel) => `${countLabel} не вошла в расчёт`,
 }: UseImportOrdersParams = {}) => {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const mutation = useMutation({
         mutationFn: importScenario,
         onSuccess: (scenario) => {
+            const scenarioId = scenario.snapshot.scenario_id;
             const issueCount = scenario.snapshot.issues.length;
 
             if (issueCount) {
@@ -29,7 +31,15 @@ export const useImportOrders = ({
                 );
             }
 
-            navigate(`/s/${scenario.snapshot.scenario_id}`);
+            queryClient.setQueryData(
+                ['scenarios', scenarioId, 'current'],
+                scenario
+            );
+            queryClient.removeQueries({
+                queryKey: ['plans', scenarioId],
+            });
+
+            navigate(`/s/${scenarioId}`);
         },
         onError: (error) => {
             toast.error(error instanceof Error ? error.message : errorFallback);

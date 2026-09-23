@@ -25,6 +25,7 @@ export type MapViewProps = {
     markers: MapMarker[];
     polylines: MapPolyline[];
     selectedId?: TypeOrNull<string>;
+    fitToken?: string;
     onMarkerClick?: (id: string) => void;
 };
 

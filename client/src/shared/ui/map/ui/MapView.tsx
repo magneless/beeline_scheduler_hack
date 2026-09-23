@@ -11,6 +11,7 @@ export const MapView = ({
     markers,
     polylines,
     selectedId,
+    fitToken,
     onMarkerClick,
 }: MapViewProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +32,7 @@ export const MapView = ({
             markers,
             polylines,
             selectedId,
+            fitToken,
             onMarkerClick: (id) => onClickRef.current?.(id),
         });
         handleRef.current = handle;
@@ -47,9 +49,10 @@ export const MapView = ({
             markers,
             polylines,
             selectedId,
+            fitToken,
             onMarkerClick: (id) => onClickRef.current?.(id),
         });
-    }, [markers, polylines, selectedId]);
+    }, [markers, polylines, selectedId, fitToken]);
 
     return <div ref={containerRef} className={styles.root} />;
 };

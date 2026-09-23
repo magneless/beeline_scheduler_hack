@@ -1,8 +1,4 @@
-import {
-    keepPreviousData,
-    useQuery,
-    useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getPlan, getScenario } from 'shared/api';
 
@@ -13,21 +9,18 @@ export const useWorkspaceQueries = (scenarioId: string) => {
         queryKey: ['scenarios', scenarioId, 'current'],
         queryFn: () => getScenario(scenarioId),
         enabled: Boolean(scenarioId),
-        placeholderData: keepPreviousData,
     });
-    const planId = scenarioQuery.data?.current_plan_id;
+    const planId = scenarioQuery.data?.current_plan_id ?? null;
     const planQuery = useQuery({
-        queryKey: ['plans', planId],
+        queryKey: ['plans', scenarioId, planId],
         queryFn: () => getPlan(planId!),
-        enabled: Boolean(planId),
-        placeholderData: keepPreviousData,
+        enabled: Boolean(scenarioId && planId),
     });
-    const previousPlanId = planQuery.data?.base_plan_id;
+    const previousPlanId = planQuery.data?.base_plan_id ?? null;
     const previousPlanQuery = useQuery({
-        queryKey: ['plans', previousPlanId],
+        queryKey: ['plans', scenarioId, previousPlanId],
         queryFn: () => getPlan(previousPlanId!),
-        enabled: Boolean(previousPlanId),
-        placeholderData: keepPreviousData,
+        enabled: Boolean(scenarioId && previousPlanId),
     });
     const planRevision = planQuery.data?.snapshot_revision;
     const currentRevision = scenarioQuery.data?.snapshot.revision;
@@ -38,12 +31,11 @@ export const useWorkspaceQueries = (scenarioId: string) => {
             Boolean(scenarioId) &&
             planRevision !== undefined &&
             planRevision !== currentRevision,
-        placeholderData: keepPreviousData,
     });
 
     const currentSnapshot = scenarioQuery.data?.snapshot;
     const snapshot = displayQuery.data?.snapshot ?? currentSnapshot;
-    const plan = planQuery.data;
+    const plan = planId ? planQuery.data : undefined;
     const compareSource = plan?.baseline_metrics
         ? ('baseline' as const)
         : previousPlanQuery.data?.metrics
@@ -56,7 +48,9 @@ export const useWorkspaceQueries = (scenarioId: string) => {
         await queryClient.invalidateQueries({
             queryKey: ['scenarios', scenarioId],
         });
-        await queryClient.invalidateQueries({ queryKey: ['plans'] });
+        await queryClient.invalidateQueries({
+            queryKey: ['plans', scenarioId],
+        });
     };
 
     return {
