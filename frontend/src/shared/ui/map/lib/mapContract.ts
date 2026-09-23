@@ -35,6 +35,6 @@ export type MapHandle = {
 };
 
 export type MapAdapter = {
-    id: 'yandex' | 'preview';
+    id: 'yandex' | 'osm' | 'preview';
     mount: (container: HTMLElement, props: MapViewProps) => MapHandle;
 };

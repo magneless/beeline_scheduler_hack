@@ -32,8 +32,9 @@ docker compose up frontend
 docker compose --profile preview up frontend-preview --build
 ```
 
-Опционально: `VITE_YANDEX_MAPS_KEY` в `.env` рядом с `docker-compose.yml`
-или через export.
+По умолчанию используется интерактивная карта OpenStreetMap через Leaflet — API-ключ не нужен. Доступны перемещение, масштабирование, выбор заявки по метке и отображение маршрутов. Для загрузки фоновой карты требуется интернет.
+
+Опционально можно включить Яндекс.Карты: задайте `VITE_YANDEX_MAPS_KEY` при сборке. Источник дорожных маршрутов backend от этого не меняется.
 
 ## Скрипты
 
@@ -50,7 +51,7 @@ docker compose --profile preview up frontend-preview --build
 - Vite 8 + React 19 + TypeScript
 - React Router, TanStack Query, Zustand
 - react-hook-form + zod, shadcn/Radix, Tailwind
-- Luxon, MSW (`VITE_API_MODE=mock`), Яндекс.Карты
+- Luxon, MSW (`VITE_API_MODE=mock`), Leaflet + OpenStreetMap (Яндекс.Карты опционально)
 - FSD page-first: `app` → `pages` → `features` → `shared`
 
 ## Архитектура (FSD page-first)

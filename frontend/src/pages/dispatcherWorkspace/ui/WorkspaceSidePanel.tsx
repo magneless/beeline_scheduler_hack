@@ -101,7 +101,7 @@ export const WorkspaceSidePanel = ({
     return (
         <aside
             className={cn(
-                'absolute top-[68px] right-4 bottom-4 z-20',
+                'absolute top-[68px] right-4 bottom-8 z-20',
                 'flex w-[368px] flex-col overflow-hidden rounded-[28px] bg-card'
             )}
             style={{ boxShadow: 'var(--shadow-soft)' }}

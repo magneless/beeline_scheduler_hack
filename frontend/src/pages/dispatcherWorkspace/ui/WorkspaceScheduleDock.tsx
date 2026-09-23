@@ -28,7 +28,7 @@ export const WorkspaceScheduleDock = ({
 }: WorkspaceScheduleDockProps) => (
     <div
         className={cn(
-            'pointer-events-none absolute bottom-4 left-4 z-20',
+            'pointer-events-none absolute bottom-8 left-16 z-20',
             panelOpen ? 'right-[396px]' : 'right-4'
         )}
     >

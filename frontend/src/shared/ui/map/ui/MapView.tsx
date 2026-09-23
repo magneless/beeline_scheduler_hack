@@ -58,7 +58,7 @@ export const MapView = ({
         <div className={styles.root}>
             <div ref={containerRef} className={styles.canvas} />
             <div className={styles.attribution}>
-                Маршруты: ©{' '}
+                Карта и маршруты: ©{' '}
                 <a
                     href="https://www.openstreetmap.org/copyright"
                     target="_blank"

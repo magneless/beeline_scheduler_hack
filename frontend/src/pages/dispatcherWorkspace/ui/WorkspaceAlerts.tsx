@@ -22,7 +22,7 @@ export const WorkspaceAlerts = ({
     showRunBanner,
     onSelectOrder,
 }: WorkspaceAlertsProps) => (
-    <div className="pointer-events-none absolute top-[68px] left-4 z-20 flex w-[min(320px,42%)] flex-col gap-2">
+    <div className="pointer-events-none absolute top-[68px] left-16 z-20 flex w-[min(320px,42%)] flex-col gap-2">
         <IssuesBanner issues={issues} onSelect={onSelectOrder} />
         <ChangesPanel
             changes={changes}

@@ -15,19 +15,12 @@ export const markerGeometrySignature = (marker: MapMarker) =>
         marker.label ?? '',
     ].join('|');
 
-export const polylineGeometrySignature = (line: MapPolyline) => {
-    const { points } = line;
-    const head = points[0];
-    const tail = points[points.length - 1];
-
-    return [
+export const polylineGeometrySignature = (line: MapPolyline) =>
+    [
         line.id,
         line.tone ?? '',
-        points.length,
-        head ? `${head.lat},${head.lon}` : '',
-        tail ? `${tail.lat},${tail.lon}` : '',
+        ...line.points.map(({ lat, lon }) => `${lat},${lon}`),
     ].join('|');
-};
 
 export const mapLayersSignature = (props: MapViewProps) => {
     const markers = props.markers.map(markerGeometrySignature).join(';');
