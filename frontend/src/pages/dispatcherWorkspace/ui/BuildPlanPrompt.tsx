@@ -7,12 +7,14 @@ type BuildPlanPromptProps = {
     pending: boolean;
     statusLabel?: string;
     onBuild: () => void;
+    errorMessage?: string;
 };
 
 export const BuildPlanPrompt = ({
     pending,
     statusLabel,
     onBuild,
+    errorMessage,
 }: BuildPlanPromptProps) => (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
         <Card
@@ -39,6 +41,14 @@ export const BuildPlanPrompt = ({
                 />
             </svg>
             <p className="text-sm leading-relaxed text-muted-foreground">
+                {errorMessage ? (
+                    <span
+                        role="alert"
+                        className="mt-4 block text-sm font-medium text-destructive"
+                    >
+                        {errorMessage}
+                    </span>
+                ) : null}
                 {workspaceCopy.buildDescription}
             </p>
             <Button
@@ -49,7 +59,9 @@ export const BuildPlanPrompt = ({
             >
                 {pending
                     ? (statusLabel ?? workspaceCopy.buildPending)
-                    : workspaceCopy.buildAction}
+                    : errorMessage
+                      ? 'Повторить расчёт'
+                      : workspaceCopy.buildAction}
             </Button>
         </Card>
     </div>

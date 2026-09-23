@@ -109,6 +109,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         eventPending,
         showRunBanner,
         buildPending: buildPlan.pending,
+        buildErrorMessage: buildPlan.errorMessage,
         crewPending: crew.pending || eventPending || buildPlan.pending,
         handleClearCrew: selection.clearCrew,
         handleBuildPlan: buildPlan.build,

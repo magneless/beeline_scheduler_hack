@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -26,9 +26,15 @@ export const useBuildPlan = ({
 }: UseBuildPlanParams) => {
     const queryClient = useQueryClient();
     const [runStatus, setRunStatus] = useState<TypeOrNull<Run['status']>>(null);
+    const [errorMessage, setErrorMessage] = useState<string>();
+
+    useEffect(() => {
+        setErrorMessage(undefined);
+    }, [scenarioId]);
 
     const mutation = useMutation({
         mutationFn: async () => {
+            setErrorMessage(undefined);
             if (!snapshot) {
                 throw new Error('Сценарий ещё не загружен');
             }
@@ -54,6 +60,8 @@ export const useBuildPlan = ({
             return run;
         },
         onError: (error) => {
+            const message = commandErrorMessage(error);
+            setErrorMessage(message);
             if (isStaleVersionError(error)) {
                 toast.error('Данные устарели. Обновите смену.', {
                     action: {
@@ -68,7 +76,7 @@ export const useBuildPlan = ({
                 return;
             }
 
-            toast.error(commandErrorMessage(error));
+            toast.error(message);
         },
         onSuccess: () => toast.success('План собран'),
     });
@@ -77,5 +85,6 @@ export const useBuildPlan = ({
         build: () => mutation.mutate(),
         pending: mutation.isPending,
         runStatus,
+        errorMessage,
     };
 };

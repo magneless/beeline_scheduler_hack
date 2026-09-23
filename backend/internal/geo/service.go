@@ -3,6 +3,7 @@ package geo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"sync/atomic"
 
@@ -35,6 +36,15 @@ type geoServiceImpl struct {
 // NewGeoService creates a GeoService backed by the given RouteProvider.
 func NewGeoService(provider RouteProvider) contracts.GeoService {
 	return &geoServiceImpl{provider: provider}
+}
+
+// Keep provider diagnostics in server logs and preserve the cause for callers,
+// while returning a useful message in API responses and persisted run errors.
+func providerError(ctx context.Context, operation string, err error, message string, details map[string]any) *contracts.ContractError {
+	slog.WarnContext(ctx, "geo provider request failed", "operation", operation, "error", err, "details", details)
+	return &contracts.ContractError{
+		Code: "GEO_UNAVAILABLE", Message: message, Details: details, Cause: err,
+	}
 }
 
 // --------------------------------------------------------------------------
@@ -75,11 +85,9 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 		// Geocode the address.
 		candidates, err := s.provider.Geocode(ctx, loc.Address)
 		if err != nil {
-			return contracts.GeocodeResult{}, &contracts.ContractError{
-				Code:    "GEO_UNAVAILABLE",
-				Message: fmt.Sprintf("geocoding failed for %q: %v", loc.Address, err),
-				Details: map[string]any{"entity_id": loc.ID},
-			}
+			return contracts.GeocodeResult{}, providerError(ctx, "geocode", err,
+				"Сервис определения адресов временно недоступен. Повторите попытку позже.",
+				map[string]any{"entity_id": loc.ID})
 		}
 
 		entityID := loc.ID
@@ -187,7 +195,9 @@ func (s *geoServiceImpl) BuildMatrix(ctx context.Context, input contracts.Matrix
 			}
 		}
 		if err != nil {
-			return contracts.TravelMatrix{}, &contracts.ContractError{Code: "GEO_UNAVAILABLE", Message: fmt.Sprintf("route matrix computation failed (%s): %v", transport, err), Details: map[string]any{}}
+			return contracts.TravelMatrix{}, providerError(ctx, "matrix", err,
+				"Не удалось получить время в пути: сервис маршрутов временно недоступен. Повторите расчёт позже.",
+				map[string]any{"profile": transport})
 		}
 		for i := 0; i < n; i++ {
 			for j := 0; j < n; j++ {
@@ -266,11 +276,9 @@ func (s *geoServiceImpl) BuildRoutes(ctx context.Context, input contracts.Routes
 
 		result, err := s.provider.Route(ctx, fromPoint, toPoint, leg.Profile)
 		if err != nil {
-			return contracts.RoutesGeometry{}, &contracts.ContractError{
-				Code:    "GEO_UNAVAILABLE",
-				Message: fmt.Sprintf("geometry unavailable for leg %q: %v", leg.LegID, err),
-				Details: map[string]any{"leg_id": leg.LegID},
-			}
+			return contracts.RoutesGeometry{}, providerError(ctx, "geometry", err,
+				"Не удалось загрузить маршруты: сервис маршрутов временно недоступен. Повторите расчёт позже.",
+				map[string]any{"leg_id": leg.LegID})
 		}
 		if !result.Reachable {
 			return contracts.RoutesGeometry{}, &contracts.ContractError{

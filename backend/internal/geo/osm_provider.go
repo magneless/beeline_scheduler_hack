@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -74,7 +76,12 @@ func NewOSMProvider(o OSMOptions) (*OSMProvider, error) {
 		}
 	}
 	if o.Client == nil {
-		o.Client = &http.Client{Timeout: 20 * time.Second}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSHandshakeTimeout = 15 * time.Second
+		transport.IdleConnTimeout = 90 * time.Second
+		transport.MaxIdleConnsPerHost = 4
+		transport.MaxConnsPerHost = 4
+		o.Client = &http.Client{Timeout: 20 * time.Second, Transport: transport}
 	}
 	if o.CacheDir != "" {
 		if err := os.MkdirAll(o.CacheDir, 0750); err != nil {
@@ -106,51 +113,124 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 			return nil
 		}
 	}
-	if delay := time.Until(p.next); delay > 0 {
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			return ctx.Err()
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
+		if attempt > 0 {
+			if err := p.wait(ctx, time.Duration(500*(1<<(attempt-1)))*time.Millisecond); err != nil {
+				return err
+			}
+		}
+		if err := p.waitGate(ctx); err != nil {
+			return err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("User-Agent", p.o.UserAgent)
+		req.Header.Set("Accept", "application/json")
+		p.next = time.Now().Add(p.o.MinInterval)
+		response, err := p.client.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			lastErr = err
+			if !retryableNetError(ctx, err) {
+				return err
+			}
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, maxGeoResponse+1))
+		response.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			if !retryableNetError(ctx, readErr) {
+				return readErr
+			}
+			continue
+		}
+		if response.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("OSM HTTP %s", response.Status)
+			if !retryableStatus(response.StatusCode) || attempt == 2 {
+				return lastErr
+			}
+			if d, valid := parseRetryAfter(response.Header.Get("Retry-After")); valid {
+				if d > 30*time.Second {
+					return lastErr
+				}
+				if err := p.wait(ctx, d); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if len(body) > maxGeoResponse {
+			return fmt.Errorf("OSM response exceeds size limit")
+		}
+		if err = json.Unmarshal(body, value); err != nil {
+			return fmt.Errorf("invalid OSM JSON: %w", err)
+		}
+		var header struct {
+			Code string `json:"code"`
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(body, &header) == nil && (header.Code == "Ok" || header.Code == "NoRoute" || header.Type == "FeatureCollection") {
+			p.saveCache(endpoint, body)
+		}
+		return nil
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("User-Agent", p.o.UserAgent)
-	req.Header.Set("Accept", "application/json")
-	p.next = time.Now().Add(p.o.MinInterval)
-	response, err := p.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("OSM HTTP %s", response.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxGeoResponse+1))
-	if err != nil {
-		return err
-	}
-	if len(body) > maxGeoResponse {
-		return fmt.Errorf("OSM response exceeds size limit")
-	}
-	if err = json.Unmarshal(body, value); err != nil {
-		return fmt.Errorf("invalid OSM JSON: %w", err)
-	}
-	var header struct {
-		Code string `json:"code"`
-		Type string `json:"type"`
-	}
-	if json.Unmarshal(body, &header) == nil && (header.Code == "Ok" || header.Code == "NoRoute" || header.Type == "FeatureCollection") {
-		p.saveCache(endpoint, body)
+	return lastErr
+}
+
+func (p *OSMProvider) waitGate(ctx context.Context) error {
+	if d := time.Until(p.next); d > 0 {
+		return p.wait(ctx, d)
 	}
 	return nil
+}
+func (p *OSMProvider) wait(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func retryableStatus(status int) bool {
+	return status == 408 || status == 429 || status == 500 || status == 502 || status == 503 || status == 504
+}
+func retryableNetError(ctx context.Context, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var ne net.Error
+	return (errors.As(err, &ne) && (ne.Timeout() || ne.Temporary())) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(strings.ToLower(err.Error()), "connection reset")
+}
+func parseRetryAfter(value string) (time.Duration, bool) {
+	if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+		if n < 0 {
+			return 0, false
+		}
+		// Values over the wait budget must stop retries, even if converting
+		// a very large number of seconds would overflow time.Duration.
+		if n > 30 {
+			return 31 * time.Second, true
+		}
+		return time.Duration(n) * time.Second, true
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		return max(0, time.Until(when)), true
+	}
+	return 0, false
 }
 
 type geoCacheEntry struct {

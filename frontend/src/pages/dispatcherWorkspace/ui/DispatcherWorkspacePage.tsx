@@ -55,6 +55,10 @@ export const DispatcherWorkspacePage = () => {
                 runStatus={workspace.runStatus}
                 showRunBanner={workspace.showRunBanner}
                 onSelectOrder={workspace.selectOrder}
+                buildErrorMessage={
+                    workspace.plan ? workspace.buildErrorMessage : undefined
+                }
+                onRetryBuild={workspace.handleBuildPlan}
             />
             {workspace.plan ||
             workspace.eventPending ||
@@ -62,6 +66,7 @@ export const DispatcherWorkspacePage = () => {
                 <BuildPlanPrompt
                     pending={workspace.buildPending}
                     statusLabel={workspace.runStatusLabel}
+                    errorMessage={workspace.buildErrorMessage}
                     onBuild={workspace.handleBuildPlan}
                 />
             )}
