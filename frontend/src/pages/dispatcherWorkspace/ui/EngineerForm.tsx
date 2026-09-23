@@ -79,7 +79,7 @@ export const EngineerForm = ({
     return (
         <Form {...form}>
             <form
-                className="space-y-3.5 rounded-2xl border border-border bg-card p-3.5"
+                className="space-y-3.5"
                 onSubmit={form.handleSubmit((values) => {
                     onSave({
                         skills: values.skills,
@@ -104,9 +104,6 @@ export const EngineerForm = ({
                     });
                 })}
             >
-                <p className="text-[11px] leading-snug text-muted-foreground">
-                    До первого события можно поправить бригаду
-                </p>
                 <FormField
                     control={form.control}
                     name="skills"
@@ -126,7 +123,8 @@ export const EngineerForm = ({
                                             variant={
                                                 selected ? 'default' : 'outline'
                                             }
-                                            className="h-7 px-2.5 text-[11px]"
+                                            className="h-7 rounded-[6px] px-2.5 text-[11px]"
+                                            aria-pressed={selected}
                                             onClick={() => {
                                                 field.onChange(
                                                     selected
@@ -163,7 +161,7 @@ export const EngineerForm = ({
                                     <FormControl>
                                         <SelectTrigger
                                             size="sm"
-                                            className="w-full bg-muted"
+                                            className="w-full rounded-[6px] bg-white"
                                         >
                                             <SelectValue placeholder="Транспорт" />
                                         </SelectTrigger>
@@ -207,6 +205,7 @@ export const EngineerForm = ({
                                 <FormLabel>Начало смены</FormLabel>
                                 <TimeSelect
                                     value={field.value}
+                                    className="rounded-[6px] bg-white"
                                     aria-label="Начало смены"
                                     onChange={field.onChange}
                                 />
@@ -221,6 +220,7 @@ export const EngineerForm = ({
                                 <FormLabel>Конец смены</FormLabel>
                                 <TimeSelect
                                     value={field.value}
+                                    className="rounded-[6px] bg-white"
                                     aria-label="Конец смены"
                                     onChange={field.onChange}
                                 />
@@ -237,7 +237,7 @@ export const EngineerForm = ({
                                     <Input
                                         type="number"
                                         min={0}
-                                        className="h-8 bg-muted px-3 text-xs"
+                                        className="h-8 rounded-[6px] bg-white px-3 text-xs"
                                         {...field}
                                         onChange={(event) =>
                                             field.onChange(
@@ -259,7 +259,7 @@ export const EngineerForm = ({
                                     <Input
                                         type="number"
                                         min={0}
-                                        className="h-8 bg-muted px-3 text-xs"
+                                        className="h-8 rounded-[6px] bg-white px-3 text-xs"
                                         {...field}
                                         onChange={(event) =>
                                             field.onChange(
@@ -273,13 +273,19 @@ export const EngineerForm = ({
                     />
                 </div>
                 <div className="flex gap-2 pt-0.5">
-                    <Button type="submit" size="sm" disabled={pending}>
+                    <Button
+                        type="submit"
+                        size="sm"
+                        className="rounded-[6px]"
+                        disabled={pending}
+                    >
                         {pending ? 'Сохраняем…' : 'Сохранить'}
                     </Button>
                     <Button
                         type="button"
                         size="sm"
                         variant="outline"
+                        className="rounded-[6px]"
                         onClick={onCancel}
                     >
                         Отмена

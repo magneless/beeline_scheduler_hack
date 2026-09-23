@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { Car, ChevronDown, Footprints, Pencil } from 'lucide-react';
 
 import {
     type Engineer,
     type Equipment,
     type Order,
 } from 'shared/api/types/contracts';
-import { equipmentLabel, skillLabel, transportLabel } from 'shared/lib/config';
+import { skillLabel, transportLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
 import {
     cn,
@@ -14,7 +15,6 @@ import {
     formatCount,
     formatKm,
 } from 'shared/lib/utils';
-import { Badge } from 'shared/ui/badge';
 import { Button } from 'shared/ui/button';
 
 import { EngineerForm } from './EngineerForm';
@@ -75,6 +75,7 @@ export const CrewRow = ({
         ? crewCompatibility(comparisonOrder, engineer, stock, asOf)
         : null;
     const name = displayEngineer(engineer.id);
+    const TransportIcon = engineer.transport === 'car' ? Car : Footprints;
     const stockItems = (
         Object.entries(stock) as Array<[Equipment, number]>
     ).filter(([, count]) => count > 0);
@@ -120,47 +121,51 @@ export const CrewRow = ({
             ref={rowRef}
             data-engineer-id={engineer.id}
             className={cn(
-                'rounded-[12px] border px-2.5 py-2',
+                'relative rounded-[10px] border p-3 transition-colors',
                 active
-                    ? 'border-primary bg-accent'
+                    ? 'border-primary bg-white'
                     : 'border-transparent hover:border-border hover:bg-background'
             )}
         >
-            <Button
+            <span
+                aria-hidden="true"
+                className="absolute top-3 bottom-3 left-0 w-[3px] rounded-r-full"
+                style={{ backgroundColor: routeColor(engineer.id) }}
+            />
+            <button
                 type="button"
-                variant="ghost"
-                className={[
-                    'h-auto w-full items-center justify-start gap-2.5 px-0 py-0',
-                    'text-left whitespace-normal',
-                ].join(' ')}
+                className={cn(
+                    'flex w-full items-start gap-2.5 rounded-[4px] text-left',
+                    'outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                )}
                 onClick={handleSelect}
                 aria-label={`Показать маршрут: ${name}`}
                 aria-pressed={active}
+                aria-expanded={active}
             >
-                <span
-                    className={[
-                        'flex size-8 shrink-0 items-center justify-center',
-                        'rounded-[12px] text-xs font-bold text-white',
-                    ].join(' ')}
-                    style={{ backgroundColor: routeColor(engineer.id) }}
-                >
-                    {engineer.id.match(/(\d+)$/)?.[1] ?? name.slice(0, 1)}
-                </span>
+                <TransportIcon
+                    className="mt-0.5 size-5 shrink-0 text-foreground"
+                    strokeWidth={1.6}
+                    aria-hidden="true"
+                />
                 <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-bold">
+                    <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-semibold">
                             {name}
                         </span>
-                        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
                             {statusLabel}
                         </span>
                     </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    <span
+                        className="mt-1 block text-[11px] text-muted-foreground"
+                        title={baselineLabel || undefined}
+                    >
                         {transportLabel[engineer.transport]}
                         {distanceLabel}
                     </span>
                 </span>
-            </Button>
+            </button>
             {compatibility ? (
                 <div
                     className="mt-2 space-y-1 text-[11px]"
@@ -181,80 +186,107 @@ export const CrewRow = ({
                 </div>
             ) : null}
             {active ? (
-                <div className="mt-2 ml-[2.75rem] space-y-1.5">
-                    <details className="rounded-[8px] border border-border bg-white px-2 py-1.5">
-                        <summary
-                            title={baselineLabel || undefined}
-                            className="cursor-pointer text-[11px] font-medium text-muted-foreground"
-                        >
-                            Параметры бригады
-                        </summary>
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                            Смена {formatClock(engineer.shift.start, timezone)}–
-                            {formatClock(engineer.shift.end, timezone)}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                            {engineer.skills.map((skill) => (
-                                <Badge
-                                    key={skill}
-                                    variant="secondary"
-                                    className="px-2 py-0.5 text-[10px]"
+                <div className="mt-3 border-t border-border pt-3">
+                    {editing && onPatch ? (
+                        <EngineerForm
+                            key={engineer.id}
+                            engineer={engineer}
+                            date={date}
+                            timezone={timezone}
+                            pending={pending}
+                            onCancel={onEdit}
+                            onSave={onPatch}
+                        />
+                    ) : (
+                        <>
+                            <dl className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs leading-relaxed">
+                                <dt className="text-muted-foreground">Смена</dt>
+                                <dd className="tabular-nums">
+                                    {formatClock(
+                                        engineer.shift.start,
+                                        timezone
+                                    )}
+                                    –{formatClock(engineer.shift.end, timezone)}
+                                </dd>
+                                <dt className="text-muted-foreground">
+                                    Навыки
+                                </dt>
+                                <dd>
+                                    {engineer.skills
+                                        .map(
+                                            (skill) =>
+                                                skillLabel[skill] ?? skill
+                                        )
+                                        .join(' · ') || 'Не указаны'}
+                                </dd>
+                                <dt className="text-muted-foreground">
+                                    Остаток
+                                </dt>
+                                <dd>
+                                    {stockItems.map(([code, count]) => (
+                                        <span key={code} className="block">
+                                            {code === 'router'
+                                                ? 'Роутеры'
+                                                : 'Приставки'}
+                                            <span className="ml-2 font-medium tabular-nums">
+                                                {count}
+                                            </span>
+                                        </span>
+                                    ))}
+                                    {!stockItems.length
+                                        ? 'Нет оборудования'
+                                        : null}
+                                </dd>
+                            </dl>
+                            {canEdit && onPatch ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="mt-3 h-8 rounded-[6px] px-2 text-xs font-medium"
+                                    disabled={pending}
+                                    onClick={onEdit}
                                 >
-                                    {skillLabel[skill] ?? skill}
-                                </Badge>
-                            ))}
-                            {stockItems.map(([code, count]) => (
-                                <Badge
-                                    key={code}
-                                    variant="default"
-                                    className="px-2 py-0.5 text-[10px]"
-                                >
-                                    {equipmentLabel[code]} {count}
-                                </Badge>
-                            ))}
-                        </div>
-                        {editing && onPatch ? (
-                            <EngineerForm
-                                key={engineer.id}
-                                engineer={engineer}
-                                date={date}
-                                timezone={timezone}
-                                pending={pending}
-                                onCancel={onEdit}
-                                onSave={onPatch}
-                            />
-                        ) : (
-                            <div className="space-y-2">
-                                {canEdit ? (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={onEdit}
+                                    <Pencil
+                                        className="size-3.5"
+                                        strokeWidth={1.6}
+                                    />
+                                    Изменить параметры
+                                </Button>
+                            ) : null}
+                            {canEvent && onUnavailable ? (
+                                <details className="group mt-3 border-t border-border pt-3">
+                                    <summary
+                                        className={cn(
+                                            'flex cursor-pointer list-none items-center justify-between gap-2',
+                                            'rounded-[4px] text-xs text-muted-foreground hover:text-foreground',
+                                            'focus-visible:outline-primary [&::-webkit-details-marker]:hidden'
+                                        )}
                                     >
-                                        {workspaceCopy.crewEdit}
-                                    </Button>
-                                ) : null}
-                                {canEvent && onUnavailable ? (
-                                    <div className="min-w-0 space-y-2">
+                                        Отметить недоступность
+                                        <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                                    </summary>
+                                    <div className="mt-3 space-y-3">
                                         <EventTimeField
                                             value={occurredAt}
                                             timezone={timezone}
+                                            label="Недоступна с"
+                                            compact
                                             onChange={setOccurredAt}
                                         />
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            className="h-auto w-full whitespace-normal px-3 py-2 text-left"
+                                            className="h-8 w-full rounded-[6px] text-xs font-medium"
                                             disabled={pending}
                                             onClick={handleUnavailable}
                                         >
-                                            {workspaceCopy.crewMakeUnavailable}
+                                            Подтвердить недоступность
                                         </Button>
                                     </div>
-                                ) : null}
-                            </div>
-                        )}
-                    </details>
+                                </details>
+                            ) : null}
+                        </>
+                    )}
                 </div>
             ) : null}
         </article>

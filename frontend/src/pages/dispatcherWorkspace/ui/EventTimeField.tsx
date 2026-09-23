@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 
-import { fromClockInput } from 'shared/lib/utils';
+import { cn, fromClockInput } from 'shared/lib/utils';
 import { DatePicker } from 'shared/ui/datePicker';
 import { Label } from 'shared/ui/label';
 import { TimeSelect } from 'shared/ui/timeSelect';
@@ -9,6 +9,7 @@ type EventTimeFieldProps = {
     value: string;
     timezone: string;
     label?: string;
+    compact?: boolean;
     onChange: (iso: string) => void;
 };
 
@@ -26,6 +27,7 @@ export const EventTimeField = ({
     value,
     timezone,
     label = 'Когда случилось',
+    compact = false,
     onChange,
 }: EventTimeFieldProps) => {
     const safe = resolveInZone(value, timezone);
@@ -38,7 +40,10 @@ export const EventTimeField = ({
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
                 <DatePicker
                     value={date}
-                    className="h-8 min-w-0 w-full px-3 text-xs"
+                    className={cn(
+                        'h-8 min-w-0 w-full px-3 text-xs',
+                        compact && 'rounded-[6px] font-normal'
+                    )}
                     onChange={(nextDate) =>
                         onChange(fromClockInput(nextDate, clock, timezone))
                     }
@@ -46,7 +51,10 @@ export const EventTimeField = ({
                 <TimeSelect
                     value={clock}
                     aria-label="Время"
-                    className="w-full"
+                    className={cn(
+                        'w-full',
+                        compact && 'rounded-[6px] border border-border bg-white'
+                    )}
                     onChange={(nextClock) =>
                         onChange(fromClockInput(date, nextClock, timezone))
                     }
