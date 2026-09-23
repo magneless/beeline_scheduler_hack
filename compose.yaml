@@ -27,9 +27,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-  client:
+  frontend:
     build:
-      context: ./client
+      context: ./frontend
       target: preview
       args:
         VITE_API_MODE: live

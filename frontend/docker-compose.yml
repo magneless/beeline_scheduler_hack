@@ -1,5 +1,5 @@
 services:
-  client:
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile
@@ -16,7 +16,7 @@ services:
       - ./index.html:/app/index.html
       - ./vite.config.ts:/app/vite.config.ts
 
-  client-preview:
+  frontend-preview:
     profiles: ['preview']
     build:
       context: .

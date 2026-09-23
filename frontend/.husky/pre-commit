@@ -1,0 +1,2 @@
+#!/bin/sh
+pnpm --dir frontend exec lint-staged

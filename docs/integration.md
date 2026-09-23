@@ -24,18 +24,18 @@ UI: http://localhost:3000. API: http://localhost:8080/api/v1. PostgreSQL: localh
 - Оптимизированный planner подключён через OR-Tools и используется по умолчанию. `baseline` остаётся fallback-режимом через `SOLVER_MODE=baseline`.
 - Геоданные остаются демонстрационными: координаты детерминированно синтезируются около Москвы, поездки идут по прямой. Это не дорожные маршруты и не реальные результаты геокодирования; планы содержат `DEMO_GEO`.
 - Без `VITE_YANDEX_MAPS_KEY` UI показывает схематическую карту. Ключ карты передаётся при сборке и не меняет демонстрационный источник геоданных backend.
-- `DEPENDENCY_MODE=stub` оставлен для изолированных проверок Go-2. `client/docker-compose.yml` запускает отдельный mock UI; для совместной работы используйте compose в корне.
+- `DEPENDENCY_MODE=stub` оставлен для изолированных проверок Go-2. `frontend/docker-compose.yml` запускает отдельный mock UI; для совместной работы используйте compose в корне.
 
 ## Разработка и проверки
 
-Для backend: Go 1.27, PostgreSQL 17, переменная `DATABASE_URL`, затем `cd backend` и `FIXTURE_PATH=../docs/contracts/examples/backend_flow.json DATASET_DIR=../datasets/original DATABASE_URL=... SOLVER_MODE=baseline go run ./cmd/server`. Для UI: Node 22.12+, pnpm, `cd client`, `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm dev`. Vite проксирует API на localhost:8080; live включён по умолчанию.
+Для backend: Go 1.27, PostgreSQL 17, переменная `DATABASE_URL`, затем `cd backend` и `FIXTURE_PATH=../docs/contracts/examples/backend_flow.json DATASET_DIR=../datasets/original DATABASE_URL=... SOLVER_MODE=baseline go run ./cmd/server`. Для UI: Node 22.12+, pnpm, `cd frontend`, `pnpm install --frozen-lockfile --ignore-scripts`, `pnpm dev`. Vite проксирует API на localhost:8080; live включён по умолчанию.
 
 ```sh
 cd backend
 go vet ./...
 go test -race ./...
 go build ./cmd/server
-cd ../client
+cd ../frontend
 pnpm lint
 pnpm lint:styles
 pnpm build

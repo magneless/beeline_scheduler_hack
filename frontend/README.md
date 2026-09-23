@@ -8,7 +8,7 @@ pnpm install
 pnpm dev               # http://localhost:3000
 ```
 
-По умолчанию `VITE_API_MODE=mock` — данные через MSW, backend не нужен.
+Для автономной работы задайте `VITE_API_MODE=mock`: данные будут загружаться через MSW без backend.
 
 Live API:
 
@@ -22,14 +22,14 @@ Vite проксирует `/api` на `http://localhost:8080`.
 
 ## Docker Compose
 
-Из этой папки (`client/`):
+Из этой папки (`frontend/`):
 
 ```bash
 # Dev с hot reload → http://localhost:3000
-docker compose up client
+docker compose up frontend
 
 # Статическая preview-сборка → http://localhost:8080
-docker compose --profile preview up client-preview --build
+docker compose --profile preview up frontend-preview --build
 ```
 
 Опционально: `VITE_YANDEX_MAPS_KEY` в `.env` рядом с `docker-compose.yml`

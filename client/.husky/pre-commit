@@ -1,2 +1,0 @@
-#!/bin/sh
-pnpm --dir client exec lint-staged
