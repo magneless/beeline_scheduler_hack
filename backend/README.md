@@ -8,6 +8,8 @@
 
 Также доступны `NewBaseline()`, `NewOptimized()` и `NewInserter()`. Входные структуры не изменяются; каждый вызов владеет своим состоянием. Начатую работу и историю сохраняет вызывающий модуль Go-4.
 
+В объединённом backend также находятся PostgreSQL storage, DEMO_GEO provider, PlanService и HTTP server; это один Go-модуль `github.com/magneless/beeline_scheduler_hack/backend`.
+
 Реализации и их тесты разделены на пакеты:
 
 - `internal/planner/baseline` — жадный алгоритм, конструктор `baseline.New()`;
@@ -54,16 +56,16 @@ go vet -tags ortools ./...
 Из корня репозитория:
 
 ```bash
-docker compose run --rm --build backend
+docker compose --profile test run --rm --build backend-test
 ```
 
-Контейнер запускает весь набор тестов с `-race`, включая `optimized`.
+Тестовый контейнер запускает набор тестов с `-race`, включая `optimized`, и использует PostgreSQL из compose через `TEST_DATABASE_URL`; runtime backend запускается отдельным сервисом compose.
 
 Дополнительные команды:
 
 ```bash
-docker compose run --rm backend go vet ./...
-docker compose run --rm backend go test -run TestOptimized -count=1 ./...
+docker compose --profile test run --rm backend-test go vet ./...
+docker compose --profile test run --rm backend-test go test -run TestOptimized -count=1 ./...
 ```
 
 ## Модель optimized

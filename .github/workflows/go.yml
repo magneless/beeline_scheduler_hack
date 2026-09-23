@@ -1,0 +1,62 @@
+name: Go checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: scheduler
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: scheduler
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scheduler -d scheduler"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      TEST_DATABASE_URL: postgres://scheduler:ci-test-only@localhost:5432/scheduler?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: ./scripts/setup-ortools.sh
+      - run: ./scripts/test-ortools.sh -race -count=1
+      - name: Vet and build with OR-Tools
+        run: |
+          export CGO_ENABLED=1
+          export CGO_LDFLAGS="-L$PWD/.cache/ortools/lib -Wl,-rpath,$PWD/.cache/ortools/lib"
+          export LD_LIBRARY_PATH="$PWD/.cache/ortools/lib"
+          go vet -tags ortools ./...
+          go build -tags ortools ./cmd/server
+      - run: go build ./cmd/server
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm lint
+      - run: pnpm lint:styles
+      - run: pnpm build

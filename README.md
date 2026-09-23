@@ -13,6 +13,10 @@
 
 ## Начало работы
 
+Объединённый проект содержит весь Go backend в `backend/`: PostgreSQL, геоданные, планы, OR-Tools planner и HTTP API работают через один модуль. Запуск и ограничения описаны в [документации интеграции](docs/integration.md). В корне проекта скопируйте `.env.example` в `.env`, задайте пароль БД и выполните `docker compose up --build -d --wait`. Интерфейс доступен на http://localhost:3000.
+
+Геоданные по-прежнему демонстрационные: `DEMO_GEO` использует синтетические координаты и поездки по прямой. По умолчанию включён `SOLVER_MODE=optimized`; для запуска без OR-Tools используйте `SOLVER_MODE=baseline`. Изолированный режим Go-2 описан в [документации backend](docs/go2_backend.md).
+
 1. [Функциональный состав](docs/functional_scope.md).
 2. [Распределение работы](docs/work_breakdown.md).
 3. [Общие типы и связи модулей](docs/contracts/common.md).
@@ -37,7 +41,7 @@
 Запуск тестов в Docker из корня репозитория:
 
 ```bash
-docker compose run --rm --build backend
+docker compose --profile test run --rm --build backend-test
 ```
 
 ## Исходные материалы

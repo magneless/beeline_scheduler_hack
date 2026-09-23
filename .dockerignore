@@ -1,7 +1,10 @@
-# Only the Go module and synthetic test fixtures belong in the build context.
+# Keep the server, datasets and contract fixtures in the backend build context.
 **
 !backend/
 !backend/**
+!datasets/
+!datasets/original/
+!datasets/original/**
 !docs/
 !docs/contracts/
 !docs/contracts/examples/
@@ -13,6 +16,7 @@
 **/.codex/
 **/.env
 **/.env.*
+**/node_modules/
 **/*.test
 **/coverage.out
 **/.DS_Store

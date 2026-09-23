@@ -195,9 +195,12 @@ const (
 
 // ContractError is a structured error shared by backend modules.
 type ContractError struct {
+	Cause   error          `json:"-"`
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
 	Details map[string]any `json:"details"`
 }
 
 func (e *ContractError) Error() string { return e.Code + ": " + e.Message }
+
+func (e *ContractError) Unwrap() error { return e.Cause }

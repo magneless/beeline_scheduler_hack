@@ -1,0 +1,189 @@
+import { type DateTime } from 'luxon';
+
+import { type TypeOrNull } from 'shared/lib/types';
+import { cn, formatCount } from 'shared/lib/utils';
+
+import { ScheduleBlockButton } from './ScheduleBlockButton';
+import { ScheduleBoardHead } from './ScheduleBoardHead';
+import { ScheduleLanePerson } from './ScheduleLanePerson';
+import { ScheduleZoomBar } from './ScheduleZoomBar';
+import { workspaceCopy } from '../lib/config';
+import { useScheduleBoard } from '../model/useScheduleBoard';
+
+import { type ScheduleLane } from '../model/types';
+
+import styles from './ScheduleBoard.module.scss';
+
+type ScheduleBoardProps = {
+    lanes: ScheduleLane[];
+    focusAt: DateTime;
+    selectedOrderId: TypeOrNull<string>;
+    selectedEngineerId: TypeOrNull<string>;
+    onSelectOrder: (id: string) => void;
+    onSelectEngineer: (id: TypeOrNull<string>) => void;
+};
+
+export const ScheduleBoard = ({
+    lanes,
+    focusAt,
+    selectedOrderId,
+    selectedEngineerId,
+    onSelectOrder,
+    onSelectEngineer,
+}: ScheduleBoardProps) => {
+    const board = useScheduleBoard({ lanes, focusAt, selectedEngineerId });
+
+    return (
+        <div
+            className={cn(
+                styles.board,
+                board.dense ? styles.dense : '',
+                board.panning ? styles.panning : '',
+                board.hand && !board.panning ? styles.ready : ''
+            )}
+        >
+            <ScheduleBoardHead
+                dense={board.dense}
+                query={board.query}
+                liveFilter={board.laneFilter === 'live'}
+                onQueryChange={board.handleQueryChange}
+                onToggleLive={board.handleToggleLive}
+            />
+            {board.visibleLanes.length && board.start && board.end ? (
+                <div
+                    ref={board.chartRef}
+                    className={styles.chart}
+                    style={{
+                        ['--row' as string]: `${board.rowPx}px`,
+                        ['--hours' as string]: '28px',
+                        height: `calc(var(--hours) + ${board.chartHeight}px)`,
+                    }}
+                >
+                    <div className={styles.caption}>
+                        {formatCount(lanes.length, [
+                            'бригада',
+                            'бригады',
+                            'бригад',
+                        ])}
+                        {board.liveCount
+                            ? workspaceCopy.scheduleOnLine(board.liveCount)
+                            : ''}
+                    </div>
+                    <div ref={board.hoursRef} className={styles.hoursRail}>
+                        <div
+                            className={styles.hours}
+                            style={{ width: board.canvasWidth }}
+                        >
+                            {board.ticks.map((tick, index) => {
+                                const shift =
+                                    index === 0
+                                        ? '0'
+                                        : index === board.ticks.length - 1
+                                          ? '-100%'
+                                          : '-50%';
+
+                                return (
+                                    <span
+                                        key={tick.at.toISO() ?? index}
+                                        className={styles.hour}
+                                        style={{
+                                            left: tick.left,
+                                            transform: `translate(${shift}, -50%)`,
+                                        }}
+                                    >
+                                        {tick.at.toFormat('HH:mm')}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div
+                        ref={board.peopleRef}
+                        className={styles.people}
+                        onScroll={board.syncFromPeople}
+                    >
+                        {board.visibleLanes.map((lane) => (
+                            <ScheduleLanePerson
+                                key={lane.engineerId}
+                                lane={lane}
+                                name={board.laneName(lane)}
+                                dense={board.dense}
+                                active={selectedEngineerId === lane.engineerId}
+                                focusAt={focusAt}
+                                onSelect={() =>
+                                    onSelectEngineer(lane.engineerId)
+                                }
+                            />
+                        ))}
+                    </div>
+                    <div
+                        ref={board.gridRef}
+                        className={styles.grid}
+                        onScroll={board.syncFromGrid}
+                    >
+                        <div
+                            className={styles.canvas}
+                            style={{
+                                width: board.canvasWidth,
+                                ['--hour' as string]: `${board.pxPerHour}px`,
+                            }}
+                        >
+                            {board.nowVisible ? (
+                                <>
+                                    <div
+                                        className={styles.pastVeil}
+                                        style={{
+                                            width: `${board.nowLeft}%`,
+                                        }}
+                                    />
+                                    <div
+                                        className={styles.now}
+                                        style={{
+                                            left: `${board.nowLeft}%`,
+                                        }}
+                                    />
+                                </>
+                            ) : null}
+                            {board.visibleLanes.map((lane) => (
+                                <div
+                                    key={lane.engineerId}
+                                    className={cn(
+                                        styles.track,
+                                        selectedEngineerId === lane.engineerId
+                                            ? styles.trackActive
+                                            : ''
+                                    )}
+                                >
+                                    {lane.blocks.map((block) => (
+                                        <ScheduleBlockButton
+                                            key={block.id}
+                                            lane={lane}
+                                            block={block}
+                                            focusAt={focusAt}
+                                            selectedOrderId={selectedOrderId}
+                                            onSelectOrder={onSelectOrder}
+                                        />
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            ) : lanes.length ? (
+                <div className={styles.empty}>
+                    {workspaceCopy.scheduleEmptyFilter}
+                </div>
+            ) : (
+                <div className={styles.empty}>
+                    {workspaceCopy.scheduleEmpty}
+                </div>
+            )}
+            <ScheduleZoomBar
+                zoomLabel={board.zoomLabel}
+                onZoomOut={board.handleZoomOut}
+                onZoomIn={board.handleZoomIn}
+                onZoomFit={board.zoomFit}
+            />
+        </div>
+    );
+};
