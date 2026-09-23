@@ -9,20 +9,21 @@ export const useDispatcherWorkspaceStore = create<DispatcherWorkspaceStore>(
         filter: 'all',
         panelOpen: true,
         scheduleOpen: false,
-        panelTab: 'crews',
+        panelTab: 'both',
         selectOrder: (selectedOrderId) =>
-            set({
+            set((state) => ({
                 selectedOrderId,
                 panelOpen: true,
-                panelTab: 'orders',
-            }),
+                panelTab: state.panelTab === 'both' ? 'both' : 'orders',
+            })),
         selectEngineer: (selectedEngineerId) =>
-            set({
+            set((state) => ({
                 selectedEngineerId,
-                selectedOrderId: null,
-                filter: 'all',
+                selectedOrderId:
+                    state.panelTab === 'both' ? state.selectedOrderId : null,
+                filter: state.panelTab === 'both' ? state.filter : 'all',
                 panelOpen: true,
-            }),
+            })),
         setFilter: (filter) => set({ filter }),
         setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
         togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
@@ -33,7 +34,7 @@ export const useDispatcherWorkspaceStore = create<DispatcherWorkspaceStore>(
                 selectedOrderId: null,
                 selectedEngineerId: null,
                 filter: 'all',
-                panelTab: 'crews',
+                panelTab: 'both',
                 scheduleOpen: false,
             }),
     })

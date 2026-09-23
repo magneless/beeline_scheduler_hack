@@ -30,8 +30,10 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
                       queries.snapshot,
                       queries.plan,
                       selection.selectedEngineerId,
-                      selection.panelTab === 'orders' &&
-                          selection.filter === 'unassigned'
+                      selection.panelTab !== 'crews' &&
+                          selection.filter === 'unassigned' &&
+                          !selection.selectedEngineerId,
+                      selection.selectedOrderId
                   )
                 : { markers: [], polylines: [] },
         [
@@ -40,6 +42,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
             selection.selectedEngineerId,
             selection.panelTab,
             selection.filter,
+            selection.selectedOrderId,
         ]
     );
 
@@ -118,6 +121,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         }
     };
     const showUnassigned = () => {
+        selection.setPanelTab('both');
         selection.focusEngineer(null);
         selection.selectOrder(null);
         selection.setFilter('unassigned');
@@ -155,13 +159,18 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         mapFitToken: [
             scenarioId,
             selection.selectedEngineerId ?? 'overview',
-            selection.panelTab === 'orders' ? selection.filter : 'all',
+            selection.panelTab !== 'crews' ? selection.filter : 'all',
+            selection.selectedOrderId &&
+            view.unassigned.has(selection.selectedOrderId)
+                ? selection.selectedOrderId
+                : '',
         ].join(':'),
         ...view,
         ...selection,
         selectOrder,
         setFilter: (filter: typeof selection.filter) => {
             selection.focusEngineer(null);
+            selection.selectOrder(null);
             selection.setFilter(filter);
         },
         onMarkerClick: (id: string) => {
@@ -177,7 +186,11 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         buildPending: buildPlan.pending,
         buildErrorMessage: buildPlan.errorMessage,
         crewPending: crew.pending || eventPending || buildPlan.pending,
-        handleClearCrew: selection.clearCrew,
+        handleClearCrew: () => {
+            selection.focusEngineer(null);
+            selection.selectOrder(null);
+            selection.setFilter('all');
+        },
         handleBuildPlan: buildPlan.build,
         handleOrderEvent: queries.plan ? handleOrderEvent : undefined,
         handlePatchEngineer,

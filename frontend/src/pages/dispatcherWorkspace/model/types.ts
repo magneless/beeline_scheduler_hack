@@ -27,7 +27,7 @@ export type ScheduleLane = {
     blocks: ScheduleBlock[];
 };
 
-export type WorkspacePanelTab = 'orders' | 'crews';
+export type WorkspacePanelTab = 'orders' | 'crews' | 'both';
 
 export type DispatcherWorkspaceStore = {
     selectedOrderId: TypeOrNull<string>;

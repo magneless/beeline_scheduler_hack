@@ -72,6 +72,7 @@ export const OrderRow = ({
     return (
         <article
             ref={row.rowRef}
+            data-order-id={order.id}
             className={cn(
                 'rounded-[12px] border px-3 py-2.5',
                 active
@@ -86,6 +87,7 @@ export const OrderRow = ({
                 variant="ghost"
                 className="h-auto w-full items-start justify-start gap-2.5 px-0 py-0 text-left whitespace-normal"
                 onClick={row.handleSelect}
+                aria-pressed={active}
             >
                 <span
                     className={cn(
@@ -131,6 +133,11 @@ export const OrderRow = ({
                     </span>
                 </span>
             </Button>
+            {open && !active ? (
+                <p className="mt-1 ml-4.5 text-[11px] text-destructive">
+                    {reasonCodeLabel[open.reason_code] ?? open.message}
+                </p>
+            ) : null}
             {active ? (
                 <div className="mt-2 ml-4.5 space-y-2">
                     <p className="text-[11px] text-muted-foreground">

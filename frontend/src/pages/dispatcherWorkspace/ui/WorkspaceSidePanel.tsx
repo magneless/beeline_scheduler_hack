@@ -27,6 +27,7 @@ import {
 type WorkspaceSidePanelProps = {
     children?: ReactNode;
     hasPlan: boolean;
+    asOf?: string;
     onShowUnassigned: () => void;
     panelTab: WorkspacePanelTab;
     ordersCount: number;
@@ -67,6 +68,7 @@ type WorkspaceSidePanelProps = {
 export const WorkspaceSidePanel = ({
     children,
     hasPlan,
+    asOf,
     onShowUnassigned,
     panelTab,
     ordersCount,
@@ -111,7 +113,9 @@ export const WorkspaceSidePanel = ({
         <aside
             className={cn(
                 'relative z-10 flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-white',
-                'w-[340px] max-lg:w-[300px] max-sm:w-full max-sm:max-h-[58vh]'
+                panelTab === 'both'
+                    ? 'w-[660px] max-lg:h-[580px] max-lg:w-full max-sm:h-[900px]'
+                    : 'w-[340px] max-lg:w-[300px] max-lg:w-full max-lg:max-h-[58vh]'
             )}
             aria-label="Рабочая панель диспетчера"
         >
@@ -131,7 +135,7 @@ export const WorkspaceSidePanel = ({
                 onValueChange={handleTabChange}
                 className="mx-4 mt-4 shrink-0"
             >
-                <TabsList className="grid grid-cols-2 rounded-[8px] bg-muted p-1">
+                <TabsList className="grid grid-cols-3 rounded-[8px] bg-muted p-1">
                     <TabsTrigger
                         value="orders"
                         className={[
@@ -166,51 +170,102 @@ export const WorkspaceSidePanel = ({
                             {crewsCount}
                         </span>
                     </TabsTrigger>
+                    <TabsTrigger
+                        value="both"
+                        className="rounded-md py-2 text-xs data-[state=active]:bg-primary"
+                    >
+                        Вместе
+                    </TabsTrigger>
                 </TabsList>
             </Tabs>
-            <div className="mt-3 flex min-h-0 flex-1 flex-col">
-                {panelTab === 'crews' ? (
-                    <CrewPanel
-                        engineers={engineers}
-                        scenarioId={scenarioId ?? ''}
-                        revision={revision ?? 0}
-                        selectedEngineerId={selectedEngineerId}
-                        timezone={timezone}
-                        date={date}
-                        remaining={remaining}
-                        distances={distances}
-                        baselineDistances={baselineDistances}
-                        assignedCounts={assignedCounts}
-                        canEdit={canEditEngineers}
-                        canEvent={canEvent}
-                        defaultOccurredAt={defaultOccurredAt}
-                        pending={pending}
-                        onSelect={onSelectEngineer}
-                        onPatch={onPatchEngineer}
-                        onUnavailable={onUnavailable}
-                    />
-                ) : (
-                    <OrderPanel
-                        orders={orders}
-                        engineers={engineers}
-                        selectedOrderId={selectedOrderId}
-                        selectedEngineerId={selectedEngineerId}
-                        engineerByOrder={engineerByOrder}
-                        unassigned={unassigned}
-                        visits={visits}
-                        timezone={timezone}
-                        addressByOrder={addressByOrder}
-                        remaining={remaining}
-                        issues={issues}
-                        defaultOccurredAt={defaultOccurredAt}
-                        filter={filter}
-                        onFilter={onFilter}
-                        onSelect={onSelectOrder}
-                        onClearCrew={onClearCrew}
-                        onEvent={onOrderEvent}
-                        statusPending={statusPending}
-                    />
+            <div
+                className={cn(
+                    'mt-3 min-h-0 flex-1',
+                    panelTab === 'both'
+                        ? 'grid grid-cols-2 max-sm:grid-cols-1 max-sm:grid-rows-2'
+                        : 'flex flex-col'
                 )}
+            >
+                {panelTab !== 'orders' ? (
+                    <section
+                        aria-label="Бригады"
+                        className="order-2 flex min-h-0 min-w-0 flex-col"
+                    >
+                        {panelTab === 'both' ? (
+                            <h2 className="px-3 pb-3 text-sm font-bold">
+                                Бригады · {crewsCount}
+                            </h2>
+                        ) : null}
+                        <CrewPanel
+                            comparisonOrder={orders.find(
+                                (order) =>
+                                    order.id === selectedOrderId &&
+                                    unassigned.has(order.id)
+                            )}
+                            comparisonAddress={
+                                selectedOrderId
+                                    ? addressByOrder[selectedOrderId]
+                                    : undefined
+                            }
+                            asOf={asOf}
+                            engineers={engineers}
+                            scenarioId={scenarioId ?? ''}
+                            revision={revision ?? 0}
+                            selectedEngineerId={selectedEngineerId}
+                            timezone={timezone}
+                            date={date}
+                            remaining={remaining}
+                            distances={distances}
+                            baselineDistances={baselineDistances}
+                            assignedCounts={assignedCounts}
+                            canEdit={canEditEngineers}
+                            canEvent={canEvent}
+                            defaultOccurredAt={defaultOccurredAt}
+                            pending={pending}
+                            onSelect={onSelectEngineer}
+                            onPatch={onPatchEngineer}
+                            onUnavailable={onUnavailable}
+                        />
+                    </section>
+                ) : null}
+                {panelTab !== 'crews' ? (
+                    <section
+                        aria-label="Заявки"
+                        className={cn(
+                            'order-1 flex min-h-0 min-w-0 flex-col',
+                            panelTab === 'both' &&
+                                'border-r border-border max-sm:mb-3 max-sm:border-r-0 max-sm:border-b'
+                        )}
+                    >
+                        {panelTab === 'both' ? (
+                            <h2 className="px-3 pb-3 text-sm font-bold">
+                                Заявки · {ordersCount}
+                            </h2>
+                        ) : null}
+                        <OrderPanel
+                            orders={orders}
+                            engineers={engineers}
+                            selectedOrderId={selectedOrderId}
+                            selectedEngineerId={
+                                panelTab === 'both' ? null : selectedEngineerId
+                            }
+                            engineerByOrder={engineerByOrder}
+                            unassigned={unassigned}
+                            visits={visits}
+                            timezone={timezone}
+                            addressByOrder={addressByOrder}
+                            remaining={remaining}
+                            issues={issues}
+                            defaultOccurredAt={defaultOccurredAt}
+                            filter={filter}
+                            onFilter={onFilter}
+                            onSelect={onSelectOrder}
+                            onClearCrew={onClearCrew}
+                            onEvent={onOrderEvent}
+                            statusPending={statusPending}
+                        />
+                    </section>
+                ) : null}
             </div>
             {children}
         </aside>

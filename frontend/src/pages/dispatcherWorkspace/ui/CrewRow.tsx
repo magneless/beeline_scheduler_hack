@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { type Engineer, type Equipment } from 'shared/api/types/contracts';
+import {
+    type Engineer,
+    type Equipment,
+    type Order,
+} from 'shared/api/types/contracts';
 import { equipmentLabel, skillLabel, transportLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
 import {
@@ -16,11 +20,14 @@ import { Button } from 'shared/ui/button';
 import { EngineerForm } from './EngineerForm';
 import { EventTimeField } from './EventTimeField';
 import { workspaceCopy } from '../lib/config';
+import { crewCompatibility } from '../lib/crewCompatibility';
 import { routeColor } from '../lib/routeColors';
 
 import { type EngineerPatchInput } from '../model/types';
 
 type CrewRowProps = {
+    comparisonOrder?: Order;
+    asOf?: string;
     engineer: Engineer;
     active: boolean;
     jobs: number;
@@ -41,6 +48,8 @@ type CrewRowProps = {
 };
 
 export const CrewRow = ({
+    comparisonOrder,
+    asOf,
     engineer,
     active,
     jobs,
@@ -62,6 +71,9 @@ export const CrewRow = ({
     const rowRef = useRef<HTMLDivElement>(null);
     const [occurredAt, setOccurredAt] = useState(defaultOccurredAt);
 
+    const compatibility = comparisonOrder
+        ? crewCompatibility(comparisonOrder, engineer, stock, asOf)
+        : null;
     const name = displayEngineer(engineer.id);
     const stockItems = (
         Object.entries(stock) as Array<[Equipment, number]>
@@ -149,6 +161,25 @@ export const CrewRow = ({
                     </span>
                 </span>
             </Button>
+            {compatibility ? (
+                <div
+                    className="mt-2 space-y-1 text-[11px]"
+                    data-crew-comparison={engineer.id}
+                >
+                    {compatibility.length ? (
+                        compatibility.map((reason) => (
+                            <p key={reason} className="text-destructive">
+                                {reason}
+                            </p>
+                        ))
+                    ) : (
+                        <p className="text-muted-foreground">
+                            Базовые условия совпадают. Нужна проверка дороги и
+                            расписания.
+                        </p>
+                    )}
+                </div>
+            ) : null}
             {active ? (
                 <div className="mt-2 ml-[2.75rem] space-y-1.5">
                     <details className="rounded-[8px] border border-border bg-white px-2 py-1.5">

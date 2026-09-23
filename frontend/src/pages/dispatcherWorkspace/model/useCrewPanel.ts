@@ -27,6 +27,11 @@ export const useCrewPanel = ({
         (engineer) => (assignedCounts?.[engineer.id] ?? 0) > 0
     ).length;
 
+    const freeCount = engineers.filter(
+        (engineer) =>
+            engineer.available && !(assignedCounts?.[engineer.id] ?? 0)
+    ).length;
+
     const visible = useMemo(() => {
         const needle = query.trim().toLowerCase();
         const filtered = engineers.filter((engineer) => {
@@ -36,7 +41,7 @@ export const useCrewPanel = ({
                 return false;
             }
 
-            if (load === 'free' && jobs > 0) {
+            if (load === 'free' && (jobs > 0 || !engineer.available)) {
                 return false;
             }
 
@@ -88,6 +93,7 @@ export const useCrewPanel = ({
         load,
         editingId,
         busyCount,
+        freeCount,
         visible,
         emptyMessage,
         handleQueryChange,

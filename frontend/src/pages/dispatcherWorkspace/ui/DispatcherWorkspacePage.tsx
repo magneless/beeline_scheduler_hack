@@ -20,7 +20,7 @@ export const DispatcherWorkspacePage = () => {
     const workspace = useDispatcherWorkspace(scenarioId);
     const focused = workspace.selectedEngineerId;
     const unassignedOnly =
-        workspace.panelTab === 'orders' && workspace.filter === 'unassigned';
+        workspace.panelTab !== 'crews' && workspace.filter === 'unassigned';
     return (
         <section
             className={[
@@ -50,10 +50,11 @@ export const DispatcherWorkspacePage = () => {
                 onToggleSchedule={workspace.toggleSchedule}
                 onTogglePanel={workspace.togglePanel}
             />
-            <div className="flex min-h-0 flex-1 max-sm:flex-col max-sm:overflow-y-auto">
+            <div className="flex min-h-0 flex-1 max-lg:flex-col max-lg:overflow-y-auto">
                 {workspace.panelOpen ? (
                     <WorkspaceSidePanel
                         hasPlan={Boolean(workspace.plan)}
+                        asOf={workspace.plan?.as_of}
                         onShowUnassigned={workspace.showUnassigned}
                         panelTab={workspace.panelTab}
                         ordersCount={workspace.ordersCount}
@@ -106,7 +107,7 @@ export const DispatcherWorkspacePage = () => {
                         />
                     </WorkspaceSidePanel>
                 ) : null}
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col max-sm:min-h-[440px] max-sm:shrink-0">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:min-h-[440px] max-lg:shrink-0">
                     <div
                         className={[
                             'flex shrink-0 items-center justify-between gap-3 border-b',

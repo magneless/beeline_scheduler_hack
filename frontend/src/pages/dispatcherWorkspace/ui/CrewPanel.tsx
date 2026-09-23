@@ -2,9 +2,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { type Engineer, HttpError, importEngineers } from 'shared/api';
+import {
+    type Engineer,
+    HttpError,
+    importEngineers,
+    type Order,
+} from 'shared/api';
+import { workTypeLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
-import { cn } from 'shared/lib/utils';
+import { cn, formatClock } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 import { Input } from 'shared/ui/input';
 import { Tabs, TabsList, TabsTrigger } from 'shared/ui/tabs';
@@ -16,6 +22,9 @@ import { useCrewPanel } from '../model/useCrewPanel';
 import { type EngineerPatchInput } from '../model/types';
 
 type CrewPanelProps = {
+    comparisonOrder?: Order;
+    comparisonAddress?: string;
+    asOf?: string;
     engineers: Engineer[];
     scenarioId: string;
     revision: number;
@@ -36,6 +45,9 @@ type CrewPanelProps = {
 };
 
 export const CrewPanel = ({
+    comparisonOrder,
+    comparisonAddress,
+    asOf,
     engineers,
     scenarioId,
     revision,
@@ -82,6 +94,30 @@ export const CrewPanel = ({
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 space-y-2 px-3">
+                {comparisonOrder ? (
+                    <div
+                        className="rounded-[8px] bg-accent px-3 py-2 text-xs"
+                        aria-label="Сравнение с заявкой"
+                    >
+                        <strong className="block">
+                            Для выбранной заявки ·{' '}
+                            {workTypeLabel[comparisonOrder.work_type]}
+                        </strong>
+                        <span
+                            className="block truncate"
+                            title={comparisonAddress}
+                        >
+                            {comparisonAddress}
+                        </span>
+                        <span className="text-muted-foreground">
+                            {formatClock(
+                                comparisonOrder.window.start,
+                                timezone
+                            )}
+                            –{formatClock(comparisonOrder.window.end, timezone)}
+                        </span>
+                    </div>
+                ) : null}
                 <details className="rounded-[12px] border border-border bg-white p-2 text-xs text-muted-foreground">
                     <summary className="cursor-pointer select-none font-medium text-foreground">
                         Управление бригадами
@@ -172,7 +208,7 @@ export const CrewPanel = ({
                         <TabsTrigger value="free">
                             {workspaceCopy.crewFilterFree}
                             <span className="tabular-nums text-[11px] text-muted-foreground">
-                                {engineers.length - panel.busyCount}
+                                {panel.freeCount}
                             </span>
                         </TabsTrigger>
                     </TabsList>
@@ -185,6 +221,8 @@ export const CrewPanel = ({
                             <CrewRow
                                 key={engineer.id}
                                 engineer={engineer}
+                                comparisonOrder={comparisonOrder}
+                                asOf={asOf}
                                 active={selectedEngineerId === engineer.id}
                                 jobs={assignedCounts?.[engineer.id] ?? 0}
                                 distance={distances?.[engineer.id]}

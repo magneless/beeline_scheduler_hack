@@ -19,7 +19,8 @@ export const buildMapModel = (
     snapshot: Snapshot,
     plan: Plan | undefined,
     selectedEngineerId?: TypeOrNull<string>,
-    onlyUnassigned = false
+    onlyUnassigned = false,
+    selectedOrderId?: TypeOrNull<string>
 ) => {
     const activePlan =
         plan && plan.scenario_id === snapshot.scenario_id ? plan : undefined;
@@ -74,7 +75,8 @@ export const buildMapModel = (
 
         if (
             selectedEngineerId &&
-            assignedTo.get(order.id) !== selectedEngineerId
+            assignedTo.get(order.id) !== selectedEngineerId &&
+            !(order.id === selectedOrderId && unassigned.has(order.id))
         ) {
             return;
         }
