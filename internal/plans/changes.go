@@ -3,10 +3,10 @@ package plans
 import (
 	"sort"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
-func calculateChanges(before, after []contracts.Route, cancelled map[string]struct{}) []contracts.PlanChange {
+func calculateChanges(before, after []contracts.Route, cancelled, statusChanged map[string]struct{}) []contracts.PlanChange {
 	beforeAssignments := assignments(before)
 	afterAssignments := assignments(after)
 	orderIDs := make(map[string]struct{}, len(beforeAssignments)+len(afterAssignments)+len(cancelled))
@@ -19,6 +19,9 @@ func calculateChanges(before, after []contracts.Route, cancelled map[string]stru
 	for id := range cancelled {
 		orderIDs[id] = struct{}{}
 	}
+	for id := range statusChanged {
+		orderIDs[id] = struct{}{}
+	}
 	ids := make([]string, 0, len(orderIDs))
 	for id := range orderIDs {
 		ids = append(ids, id)
@@ -28,12 +31,15 @@ func calculateChanges(before, after []contracts.Route, cancelled map[string]stru
 	for _, id := range ids {
 		beforeAssignment, hadBefore := beforeAssignments[id]
 		afterAssignment, hasAfter := afterAssignments[id]
-		if hadBefore && hasAfter && assignmentEqual(beforeAssignment, afterAssignment) {
+		_, hasStatusChange := statusChanged[id]
+		if hadBefore && hasAfter && assignmentEqual(beforeAssignment, afterAssignment) && !hasStatusChange {
 			continue
 		}
 		if !hadBefore && !hasAfter {
 			if _, isCancelled := cancelled[id]; isCancelled {
 				changes = append(changes, contracts.PlanChange{OrderID: id, Reason: contracts.PlanChangeCancelled})
+			} else if hasStatusChange {
+				changes = append(changes, contracts.PlanChange{OrderID: id, Reason: contracts.PlanChangeStatusChanged})
 			}
 			continue
 		}
@@ -48,6 +54,8 @@ func calculateChanges(before, after []contracts.Route, cancelled map[string]stru
 		}
 		if _, isCancelled := cancelled[id]; isCancelled {
 			change.Reason = contracts.PlanChangeCancelled
+		} else if hasStatusChange {
+			change.Reason = contracts.PlanChangeStatusChanged
 		} else if !hadBefore {
 			change.Reason = contracts.PlanChangeAssigned
 		} else if !hasAfter {

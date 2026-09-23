@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 func cloneSnapshot(value contracts.Snapshot) contracts.Snapshot {
@@ -22,6 +22,11 @@ func cloneOrders(values []contracts.Order) []contracts.Order {
 	for i, value := range values {
 		result[i] = value
 		result[i].RequiredSkills = append([]string(nil), value.RequiredSkills...)
+		result[i].EquipmentRequired = cloneEquipment(value.EquipmentRequired)
+		if value.Execution != nil {
+			execution := *value.Execution
+			result[i].Execution = &execution
+		}
 	}
 	return result
 }
@@ -31,6 +36,15 @@ func cloneEngineers(values []contracts.Engineer) []contracts.Engineer {
 	for i, value := range values {
 		result[i] = value
 		result[i].Skills = append([]string(nil), value.Skills...)
+		result[i].EquipmentStock = cloneEquipment(value.EquipmentStock)
+	}
+	return result
+}
+
+func cloneEquipment(value map[contracts.Equipment]int64) map[contracts.Equipment]int64 {
+	result := make(map[contracts.Equipment]int64, len(value))
+	for equipment, count := range value {
+		result[equipment] = count
 	}
 	return result
 }
@@ -53,6 +67,9 @@ func cloneSolveRequest(value contracts.SolveRequest) contracts.SolveRequest {
 	value.Orders = cloneOrders(value.Orders)
 	value.Engineers = cloneEngineers(value.Engineers)
 	value.EngineerStates = append([]contracts.EngineerState(nil), value.EngineerStates...)
+	for index := range value.EngineerStates {
+		value.EngineerStates[index].EquipmentAvailable = cloneEquipment(value.EngineerStates[index].EquipmentAvailable)
+	}
 	value.AlreadyUsedEngineerIDs = append([]string(nil), value.AlreadyUsedEngineerIDs...)
 	value.TravelMatrix = cloneMatrix(value.TravelMatrix)
 	return value
@@ -91,7 +108,7 @@ func activeValidOrders(snapshot contracts.Snapshot) []contracts.Order {
 	}
 	result := make([]contracts.Order, 0, len(snapshot.Orders))
 	for _, order := range snapshot.Orders {
-		if order.Status != contracts.OrderStatusActive {
+		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute {
 			continue
 		}
 		if _, exists := invalid[order.ID]; exists {
@@ -110,6 +127,40 @@ func availableEngineers(snapshot contracts.Snapshot) []contracts.Engineer {
 		}
 	}
 	return result
+}
+
+func equipmentRemaining(snapshot contracts.Snapshot) (map[string]map[contracts.Equipment]int64, error) {
+	result := make(map[string]map[contracts.Equipment]int64, len(snapshot.Engineers))
+	for _, engineer := range snapshot.Engineers {
+		result[engineer.ID] = cloneEquipment(engineer.EquipmentStock)
+	}
+	for _, order := range snapshot.Orders {
+		if order.Execution == nil || order.Execution.StartedAt == nil {
+			continue
+		}
+		remaining, exists := result[order.Execution.EngineerID]
+		if !exists {
+			return nil, contracts.InvalidInput("started order references an unknown engineer", map[string]any{"order_id": order.ID, "engineer_id": order.Execution.EngineerID})
+		}
+		for equipment, count := range order.EquipmentRequired {
+			remaining[equipment] -= count
+			if remaining[equipment] < 0 {
+				return nil, contracts.InvalidInput("started work exceeds engineer equipment stock", map[string]any{"order_id": order.ID, "engineer_id": order.Execution.EngineerID, "equipment": equipment})
+			}
+		}
+	}
+	return result, nil
+}
+
+func statusOrderIDs(snapshot contracts.Snapshot, status contracts.OrderStatus) []string {
+	result := make([]string, 0)
+	for _, order := range snapshot.Orders {
+		if order.Status == status {
+			result = append(result, order.ID)
+		}
+	}
+	sort.Strings(result)
+	return nonNil(result)
 }
 
 func profilesFor(engineers []contracts.Engineer) []contracts.Transport {

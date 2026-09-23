@@ -3,10 +3,14 @@ package plans
 import (
 	"sort"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
-func calculateMetrics(routes []contracts.Route, unassigned []contracts.UnassignedOrder) contracts.Metrics {
+func calculateMetrics(routes []contracts.Route, unassigned []contracts.UnassignedOrder, cancelledIDs, completedIDs []string) contracts.Metrics {
+	cancelled := make(map[string]struct{}, len(cancelledIDs))
+	for _, orderID := range cancelledIDs {
+		cancelled[orderID] = struct{}{}
+	}
 	assignments := make(map[string]struct{})
 	distanceByEngineer := make(map[string]int64)
 	used := make(map[string]struct{})
@@ -15,6 +19,9 @@ func calculateMetrics(routes []contracts.Route, unassigned []contracts.Unassigne
 			used[route.EngineerID] = struct{}{}
 		}
 		for _, visit := range route.Visits {
+			if _, isCancelled := cancelled[visit.OrderID]; isCancelled {
+				continue
+			}
 			assignments[visit.OrderID] = struct{}{}
 		}
 		for _, leg := range route.Legs {
@@ -35,6 +42,7 @@ func calculateMetrics(routes []contracts.Route, unassigned []contracts.Unassigne
 	}
 	return contracts.Metrics{
 		AssignedCount:     len(assignments),
+		CompletedCount:    len(completedIDs),
 		UnassignedCount:   len(unassigned),
 		UsedEngineerCount: len(used),
 		TotalDistanceM:    total,

@@ -13,23 +13,6 @@ const (
 	ErrorComputationFailed   = "COMPUTATION_FAILED"
 )
 
-type ContractError struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details"`
-	cause   error
-}
-
-var _ error = (*ContractError)(nil)
-
-func (e *ContractError) Error() string {
-	return e.Code + ": " + e.Message
-}
-
-func (e *ContractError) Unwrap() error {
-	return e.cause
-}
-
 func NewError(code, message string, details map[string]any) *ContractError {
 	if details == nil {
 		details = map[string]any{}

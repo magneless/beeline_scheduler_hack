@@ -3,7 +3,7 @@ package plans
 import (
 	"context"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 type PlanDataReader interface {
@@ -18,9 +18,7 @@ type GeoService interface {
 	PositionAt(ctx context.Context, input contracts.PositionRequest) (contracts.PositionResult, error)
 }
 
-type Planner interface {
-	Solve(ctx context.Context, input contracts.SolveRequest) (contracts.SolveResult, error)
-}
+type Planner = contracts.Planner
 
 type PlanService interface {
 	Build(ctx context.Context, input contracts.BuildPlanRequest) (contracts.PlanResult, error)

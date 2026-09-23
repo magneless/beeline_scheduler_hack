@@ -194,6 +194,9 @@ type ContractError struct {
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
 	Details map[string]any `json:"details"`
+	cause   error
 }
 
 func (e *ContractError) Error() string { return e.Code + ": " + e.Message }
+
+func (e *ContractError) Unwrap() error { return e.cause }

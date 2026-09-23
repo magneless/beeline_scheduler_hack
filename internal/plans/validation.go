@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 func validateSnapshot(snapshot contracts.Snapshot, scenarioID string, revision int64) error {
@@ -37,7 +37,7 @@ func validateSnapshot(snapshot contracts.Snapshot, scenarioID string, revision i
 	if _, exists := locations[snapshot.OfficeLocationID]; !exists {
 		return contracts.InvalidInput("office location was not found", map[string]any{"location_id": snapshot.OfficeLocationID})
 	}
-	orders := make(map[string]struct{}, len(snapshot.Orders))
+	orders := make(map[string]contracts.Order, len(snapshot.Orders))
 	for _, order := range snapshot.Orders {
 		if order.ID == "" || order.LocationID == "" {
 			return contracts.InvalidInput("order id and location are required", nil)
@@ -48,18 +48,35 @@ func validateSnapshot(snapshot contracts.Snapshot, scenarioID string, revision i
 		if _, exists := locations[order.LocationID]; !exists {
 			return contracts.InvalidInput("order location was not found", map[string]any{"order_id": order.ID, "location_id": order.LocationID})
 		}
-		if order.ServiceSec <= 0 || order.Window.End.Before(order.Window.Start) {
+		if order.ServiceSec <= 0 || order.Window.Start.IsZero() || order.Window.End.Before(order.Window.Start) || order.ReceivedAt.IsZero() {
 			return contracts.InvalidInput("invalid order duration or window", map[string]any{"order_id": order.ID})
 		}
-		if order.Priority != contracts.PriorityNormal && order.Priority != contracts.PriorityUrgent {
-			return contracts.InvalidInput("invalid order priority", map[string]any{"order_id": order.ID, "priority": order.Priority})
+		switch order.WorkType {
+		case contracts.WorkTypeEmergency:
+			if order.Priority != contracts.PriorityUrgent || order.ServiceSec != 4800 {
+				return contracts.InvalidInput("emergency order requires urgent priority and service_sec=4800", map[string]any{"order_id": order.ID})
+			}
+		case contracts.WorkTypeConnection, contracts.WorkTypeRepair, contracts.WorkTypeAdditional:
+			if order.Priority != contracts.PriorityNormal {
+				return contracts.InvalidInput("non-emergency order requires normal priority", map[string]any{"order_id": order.ID})
+			}
+		default:
+			return contracts.InvalidInput("invalid order work type", map[string]any{"order_id": order.ID, "work_type": order.WorkType})
 		}
-		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusCancelled {
-			return contracts.InvalidInput("invalid order status", map[string]any{"order_id": order.ID, "status": order.Status})
+		if err := validateEquipment("order equipment requirement", order.ID, order.EquipmentRequired); err != nil {
+			return err
 		}
-		orders[order.ID] = struct{}{}
+		if order.RequiredTransport != nil && *order.RequiredTransport != contracts.TransportCar && *order.RequiredTransport != contracts.TransportWalk {
+			return contracts.InvalidInput("invalid required transport", map[string]any{"order_id": order.ID, "transport": *order.RequiredTransport})
+		}
+		for _, skill := range order.RequiredSkills {
+			if skill == "" {
+				return contracts.InvalidInput("order skill cannot be empty", map[string]any{"order_id": order.ID})
+			}
+		}
+		orders[order.ID] = order
 	}
-	engineers := make(map[string]struct{}, len(snapshot.Engineers))
+	engineers := make(map[string]contracts.Engineer, len(snapshot.Engineers))
 	for _, engineer := range snapshot.Engineers {
 		if engineer.ID == "" {
 			return contracts.InvalidInput("engineer id is required", nil)
@@ -73,7 +90,86 @@ func validateSnapshot(snapshot contracts.Snapshot, scenarioID string, revision i
 		if engineer.Shift.End.Before(engineer.Shift.Start) {
 			return contracts.InvalidInput("invalid engineer shift", map[string]any{"engineer_id": engineer.ID})
 		}
-		engineers[engineer.ID] = struct{}{}
+		if err := validateEquipment("engineer equipment stock", engineer.ID, engineer.EquipmentStock); err != nil {
+			return err
+		}
+		for _, skill := range engineer.Skills {
+			if skill == "" {
+				return contracts.InvalidInput("engineer skill cannot be empty", map[string]any{"engineer_id": engineer.ID})
+			}
+		}
+		engineers[engineer.ID] = engineer
+	}
+	currentByEngineer := make(map[string]string)
+	for _, order := range snapshot.Orders {
+		execution := order.Execution
+		switch order.Status {
+		case contracts.OrderStatusActive:
+			if execution != nil {
+				return contracts.InvalidInput("active order must not contain execution", map[string]any{"order_id": order.ID})
+			}
+		case contracts.OrderStatusSent:
+			if execution == nil || execution.EngineerID == "" || execution.DepartedAt != nil || execution.StartedAt != nil || execution.FinishedAt != nil || execution.ExpectedEndAt != nil {
+				return contracts.InvalidInput("sent order has invalid execution", map[string]any{"order_id": order.ID})
+			}
+		case contracts.OrderStatusEnRoute:
+			if execution == nil || execution.EngineerID == "" || execution.DepartedAt == nil || execution.StartedAt != nil || execution.FinishedAt != nil || execution.ExpectedEndAt != nil {
+				return contracts.InvalidInput("en_route order has invalid execution", map[string]any{"order_id": order.ID})
+			}
+		case contracts.OrderStatusInProgress:
+			if execution == nil || execution.EngineerID == "" || execution.StartedAt == nil || execution.FinishedAt != nil {
+				return contracts.InvalidInput("in_progress order has invalid execution", map[string]any{"order_id": order.ID})
+			}
+		case contracts.OrderStatusCompleted:
+			if execution == nil || execution.EngineerID == "" || execution.StartedAt == nil || execution.FinishedAt == nil || !execution.FinishedAt.After(*execution.StartedAt) || execution.ExpectedEndAt != nil {
+				return contracts.InvalidInput("completed order has invalid execution", map[string]any{"order_id": order.ID})
+			}
+		case contracts.OrderStatusCancelled:
+			if execution != nil && execution.EngineerID == "" {
+				return contracts.InvalidInput("cancelled order execution requires engineer_id", map[string]any{"order_id": order.ID})
+			}
+			if execution != nil && execution.StartedAt != nil && (execution.FinishedAt == nil || execution.FinishedAt.Before(*execution.StartedAt)) {
+				return contracts.InvalidInput("cancelled started order requires a valid finished_at", map[string]any{"order_id": order.ID})
+			}
+		default:
+			return contracts.InvalidInput("invalid order status", map[string]any{"order_id": order.ID, "status": order.Status})
+		}
+		if execution == nil {
+			continue
+		}
+		if _, exists := engineers[execution.EngineerID]; !exists {
+			return contracts.InvalidInput("order execution references an unknown engineer", map[string]any{"order_id": order.ID, "engineer_id": execution.EngineerID})
+		}
+		if execution.DepartedAt != nil && execution.DepartedAt.Before(order.ReceivedAt) {
+			return contracts.InvalidInput("engineer departed before order was received", map[string]any{"order_id": order.ID})
+		}
+		if execution.StartedAt != nil && execution.StartedAt.Before(order.ReceivedAt) {
+			return contracts.InvalidInput("work started before order was received", map[string]any{"order_id": order.ID})
+		}
+		if execution.ExpectedEndAt != nil && execution.StartedAt != nil && !execution.ExpectedEndAt.After(*execution.StartedAt) {
+			return contracts.InvalidInput("expected_end_at must be after started_at", map[string]any{"order_id": order.ID})
+		}
+		if execution.DepartedAt != nil && execution.StartedAt != nil && execution.StartedAt.Before(*execution.DepartedAt) {
+			return contracts.InvalidInput("started_at cannot precede departed_at", map[string]any{"order_id": order.ID})
+		}
+		if order.Status == contracts.OrderStatusEnRoute || order.Status == contracts.OrderStatusInProgress {
+			if other, exists := currentByEngineer[execution.EngineerID]; exists {
+				return contracts.InvalidInput("engineer has multiple current executions", map[string]any{"engineer_id": execution.EngineerID, "first_order_id": other, "second_order_id": order.ID})
+			}
+			currentByEngineer[execution.EngineerID] = order.ID
+		}
+	}
+	return nil
+}
+
+func validateEquipment(kind, entityID string, values map[contracts.Equipment]int64) error {
+	for equipment, count := range values {
+		if equipment != contracts.EquipmentRouter && equipment != contracts.EquipmentTVBox {
+			return contracts.InvalidInput("unknown equipment type", map[string]any{"kind": kind, "entity_id": entityID, "equipment": equipment})
+		}
+		if count < 0 {
+			return contracts.InvalidInput("equipment count cannot be negative", map[string]any{"kind": kind, "entity_id": entityID, "equipment": equipment})
+		}
 	}
 	return nil
 }
@@ -164,6 +260,7 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 		}
 		cursorLocation := route.StartLocationID
 		cursorTime := state.AvailableFrom
+		reserved := make(map[contracts.Equipment]int64)
 		for index, visit := range route.Visits {
 			order, exists := orders[visit.OrderID]
 			if !exists {
@@ -178,6 +275,12 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 			if order.RequiredTransport != nil && *order.RequiredTransport != engineer.Transport {
 				return contracts.InvalidPlan("engineer transport does not match order", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
+			for equipment, count := range order.EquipmentRequired {
+				reserved[equipment] += count
+				if reserved[equipment] > state.EquipmentAvailable[equipment] {
+					return contracts.InvalidPlan("route exceeds available equipment", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID, "equipment": equipment})
+				}
+			}
 			leg := route.Legs[index]
 			if leg.ID == "" {
 				return contracts.InvalidPlan("leg id is required", map[string]any{"engineer_id": engineer.ID, "sequence": index})
@@ -189,7 +292,7 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 			if leg.FromLocationID != cursorLocation || leg.ToLocationID != order.LocationID {
 				return contracts.InvalidPlan("leg endpoints do not match route sequence", map[string]any{"leg_id": leg.ID})
 			}
-			if leg.StartAt.Before(cursorTime) || !leg.EndAt.Equal(visit.ArrivalAt) || leg.EndAt.Before(leg.StartAt) {
+			if leg.StartAt.Before(cursorTime) || leg.StartAt.Before(order.ReceivedAt) || !leg.EndAt.Equal(visit.ArrivalAt) || leg.EndAt.Before(leg.StartAt) {
 				return contracts.InvalidPlan("leg times do not match visit arrival", map[string]any{"leg_id": leg.ID})
 			}
 			if len(leg.Geometry) != 0 {
@@ -205,7 +308,7 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 			if leg.EndAt.Sub(leg.StartAt) != time.Duration(*cell.DurationSec)*time.Second || leg.DistanceM != *cell.DistanceM || leg.GeoContextID != request.TravelMatrix.GeoContextID {
 				return contracts.InvalidPlan("leg does not match travel matrix", map[string]any{"leg_id": leg.ID})
 			}
-			if visit.ArrivalAt.After(visit.StartAt) || visit.StartAt.Before(order.Window.Start) || visit.StartAt.After(order.Window.End) {
+			if visit.ArrivalAt.After(visit.StartAt) || visit.StartAt.Before(order.ReceivedAt) || visit.StartAt.Before(order.Window.Start) || visit.StartAt.After(order.Window.End) {
 				return contracts.InvalidPlan("visit does not satisfy the order window", map[string]any{"order_id": order.ID})
 			}
 			if visit.EndAt.Sub(visit.StartAt) != time.Duration(order.ServiceSec)*time.Second || visit.StartAt.Before(engineer.Shift.Start) || visit.EndAt.After(engineer.Shift.End) {

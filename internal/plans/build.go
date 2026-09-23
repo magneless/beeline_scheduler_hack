@@ -3,7 +3,7 @@ package plans
 import (
 	"context"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequest) (contracts.PlanResult, error) {
@@ -21,15 +21,34 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	if err := validateSnapshot(snapshot, input.ScenarioID, input.SnapshotRevision); err != nil {
 		return contracts.PlanResult{}, err
 	}
+	dayStart, _, err := localDayBounds(snapshot)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
+	for _, order := range snapshot.Orders {
+		if order.Execution != nil {
+			return contracts.PlanResult{}, contracts.EventConflict("ordinary build cannot replace operational execution history", map[string]any{"order_id": order.ID})
+		}
+	}
+	if input.ExpectedCurrentPlanID != nil {
+		current, err := service.data.GetPlan(ctx, *input.ExpectedCurrentPlanID)
+		if err != nil {
+			return contracts.PlanResult{}, dependencyError("get current plan", err)
+		}
+		if current.BasePlanID != nil || current.AsOf.After(dayStart) {
+			return contracts.PlanResult{}, contracts.EventConflict("ordinary build is blocked after operational events", map[string]any{"plan_id": current.ID})
+		}
+	}
 
 	orders := activeValidOrders(snapshot)
 	engineers := availableEngineers(snapshot)
 	states := make([]contracts.EngineerState, 0, len(engineers))
 	for _, engineer := range engineers {
 		states = append(states, contracts.EngineerState{
-			EngineerID:      engineer.ID,
-			StartLocationID: snapshot.OfficeLocationID,
-			AvailableFrom:   engineer.Shift.Start,
+			EngineerID:         engineer.ID,
+			StartLocationID:    snapshot.OfficeLocationID,
+			AvailableFrom:      engineer.Shift.Start,
+			EquipmentAvailable: cloneEquipment(engineer.EquipmentStock),
 		})
 	}
 	locations, err := relevantLocations(snapshot, orders, states)
@@ -77,25 +96,31 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 		return contracts.PlanResult{}, err
 	}
 
-	asOf, _, err := localDayBounds(snapshot)
+	baselineMetrics := calculateMetrics(baseline.Routes, baseline.Unassigned, nil, nil)
+	unassigned := nonNil(append([]contracts.UnassignedOrder(nil), optimized.Unassigned...))
+	cancelledIDs := statusOrderIDs(snapshot, contracts.OrderStatusCancelled)
+	if err := validateFinalPlan(snapshot, routes, unassigned, cancelledIDs, nil); err != nil {
+		return contracts.PlanResult{}, err
+	}
+	equipment, err := equipmentRemaining(snapshot)
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
-	baselineMetrics := calculateMetrics(baseline.Routes, baseline.Unassigned)
-	unassigned := nonNil(append([]contracts.UnassignedOrder(nil), optimized.Unassigned...))
 	draft := contracts.PlanDraft{
-		ScenarioID:        snapshot.ScenarioID,
-		SnapshotRevision:  snapshot.Revision,
-		BasePlanID:        nil,
-		AsOf:              asOf,
-		Routes:            nonNil(routes),
-		Unassigned:        unassigned,
-		CancelledOrderIDs: []string{},
-		Issues:            nonNil(append([]contracts.Issue(nil), snapshot.Issues...)),
-		Metrics:           calculateMetrics(routes, unassigned),
-		BaselineMetrics:   &baselineMetrics,
-		Changes:           []contracts.PlanChange{},
-		Termination:       optimized.Termination,
+		ScenarioID:         snapshot.ScenarioID,
+		SnapshotRevision:   snapshot.Revision,
+		BasePlanID:         nil,
+		AsOf:               dayStart,
+		Routes:             nonNil(routes),
+		Unassigned:         unassigned,
+		CancelledOrderIDs:  cancelledIDs,
+		CompletedOrderIDs:  []string{},
+		EquipmentRemaining: equipment,
+		Issues:             nonNil(append([]contracts.Issue(nil), snapshot.Issues...)),
+		Metrics:            calculateMetrics(routes, unassigned, nil, nil),
+		BaselineMetrics:    &baselineMetrics,
+		Changes:            []contracts.PlanChange{},
+		Termination:        optimized.Termination,
 	}
 	return contracts.PlanResult{
 		Draft:          draft,

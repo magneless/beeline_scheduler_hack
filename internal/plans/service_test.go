@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 func TestBuildMatchesPublishedBackendExample(t *testing.T) {
@@ -63,6 +63,53 @@ func TestReplanMatchesPublishedCancellationExample(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("Replan result differs from published example\nactual:   %#v\nexpected: %#v", actual, expected)
+	}
+}
+
+func TestReplanMatchesPublishedExecutionStatusFlow(t *testing.T) {
+	example := loadBackendExample(t)
+	var snapshot contracts.Snapshot
+	var base contracts.Plan
+	var matrix contracts.TravelMatrix
+	var solveResult contracts.SolveResult
+	var geometry contracts.RoutesGeometry
+	decodeExample(t, example, "snapshot", &snapshot)
+	decodeExample(t, example, "saved_plan", &base)
+	decodeExample(t, example, "matrix", &matrix)
+	decodeExample(t, example, "solve_result", &solveResult)
+	decodeExample(t, example, "routes_geometry", &geometry)
+	var flow struct {
+		StatusSteps []struct {
+			Request  contracts.ReplanRequest `json:"request"`
+			Response contracts.PlanResult    `json:"response"`
+		} `json:"status_steps"`
+	}
+	if err := json.Unmarshal(example["execution_status_flow"], &flow); err != nil {
+		t.Fatalf("decode execution_status_flow: %v", err)
+	}
+	if len(flow.StatusSteps) != 4 {
+		t.Fatalf("expected four status steps, got %d", len(flow.StatusSteps))
+	}
+
+	currentSnapshot, currentPlan := snapshot, base
+	for index, step := range flow.StatusSteps {
+		geo := &fakeGeo{
+			matrixFn: func(contracts.MatrixRequest) (contracts.TravelMatrix, error) { return matrix, nil },
+			routesFn: func(contracts.RoutesRequest) (contracts.RoutesGeometry, error) { return geometry, nil },
+		}
+		planner := &fakePlanner{solveFn: func(contracts.SolveRequest) (contracts.SolveResult, error) { return solveResult, nil }}
+		service := mustService(t, &fakeData{snapshot: currentSnapshot, plan: currentPlan}, geo, planner)
+		actual, err := service.Replan(context.Background(), step.Request)
+		if err != nil {
+			t.Fatalf("status step %d returned error: %v", index, err)
+		}
+		if !reflect.DeepEqual(actual, step.Response) {
+			t.Fatalf("status step %d differs from published example\nactual:   %#v\nexpected: %#v", index, actual, step.Response)
+		}
+		if index < len(flow.StatusSteps)-1 {
+			currentSnapshot = actual.TargetSnapshot
+			currentPlan = contracts.Plan{ID: flow.StatusSteps[index+1].Request.BasePlanID, PlanDraft: actual.Draft}
+		}
 	}
 }
 
@@ -190,7 +237,7 @@ func TestReplanCancelsFutureOrderWithoutCallingPlanner(t *testing.T) {
 
 	result, err := service.Replan(context.Background(), contracts.ReplanRequest{
 		RequestID: "request-2", ScenarioID: snapshot.ScenarioID, SnapshotRevision: 1, BasePlanID: base.ID,
-		Event: contracts.Event{ID: "event-1", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventOrderCancelled, Payload: contracts.EventPayload{OrderID: "order-1"}},
+		Event: contracts.Event{ID: "event-1", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventOrderCancelled, Payload: contracts.EventPayload{OrderID: "order-1", Reason: contracts.CancellationClientRefusal}},
 	})
 	if err != nil {
 		t.Fatalf("Replan returned error: %v", err)
@@ -211,6 +258,9 @@ func TestReplanCancelsFutureOrderWithoutCallingPlanner(t *testing.T) {
 
 func TestReplanUnavailableEngineerSplitsActiveLeg(t *testing.T) {
 	snapshot := testSnapshot()
+	departed := mustTime("2026-09-17T06:00:00Z")
+	snapshot.Orders[0].Status = contracts.OrderStatusEnRoute
+	snapshot.Orders[0].Execution = &contracts.OrderExecution{EngineerID: "eng-1", DepartedAt: &departed}
 	base := testSavedPlan(snapshot)
 	geo := &fakeGeo{positionFn: func(input contracts.PositionRequest) (contracts.PositionResult, error) {
 		return contracts.PositionResult{
@@ -285,6 +335,56 @@ func TestReplanAddsUrgentOrderAndReturnsResolvedEvent(t *testing.T) {
 	}
 }
 
+func TestReplanKeepsInProgressWorkWithoutEstimateAndBlocksEngineer(t *testing.T) {
+	example := loadBackendExample(t)
+	var snapshot contracts.Snapshot
+	var base contracts.Plan
+	decodeExample(t, example, "snapshot", &snapshot)
+	decodeExample(t, example, "saved_plan", &base)
+	snapshot.Orders[0].Status = contracts.OrderStatusSent
+	snapshot.Orders[0].Execution = &contracts.OrderExecution{EngineerID: "eng-1"}
+	planner := &fakePlanner{solveFn: solveFirstOrder}
+	service := mustService(t, &fakeData{snapshot: snapshot, plan: base}, &fakeGeo{}, planner)
+
+	result, err := service.Replan(context.Background(), contracts.ReplanRequest{
+		RequestID: "request-no-estimate", ScenarioID: snapshot.ScenarioID, SnapshotRevision: snapshot.Revision, BasePlanID: base.ID,
+		Event: contracts.Event{ID: "event-no-estimate", OccurredAt: mustTime("2026-09-17T07:00:00Z"), Type: contracts.EventOrderStatusChanged,
+			Payload: contracts.EventPayload{OrderID: "order-1", Status: contracts.OrderStatusInProgress, EngineerID: "eng-1"}},
+	})
+	if err != nil {
+		t.Fatalf("Replan returned error: %v", err)
+	}
+	if len(planner.modes) != 0 {
+		t.Fatalf("engineer with an unknown finish must not be sent to planner: %v", planner.modes)
+	}
+	if result.TargetSnapshot.Orders[0].Status != contracts.OrderStatusInProgress || result.TargetSnapshot.Orders[0].Execution.StartedAt == nil {
+		t.Fatalf("confirmed work was not preserved: %+v", result.TargetSnapshot.Orders[0])
+	}
+	if result.Draft.EquipmentRemaining["eng-1"][contracts.EquipmentRouter] != 0 {
+		t.Fatalf("equipment was not consumed at start: %+v", result.Draft.EquipmentRemaining)
+	}
+	found := false
+	for _, issue := range result.Draft.Issues {
+		if issue.Code == "EXECUTION_STATE_REQUIRED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing EXECUTION_STATE_REQUIRED issue: %+v", result.Draft.Issues)
+	}
+}
+
+func TestBuildRejectsOperationalSnapshot(t *testing.T) {
+	snapshot := testSnapshot()
+	started := mustTime("2026-09-17T07:00:00Z")
+	snapshot.Orders[0].Status = contracts.OrderStatusInProgress
+	snapshot.Orders[0].Execution = &contracts.OrderExecution{EngineerID: "eng-1", StartedAt: &started, ExpectedEndAt: ptr(mustTime("2026-09-17T07:30:00Z"))}
+	service := mustService(t, &fakeData{snapshot: snapshot}, standardGeo(), &fakePlanner{solveFn: solveFirstOrder})
+
+	_, err := service.Build(context.Background(), contracts.BuildPlanRequest{RequestID: "request-operational", ScenarioID: snapshot.ScenarioID, SnapshotRevision: snapshot.Revision})
+	requireContractCode(t, err, contracts.ErrorEventConflict)
+}
+
 func mustService(t *testing.T, data PlanDataReader, geo GeoService, planner Planner) *Service {
 	t.Helper()
 	service, err := New(data, geo, planner, Options{TimeLimitMS: 1000})
@@ -348,6 +448,9 @@ func solveFirstOrder(input contracts.SolveRequest) (contracts.SolveResult, error
 		return contracts.SolveResult{}, err
 	}
 	legStart := state.AvailableFrom
+	if order.ReceivedAt.After(legStart) {
+		legStart = order.ReceivedAt
+	}
 	arrival := legStart.Add(time.Duration(*cell.DurationSec) * time.Second)
 	workStart := arrival
 	if order.Window.Start.After(workStart) {
@@ -363,8 +466,12 @@ func testSnapshot() contracts.Snapshot {
 	return contracts.Snapshot{
 		ScenarioID: "scenario-1", Revision: 1, RegionID: "region-1", Date: "2026-09-17", Timezone: "Europe/Moscow", OfficeLocationID: "office-1",
 		Locations: []contracts.Location{{ID: "office-1", Address: "Москва, офис", Point: contracts.Point{Lat: 55.75, Lon: 37.61}}, {ID: "loc-1", Address: "Москва, ул. Тверская, 1", Point: contracts.Point{Lat: 55.76, Lon: 37.61}}},
-		Orders:    []contracts.Order{{ID: "order-1", LocationID: "loc-1", RequiredSkills: []string{"repair"}, RequiredTransport: &transport, Window: contracts.Window{Start: mustTime("2026-09-17T07:00:00Z"), End: mustTime("2026-09-17T09:00:00Z")}, ServiceSec: 1800, Priority: contracts.PriorityNormal, SourceOrder: 1, Status: contracts.OrderStatusActive}},
-		Engineers: []contracts.Engineer{{ID: "eng-1", Skills: []string{"repair"}, Transport: contracts.TransportCar, Shift: contracts.Window{Start: mustTime("2026-09-17T06:00:00Z"), End: mustTime("2026-09-17T15:00:00Z")}, Available: true, SourceOrder: 1}},
+		Orders: []contracts.Order{{
+			ID: "order-1", LocationID: "loc-1", WorkType: contracts.WorkTypeRepair, RequiredSkills: []string{"repair"}, RequiredTransport: &transport,
+			Window: contracts.Window{Start: mustTime("2026-09-17T07:00:00Z"), End: mustTime("2026-09-17T09:00:00Z")}, ReceivedAt: mustTime("2026-09-16T21:00:00Z"),
+			ServiceSec: 1800, Priority: contracts.PriorityNormal, EquipmentRequired: map[contracts.Equipment]int64{}, SourceOrder: 1, Status: contracts.OrderStatusActive,
+		}},
+		Engineers: []contracts.Engineer{{ID: "eng-1", Skills: []string{"repair"}, Transport: contracts.TransportCar, Shift: contracts.Window{Start: mustTime("2026-09-17T06:00:00Z"), End: mustTime("2026-09-17T15:00:00Z")}, Available: true, EquipmentStock: map[contracts.Equipment]int64{}, SourceOrder: 1}},
 		Issues:    []contracts.Issue{},
 	}
 }

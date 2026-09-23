@@ -2,10 +2,9 @@ package plans
 
 import (
 	"context"
-	"sort"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/contracts"
+	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
 )
 
 func (service *Service) Replan(ctx context.Context, input contracts.ReplanRequest) (contracts.PlanResult, error) {
@@ -29,7 +28,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if base.ID != input.BasePlanID || base.ScenarioID != input.ScenarioID || base.SnapshotRevision != input.SnapshotRevision {
 		return contracts.PlanResult{}, contracts.InvalidInput("base plan does not match requested scenario and revision", map[string]any{"base_plan_id": input.BasePlanID})
 	}
-	if err := validateFinalPlan(snapshot, base.Routes, base.Unassigned, base.CancelledOrderIDs); err != nil {
+	if err := validateFinalPlan(snapshot, base.Routes, base.Unassigned, base.CancelledOrderIDs, base.CompletedOrderIDs); err != nil {
 		return contracts.PlanResult{}, err
 	}
 	dayStart, dayEnd, err := localDayBounds(snapshot)
@@ -41,11 +40,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	}
 
 	target := cloneSnapshot(snapshot)
-	replay, err := service.replayAt(ctx, &target, base, input.Event)
-	if err != nil {
-		return contracts.PlanResult{}, err
-	}
-	appliedEvent, newlyCancelled, err := service.applyEvent(ctx, &target, input.Event, replay.lockedOrders)
+	appliedEvent, err := service.applyEvent(ctx, &target, base, input.Event)
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
@@ -53,22 +48,28 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if err := validateSnapshot(target, input.ScenarioID, target.Revision); err != nil {
 		return contracts.PlanResult{}, err
 	}
+	replay, err := service.replayAt(ctx, &target, base, input.Event)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
 
 	remaining, expired := prepareRemainingOrders(target, replay.lockedOrders, input.Event.OccurredAt)
-	engineers := availableEngineers(target)
+	available := availableEngineers(target)
+	engineers := make([]contracts.Engineer, 0, len(available))
 	states := make([]contracts.EngineerState, 0, len(engineers))
-	for _, engineer := range engineers {
+	for _, engineer := range available {
 		state, exists := replay.states[engineer.ID]
 		if !exists {
-			return contracts.PlanResult{}, contracts.InvalidPlan("replayed engineer state is missing", map[string]any{"engineer_id": engineer.ID})
+			continue
 		}
+		engineers = append(engineers, engineer)
 		states = append(states, state)
 	}
 
 	solveResult := contracts.SolveResult{Routes: []contracts.Route{}, Unassigned: []contracts.UnassignedOrder{}, Termination: contracts.TerminationCompleted}
 	if len(remaining) > 0 && len(engineers) == 0 {
 		for _, order := range remaining {
-			solveResult.Unassigned = append(solveResult.Unassigned, contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: contracts.UnassignedNoAvailableEngineer, Message: "Нет доступных инженеров"})
+			solveResult.Unassigned = append(solveResult.Unassigned, contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: contracts.ReasonNoAvailableEngineer, Message: "Нет доступных инженеров"})
 		}
 	} else if len(remaining) > 0 {
 		locations, err := relevantLocations(target, remaining, states)
@@ -106,32 +107,47 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		}
 		solveResult.Routes = future
 	}
+	resetReassignedExecution(&target, solveResult.Routes)
+	if err := validateSnapshot(target, input.ScenarioID, target.Revision); err != nil {
+		return contracts.PlanResult{}, err
+	}
 
 	unassigned := append(expired, solveResult.Unassigned...)
 	unassigned = nonNil(unassigned)
 	routes := mergeRoutes(replay.routes, solveResult.Routes)
-	cancelledIDs := mergeCancelled(base.CancelledOrderIDs, newlyCancelled)
-	if err := validateFinalPlan(target, routes, unassigned, cancelledIDs); err != nil {
+	cancelledIDs := statusOrderIDs(target, contracts.OrderStatusCancelled)
+	completedIDs := statusOrderIDs(target, contracts.OrderStatusCompleted)
+	if err := validateFinalPlan(target, routes, unassigned, cancelledIDs, completedIDs); err != nil {
 		return contracts.PlanResult{}, err
 	}
-	cancelledSet := make(map[string]struct{}, len(newlyCancelled))
-	for _, orderID := range newlyCancelled {
+	cancelledSet := make(map[string]struct{}, len(cancelledIDs))
+	for _, orderID := range cancelledIDs {
 		cancelledSet[orderID] = struct{}{}
+	}
+	statusChanged := map[string]struct{}{}
+	if input.Event.Type == contracts.EventOrderStatusChanged {
+		statusChanged[input.Event.Payload.OrderID] = struct{}{}
+	}
+	equipment, err := equipmentRemaining(target)
+	if err != nil {
+		return contracts.PlanResult{}, err
 	}
 	basePlanID := input.BasePlanID
 	draft := contracts.PlanDraft{
-		ScenarioID:        target.ScenarioID,
-		SnapshotRevision:  target.Revision,
-		BasePlanID:        &basePlanID,
-		AsOf:              input.Event.OccurredAt,
-		Routes:            routes,
-		Unassigned:        unassigned,
-		CancelledOrderIDs: cancelledIDs,
-		Issues:            nonNil(append([]contracts.Issue(nil), target.Issues...)),
-		Metrics:           calculateMetrics(routes, unassigned),
-		BaselineMetrics:   nil,
-		Changes:           calculateChanges(base.Routes, routes, cancelledSet),
-		Termination:       solveResult.Termination,
+		ScenarioID:         target.ScenarioID,
+		SnapshotRevision:   target.Revision,
+		BasePlanID:         &basePlanID,
+		AsOf:               input.Event.OccurredAt,
+		Routes:             routes,
+		Unassigned:         unassigned,
+		CancelledOrderIDs:  cancelledIDs,
+		CompletedOrderIDs:  completedIDs,
+		EquipmentRemaining: equipment,
+		Issues:             nonNil(append([]contracts.Issue(nil), target.Issues...)),
+		Metrics:            calculateMetrics(routes, unassigned, cancelledIDs, completedIDs),
+		BaselineMetrics:    nil,
+		Changes:            calculateChanges(base.Routes, routes, cancelledSet, statusChanged),
+		Termination:        solveResult.Termination,
 	}
 	return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &appliedEvent}, nil
 }
@@ -143,32 +159,35 @@ func prepareRemainingOrders(snapshot contracts.Snapshot, locked map[string]struc
 		if _, exists := locked[order.ID]; exists {
 			continue
 		}
-		if order.Window.End.Before(eventAt) {
-			expired = append(expired, contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: contracts.UnassignedNoFeasibleSlot, Message: "К моменту события временное окно уже завершилось"})
+		lowerBound := eventAt
+		if order.ReceivedAt.After(lowerBound) {
+			lowerBound = order.ReceivedAt
+		}
+		if order.Window.End.Before(lowerBound) {
+			expired = append(expired, contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: contracts.ReasonNoFeasibleSlot, Message: "К моменту события временное окно уже завершилось"})
 			continue
 		}
-		copyOrder := order
-		copyOrder.RequiredSkills = append([]string(nil), order.RequiredSkills...)
-		if copyOrder.Window.Start.Before(eventAt) {
-			copyOrder.Window.Start = eventAt
+		copyOrder := cloneOrders([]contracts.Order{order})[0]
+		if copyOrder.Window.Start.Before(lowerBound) {
+			copyOrder.Window.Start = lowerBound
 		}
 		remaining = append(remaining, copyOrder)
 	}
 	return remaining, expired
 }
 
-func mergeCancelled(existing, added []string) []string {
-	seen := make(map[string]struct{}, len(existing)+len(added))
-	result := make([]string, 0, len(existing)+len(added))
-	for _, values := range [][]string{existing, added} {
-		for _, value := range values {
-			if _, exists := seen[value]; exists {
-				continue
-			}
-			seen[value] = struct{}{}
-			result = append(result, value)
+func resetReassignedExecution(snapshot *contracts.Snapshot, routes []contracts.Route) {
+	assigned := assignments(routes)
+	for index := range snapshot.Orders {
+		order := &snapshot.Orders[index]
+		if (order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute) || order.Execution == nil {
+			continue
 		}
+		assignment, exists := assigned[order.ID]
+		if exists && assignment.EngineerID == order.Execution.EngineerID {
+			continue
+		}
+		order.Status = contracts.OrderStatusActive
+		order.Execution = nil
 	}
-	sort.Strings(result)
-	return nonNil(result)
 }
