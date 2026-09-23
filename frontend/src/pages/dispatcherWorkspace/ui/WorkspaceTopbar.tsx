@@ -105,12 +105,14 @@ export const WorkspaceTopbar = ({
                 ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                {(buildPending || eventPending) && runStatus ? (
+                {buildPending || eventPending ? (
                     <span
                         role="status"
                         className="text-xs text-muted-foreground"
                     >
-                        {runStatusLabel[runStatus]}
+                        {runStatus
+                            ? runStatusLabel[runStatus]
+                            : 'Рассчитываем маршруты…'}
                     </span>
                 ) : null}
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">

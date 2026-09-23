@@ -193,17 +193,6 @@ export const DispatcherWorkspacePage = () => {
                                 onBuild={workspace.handleBuildPlan}
                             />
                         )}
-                        {workspace.buildPending && !workspace.plan ? (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
-                                <p
-                                    role="status"
-                                    className="rounded-[12px] bg-white px-5 py-4 text-sm shadow-sm"
-                                >
-                                    {workspace.runStatusLabel ??
-                                        'Распределяем заявки и строим маршруты…'}
-                                </p>
-                            </div>
-                        ) : null}
                     </div>
                     {workspace.scheduleOpen && workspace.plan ? (
                         <WorkspaceScheduleDock
