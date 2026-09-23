@@ -28,21 +28,16 @@
 
 Каждый контракт описывает реализуемые и используемые интерфейсы, входы, выходы и ошибки.
 
-## Baseline планировщика
+## Планировщик
 
-Реализация — [`internal/planner`](internal/planner/baseline.go), общие Go-типы — [`internal/contracts`](internal/contracts/planner.go). Требуется Go 1.22 или новее; внешних зависимостей нет.
+Реализация — [`backend/internal/planner`](backend/internal/planner/planner.go), общие Go-типы — [`backend/internal/contracts`](backend/internal/contracts/planner.go). Требуется Go 1.27.
 
-`planner.NewBaseline()` реализует `contracts.Planner`. В `Solve` нужно передать подготовленный `contracts.SolveRequest` с `Mode: contracts.SolveModeBaseline`. Для примера из `docs/contracts/examples/backend_flow.json` используется поле `solve_request` с заменой `mode` на `baseline`.
+`planner.New()` реализует `contracts.Planner` и поддерживает режимы `baseline`, `optimized` и `insert_only`. Сборка, тесты и описание алгоритмов — в [backend/README.md](backend/README.md).
 
-Алгоритм перебирает заявки и инженеров по `source_order`, затем ID, добавляя заявку в конец маршрута первого допустимого инженера. Проверяются навыки, транспорт, остатки оборудования, поступление заявки, клиентские окна, смены и направленная матрица. Входные данные не изменяются. Для перепланирования используются переданные стартовые состояния инженеров.
-
-При исчерпании `time_limit_ms` возвращается частичный допустимый план с `termination=time_limit`; все оставшиеся заявки перечислены в `unassigned`. Отмена или дедлайн родительского `context` возвращают `ctx.Err()` без пригодного для сохранения результата. Режим `optimized` пока не реализован и отклоняется с `INVALID_INPUT`.
-
-Проверки:
+Запуск тестов в Docker из корня репозитория:
 
 ```bash
-go test -race ./...
-go vet ./...
+docker compose run --rm --build backend
 ```
 
 ## Исходные материалы
@@ -51,5 +46,6 @@ go vet ./...
 - [Q&A 1: исходные ответы](docs/qa_1/QA_raw.md) · [сводка](docs/qa_1/QA_processed.md).
 - [Q&A 2: исходные ответы](docs/qa_2/QA_raw.md) · [сводка](docs/qa_2/QA_processed.md).
 - [Q&A из чата: исходные ответы](docs/qa_chat/QA_raw.md) · [сводка](docs/qa_chat/QA_processed.md).
+- [Q&A из чата 2: исходные ответы](docs/qa_chat_2/QA_raw.md) · [сводка](docs/qa_chat_2/QA_processed.md).
 - [Нормативы](docs/Нормативы.xlsx).
 - [Наборы данных](datasets/original/).

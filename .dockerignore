@@ -1,0 +1,18 @@
+# Only the Go module and synthetic test fixtures belong in the build context.
+**
+!backend/
+!backend/**
+!docs/
+!docs/contracts/
+!docs/contracts/examples/
+!docs/contracts/examples/**
+
+**/.cache/
+**/.git/
+**/.agents/
+**/.codex/
+**/.env
+**/.env.*
+**/*.test
+**/coverage.out
+**/.DS_Store

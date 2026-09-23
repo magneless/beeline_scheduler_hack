@@ -1,5 +1,5 @@
-// Package planner builds schedules from the prepared input and travel matrix.
-package planner
+// Package baseline builds schedules by appending orders in source order.
+package baseline
 
 import (
 	"context"
@@ -7,7 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/internal/shared"
 )
 
 // Baseline appends orders to the first feasible engineer in source order.
@@ -19,7 +20,8 @@ type Baseline struct {
 
 var _ contracts.Planner = (*Baseline)(nil)
 
-func NewBaseline() *Baseline { return &Baseline{} }
+// New returns a baseline planner.
+func New() *Baseline { return &Baseline{} }
 
 // Solve never mutates input. A search timeout returns a complete, feasible
 // partial assignment with termination=time_limit. Cancellation of the caller's
@@ -33,7 +35,10 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 	if err := ctx.Err(); err != nil {
 		return contracts.SolveResult{}, err
 	}
-	if err := validateInput(ctx, input); err != nil {
+	if input.Mode != contracts.SolveModeBaseline {
+		return contracts.SolveResult{}, shared.InvalidInput("mode", "Baseline поддерживает только baseline; используйте planner.New() для выбора режима")
+	}
+	if err := shared.ValidateInput(ctx, input); err != nil {
 		return contracts.SolveResult{}, err
 	}
 	deadline := started.Add(time.Duration(input.TimeLimitMS) * time.Millisecond)
@@ -67,10 +72,10 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 	for _, state := range input.EngineerStates {
 		states[state.EngineerID] = state
 	}
-	workers := make([]baselineWorker, len(engineers))
+	workers := make([]shared.Worker, len(engineers))
 	for i, engineer := range engineers {
 		state := states[engineer.ID]
-		start := later(engineer.Shift.Start, state.AvailableFrom).UTC()
+		start := shared.Later(engineer.Shift.Start, state.AvailableFrom).UTC()
 		skills := make(map[string]bool, len(engineer.Skills))
 		for _, skill := range engineer.Skills {
 			skills[skill] = true
@@ -79,11 +84,11 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 		for equipment, count := range state.EquipmentAvailable {
 			remaining[equipment] = count
 		}
-		workers[i] = baselineWorker{
-			engineer: engineer, skills: skills, remaining: remaining,
-			location: locations[state.StartLocationID], time: start,
-			initialLocation: locations[state.StartLocationID],
-			route: contracts.Route{
+		workers[i] = shared.Worker{
+			Engineer: engineer, Skills: skills, Remaining: remaining,
+			Location: locations[state.StartLocationID], Time: start,
+			InitialLocation: locations[state.StartLocationID],
+			Route: contracts.Route{
 				EngineerID: engineer.ID, StartLocationID: state.StartLocationID, StartAt: start,
 				Visits: []contracts.Visit{}, Legs: []contracts.Leg{},
 			},
@@ -95,8 +100,8 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 	}
 	finish := func() contracts.SolveResult {
 		for _, worker := range workers {
-			if len(worker.route.Visits) > 0 {
-				result.Routes = append(result.Routes, worker.route)
+			if len(worker.Route.Visits) > 0 {
+				result.Routes = append(result.Routes, worker.Route)
 			}
 		}
 		return result
@@ -104,7 +109,7 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 	timedOut := func(next int) contracts.SolveResult {
 		result.Termination = contracts.TerminationTimeLimit
 		for _, order := range orders[next:] {
-			result.Unassigned = append(result.Unassigned, unassigned(order, contracts.ReasonNotAssignedBySolver,
+			result.Unassigned = append(result.Unassigned, shared.Unassigned(order, contracts.ReasonNotAssignedBySolver,
 				"Расчёт остановлен по лимиту времени до назначения заявки."))
 		}
 		return finish()
@@ -124,30 +129,30 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 				return timedOut(i), nil
 			}
 			worker := &workers[j]
-			if !worker.matchesSkills(order) || !worker.matchesTransport(order) || !worker.hasEquipment(order) {
+			if !worker.MatchesSkills(order) || !worker.MatchesTransport(order) || !worker.HasEquipment(order) {
 				continue
 			}
 			to := locations[order.LocationID]
-			cell := input.TravelMatrix.Profiles[worker.engineer.Transport][worker.location][to]
-			visit, leg, ok := worker.appendCandidate(order, cell)
+			cell := input.TravelMatrix.Profiles[worker.Engineer.Transport][worker.Location][to]
+			visit, leg, ok := worker.AppendCandidate(order, cell)
 			if !ok {
 				continue
 			}
 			legNumber++
 			leg.ID = fmt.Sprintf("leg-%d", legNumber)
-			leg.FromLocationID = input.TravelMatrix.LocationIDs[worker.location]
+			leg.FromLocationID = input.TravelMatrix.LocationIDs[worker.Location]
 			leg.GeoContextID = input.TravelMatrix.GeoContextID
-			worker.route.Visits = append(worker.route.Visits, visit)
-			worker.route.Legs = append(worker.route.Legs, leg)
-			worker.location, worker.time = to, visit.EndAt
+			worker.Route.Visits = append(worker.Route.Visits, visit)
+			worker.Route.Legs = append(worker.Route.Legs, leg)
+			worker.Location, worker.Time = to, visit.EndAt
 			for equipment, count := range order.EquipmentRequired {
-				worker.remaining[equipment] -= count
+				worker.Remaining[equipment] -= count
 			}
 			assigned = true
 			break
 		}
 		if !assigned {
-			reason, done, err := explainUnassigned(order, workers, locations[order.LocationID], input.TravelMatrix, stop)
+			reason, done, err := shared.ExplainUnassigned(order, workers, locations[order.LocationID], input.TravelMatrix, stop)
 			if err != nil {
 				return contracts.SolveResult{}, err
 			}
@@ -163,70 +168,4 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 		return timedOut(len(orders)), nil
 	}
 	return finish(), nil
-}
-
-type baselineWorker struct {
-	engineer        contracts.Engineer
-	skills          map[string]bool
-	remaining       map[contracts.Equipment]int64
-	location        int
-	time            time.Time
-	initialLocation int
-	reachable       []bool // Optimistic connectivity from the initial location.
-	route           contracts.Route
-}
-
-func (w *baselineWorker) matchesSkills(order contracts.Order) bool {
-	for _, skill := range order.RequiredSkills {
-		if !w.skills[skill] {
-			return false
-		}
-	}
-	return true
-}
-
-func (w *baselineWorker) matchesTransport(order contracts.Order) bool {
-	return order.RequiredTransport == nil || *order.RequiredTransport == w.engineer.Transport
-}
-
-func (w *baselineWorker) hasEquipment(order contracts.Order) bool {
-	for equipment, count := range order.EquipmentRequired {
-		if w.remaining[equipment] < count {
-			return false
-		}
-	}
-	return true
-}
-
-func (w *baselineWorker) appendCandidate(order contracts.Order, cell contracts.TravelCell) (contracts.Visit, contracts.Leg, bool) {
-	if !cell.Reachable {
-		return contracts.Visit{}, contracts.Leg{}, false
-	}
-	departure := later(w.time, order.ReceivedAt).UTC()
-	travel := time.Duration(*cell.DurationSec) * time.Second
-	if departure.After(w.engineer.Shift.End) || travel > w.engineer.Shift.End.Sub(departure) {
-		return contracts.Visit{}, contracts.Leg{}, false
-	}
-	arrival := departure.Add(travel)
-	start := later(arrival, order.Window.Start).UTC()
-	service := time.Duration(order.ServiceSec) * time.Second
-	if start.After(order.Window.End) || start.After(w.engineer.Shift.End) || service > w.engineer.Shift.End.Sub(start) {
-		return contracts.Visit{}, contracts.Leg{}, false
-	}
-	return contracts.Visit{
-			OrderID: order.ID, ArrivalAt: arrival, StartAt: start, EndAt: start.Add(service),
-		}, contracts.Leg{
-			ToLocationID: order.LocationID, StartAt: departure, EndAt: arrival, DistanceM: *cell.DistanceM,
-		}, true
-}
-
-func later(a, b time.Time) time.Time {
-	if a.Before(b) {
-		return b
-	}
-	return a
-}
-
-func unassigned(order contracts.Order, reason contracts.UnassignedReason, message string) contracts.UnassignedOrder {
-	return contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: reason, Message: message}
 }

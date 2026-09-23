@@ -34,7 +34,9 @@ Go-2 предоставляет HTTP API ниже, хранение сценар
 | `GET /runs/{id}` | — | `200 Run` |
 | `GET /plans/{id}` | — | `200 Plan` |
 
-`scenario_id` обычного расчёта берётся из URL. Для события Go-2 получает сценарий по плану из URL; этот ID становится `base_plan_id`. Формат `event` — в [common.md](common.md), семантика — в [plans.md](plans.md). Приоритет типа работ фиксирован: авария → подключение → ремонт/дозаказ. У аварии норматив 100 минут включает 20 минут дороги; в расчёте эти 20 минут заменяются фактической поездкой, `service_sec=4800` секунд.
+`scenario_id` обычного расчёта берётся из URL. Для события Go-2 получает сценарий по плану из URL; этот ID становится `base_plan_id`. Формат `event` — в [common.md](common.md), семантика — в [plans.md](plans.md). Приоритет типа работ фиксирован: авария → подключение → ремонт/дозаказ.
+
+Обычная новая заявка передаётся как `ordinary_order_added` с полями `order`, `location?`; внутри `order.work_type` — `connection|repair|additional`, `priority=normal`, `status=active`, `execution=null`, `received_at=occurred_at`. Полная схема события — в [common.md](common.md). Интерфейс показывает, назначена заявка или неназначена: при отсутствии свободной щели — `NO_FEASIBLE_INSERTION`, а при конфликте устаревшего плана — Issue `EXISTING_PLAN_CONFLICT` и `UnassignedOrder.reason_code=NOT_ASSIGNED_BY_SOLVER`; это не HTTP-ошибка.
 
 ### Подтверждение статуса заявки
 

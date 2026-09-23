@@ -1,4 +1,4 @@
-package planner
+package baseline
 
 import (
 	"context"
@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 )
 
 func TestTimeLimitKeepsEveryOrder(t *testing.T) {
-	data, err := os.ReadFile("../../docs/contracts/examples/backend_flow.json")
+	data, err := os.ReadFile("../../../../docs/contracts/examples/backend_flow.json")
 	if err != nil {
 		t.Fatal(err)
 	}

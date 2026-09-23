@@ -17,6 +17,8 @@ type SolveRequest struct {
 	EngineerStates         []EngineerState `json:"engineer_states"`
 	AlreadyUsedEngineerIDs []string        `json:"already_used_engineer_ids"`
 	TravelMatrix           TravelMatrix    `json:"travel_matrix"`
+	FixedRoutes            []Route         `json:"fixed_routes"`
+	ProtectedLegIDs        []string        `json:"protected_leg_ids"`
 	TimeLimitMS            int64           `json:"time_limit_ms"`
 }
 
@@ -166,8 +168,9 @@ const (
 type SolveMode string
 
 const (
-	SolveModeBaseline  SolveMode = "baseline"
-	SolveModeOptimized SolveMode = "optimized"
+	SolveModeBaseline   SolveMode = "baseline"
+	SolveModeOptimized  SolveMode = "optimized"
+	SolveModeInsertOnly SolveMode = "insert_only"
 )
 
 type Termination string
@@ -186,6 +189,7 @@ const (
 	ReasonNoAvailableEngineer UnassignedReason = "NO_AVAILABLE_ENGINEER"
 	ReasonNoReachableRoute    UnassignedReason = "NO_REACHABLE_ROUTE"
 	ReasonNoFeasibleSlot      UnassignedReason = "NO_FEASIBLE_SLOT"
+	ReasonNoFeasibleInsertion UnassignedReason = "NO_FEASIBLE_INSERTION"
 	ReasonNotAssignedBySolver UnassignedReason = "NOT_ASSIGNED_BY_SOLVER"
 )
 

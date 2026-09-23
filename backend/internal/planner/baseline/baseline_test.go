@@ -1,4 +1,4 @@
-package planner_test
+package baseline_test
 
 import (
 	"context"
@@ -10,55 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
-	"github.com/magneless/beeline_scheduler_hack/internal/planner"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/baseline"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/internal/testutil"
 )
-
-var testDay = time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
-
-func at(h, m int) time.Time {
-	return testDay.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute)
-}
-func ptr(v int64) *int64 { return &v }
-
-func baseRequest() contracts.SolveRequest {
-	return contracts.SolveRequest{
-		Mode:           contracts.SolveModeBaseline,
-		Orders:         []contracts.Order{order("o1", "p1", 1, 7, 0, 10, 0)},
-		Engineers:      []contracts.Engineer{engineer("e1", 1)},
-		EngineerStates: []contracts.EngineerState{{EngineerID: "e1", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{contracts.EquipmentRouter: 2}}},
-		TravelMatrix:   matrix([]string{"depot", "p1"}, contracts.TransportCar),
-		TimeLimitMS:    1000,
-	}
-}
-
-func order(id, loc string, source int64, wh, wm, service, received int) contracts.Order {
-	return contracts.Order{ID: id, LocationID: loc, WorkType: contracts.WorkTypeRepair, RequiredSkills: []string{"repair"}, Window: contracts.Window{Start: at(wh, wm), End: at(17, 0)}, ReceivedAt: at(received, 0), ServiceSec: int64(service * 60), Priority: contracts.PriorityNormal, EquipmentRequired: map[contracts.Equipment]int64{}, SourceOrder: source, Status: contracts.OrderStatusActive}
-}
-
-func engineer(id string, source int64) contracts.Engineer {
-	return contracts.Engineer{ID: id, Skills: []string{"repair"}, Transport: contracts.TransportCar, Shift: contracts.Window{Start: at(6, 0), End: at(18, 0)}, Available: true, EquipmentStock: map[contracts.Equipment]int64{contracts.EquipmentRouter: 2}, SourceOrder: source}
-}
-
-func matrix(locations []string, profile contracts.Transport) contracts.TravelMatrix {
-	n := len(locations)
-	cells := make([][]contracts.TravelCell, n)
-	for i := range cells {
-		cells[i] = make([]contracts.TravelCell, n)
-		for j := range cells[i] {
-			sec, dist := int64(0), int64(0)
-			if i != j {
-				sec, dist = 600, 1000
-			}
-			cells[i][j] = contracts.TravelCell{Reachable: true, DurationSec: &sec, DistanceM: &dist}
-		}
-	}
-	return contracts.TravelMatrix{ID: "m1", GeoContextID: "geo1", LocationIDs: locations, Profiles: map[contracts.Transport][][]contracts.TravelCell{profile: cells}}
-}
 
 func solve(t *testing.T, in contracts.SolveRequest) (contracts.SolveResult, error) {
 	t.Helper()
-	return planner.NewBaseline().Solve(context.Background(), in)
+	return baseline.New().Solve(context.Background(), in)
 }
 
 func requireInvalid(t *testing.T, in contracts.SolveRequest) {
@@ -70,18 +29,8 @@ func requireInvalid(t *testing.T, in contracts.SolveRequest) {
 	}
 }
 
-func assignedIDs(got contracts.SolveResult) map[string]string {
-	out := map[string]string{}
-	for _, route := range got.Routes {
-		for _, visit := range route.Visits {
-			out[visit.OrderID] = route.EngineerID
-		}
-	}
-	return out
-}
-
 func TestBaselineBackendFlowExample(t *testing.T) {
-	path := filepath.Join("..", "..", "docs", "contracts", "examples", "backend_flow.json")
+	path := filepath.Join("..", "..", "..", "..", "docs", "contracts", "examples", "backend_flow.json")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -102,34 +51,34 @@ func TestBaselineBackendFlowExample(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", got)
 	}
 	r := got.Routes[0]
-	if r.EngineerID != "eng-1" || r.StartLocationID != "office-1" || !r.StartAt.Equal(at(6, 0)) || len(r.Visits) != 1 || len(r.Legs) != 1 {
+	if r.EngineerID != "eng-1" || r.StartLocationID != "office-1" || !r.StartAt.Equal(testutil.At(6, 0)) || len(r.Visits) != 1 || len(r.Legs) != 1 {
 		t.Fatalf("unexpected route: %+v", r)
 	}
 	v := r.Visits[0]
-	if v.OrderID != "order-1" || !v.ArrivalAt.Equal(at(6, 15)) || !v.StartAt.Equal(at(7, 0)) || !v.EndAt.Equal(at(7, 30)) {
+	if v.OrderID != "order-1" || !v.ArrivalAt.Equal(testutil.At(6, 15)) || !v.StartAt.Equal(testutil.At(7, 0)) || !v.EndAt.Equal(testutil.At(7, 30)) {
 		t.Fatalf("unexpected visit: %+v", v)
 	}
 	l := r.Legs[0]
-	if l.ID != "leg-1" || l.FromLocationID != "office-1" || l.ToLocationID != "loc-1" || !l.StartAt.Equal(at(6, 0)) || !l.EndAt.Equal(at(6, 15)) || l.DistanceM != 1200 || l.GeoContextID != "geo-1" {
+	if l.ID != "leg-1" || l.FromLocationID != "office-1" || l.ToLocationID != "loc-1" || !l.StartAt.Equal(testutil.At(6, 0)) || !l.EndAt.Equal(testutil.At(6, 15)) || l.DistanceM != 1200 || l.GeoContextID != "geo-1" {
 		t.Fatalf("unexpected leg: %+v", l)
 	}
 }
 
 func TestBaselineOrdersAndEngineersUseSourceOrderThenID(t *testing.T) {
-	in := baseRequest()
-	in.Orders = []contracts.Order{order("z", "p1", 1, 7, 0, 10, 0), order("b", "p2", 1, 7, 0, 10, 0), order("a", "p3", 1, 7, 0, 10, 0)}
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2", "p3"}, contracts.TransportCar)
-	in.Engineers = []contracts.Engineer{engineer("z-eng", 1), engineer("a-eng", 1)}
+	in := testutil.BaseRequest()
+	in.Orders = []contracts.Order{testutil.Order("z", "p1", 1, 7, 0, 10, 0), testutil.Order("b", "p2", 1, 7, 0, 10, 0), testutil.Order("a", "p3", 1, 7, 0, 10, 0)}
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2", "p3"}, contracts.TransportCar)
+	in.Engineers = []contracts.Engineer{testutil.Engineer("z-eng", 1), testutil.Engineer("a-eng", 1)}
 	in.EngineerStates = []contracts.EngineerState{
-		{EngineerID: "z-eng", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
-		{EngineerID: "a-eng", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+		{EngineerID: "z-eng", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+		{EngineerID: "a-eng", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
 	}
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{"a": "a-eng", "b": "a-eng", "z": "a-eng"}
-	if actual := assignedIDs(got); !reflect.DeepEqual(actual, want) {
+	if actual := testutil.AssignedIDs(got); !reflect.DeepEqual(actual, want) {
 		t.Fatalf("assignments = %#v, want %#v", actual, want)
 	}
 	if len(got.Routes) != 1 || len(got.Routes[0].Visits) != 3 {
@@ -143,12 +92,12 @@ func TestBaselineOrdersAndEngineersUseSourceOrderThenID(t *testing.T) {
 }
 
 func TestBaselineDoesNotPrioritizeUrgentOrders(t *testing.T) {
-	in := baseRequest()
-	normal := order("normal", "p1", 1, 7, 0, 10, 0)
-	urgent := order("urgent", "p2", 2, 7, 0, 10, 0)
+	in := testutil.BaseRequest()
+	normal := testutil.Order("normal", "p1", 1, 7, 0, 10, 0)
+	urgent := testutil.Order("urgent", "p2", 2, 7, 0, 10, 0)
 	urgent.WorkType, urgent.Priority, urgent.ServiceSec = contracts.WorkTypeEmergency, contracts.PriorityUrgent, 4800
 	in.Orders = []contracts.Order{urgent, normal}
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
@@ -159,10 +108,10 @@ func TestBaselineDoesNotPrioritizeUrgentOrders(t *testing.T) {
 }
 
 func TestBaselineAllowsWindowEndStartAndFinishAfterWindow(t *testing.T) {
-	in := baseRequest()
-	in.Orders[0].Window = contracts.Window{Start: at(7, 10), End: at(7, 10)}
+	in := testutil.BaseRequest()
+	in.Orders[0].Window = contracts.Window{Start: testutil.At(7, 10), End: testutil.At(7, 10)}
 	in.Orders[0].ServiceSec = 30 * 60
-	in.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = ptr(600)
+	in.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = testutil.Ptr(600)
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
@@ -171,14 +120,14 @@ func TestBaselineAllowsWindowEndStartAndFinishAfterWindow(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", got)
 	}
 	v := got.Routes[0].Visits[0]
-	if !v.StartAt.Equal(at(7, 10)) || !v.EndAt.Equal(at(7, 40)) {
+	if !v.StartAt.Equal(testutil.At(7, 10)) || !v.EndAt.Equal(testutil.At(7, 40)) {
 		t.Fatalf("visit = %+v; start at window end and finish after it should be allowed", v)
 	}
 }
 
 func TestBaselineRespectsReceivedAtForDeparture(t *testing.T) {
-	in := baseRequest()
-	in.Orders[0].ReceivedAt = at(8, 0)
+	in := testutil.BaseRequest()
+	in.Orders[0].ReceivedAt = testutil.At(8, 0)
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
@@ -186,49 +135,49 @@ func TestBaselineRespectsReceivedAtForDeparture(t *testing.T) {
 	if len(got.Routes) != 1 {
 		t.Fatalf("unexpected result: %+v", got)
 	}
-	if !got.Routes[0].Legs[0].StartAt.Equal(at(8, 0)) || !got.Routes[0].Visits[0].ArrivalAt.Equal(at(8, 10)) {
+	if !got.Routes[0].Legs[0].StartAt.Equal(testutil.At(8, 0)) || !got.Routes[0].Visits[0].ArrivalAt.Equal(testutil.At(8, 10)) {
 		t.Fatalf("received_at must constrain departure to the order: route=%+v", got.Routes[0])
 	}
 }
 
 func TestBaselineUsesEngineerStateForReplanning(t *testing.T) {
-	in := baseRequest()
+	in := testutil.BaseRequest()
 	in.EngineerStates[0].StartLocationID = "p1"
-	in.EngineerStates[0].AvailableFrom = at(8, 0)
+	in.EngineerStates[0].AvailableFrom = testutil.At(8, 0)
 	in.Orders[0].LocationID = "p2"
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Routes) != 1 || got.Routes[0].StartLocationID != "p1" || !got.Routes[0].StartAt.Equal(at(8, 0)) || got.Routes[0].Legs[0].FromLocationID != "p1" {
+	if len(got.Routes) != 1 || got.Routes[0].StartLocationID != "p1" || !got.Routes[0].StartAt.Equal(testutil.At(8, 0)) || got.Routes[0].Legs[0].FromLocationID != "p1" {
 		t.Fatalf("route did not start from live engineer state: %+v", got.Routes)
 	}
 }
 
 func TestBaselineUsesDirectedProfileTravel(t *testing.T) {
-	in := baseRequest()
+	in := testutil.BaseRequest()
 	in.EngineerStates[0].StartLocationID = "p1"
 	in.Orders[0].LocationID = "depot"
-	in.TravelMatrix = matrix([]string{"depot", "p1"}, contracts.TransportCar)
-	in.TravelMatrix.Profiles[contracts.TransportCar][1][0] = contracts.TravelCell{Reachable: true, DurationSec: ptr(120), DistanceM: ptr(250)}
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1"}, contracts.TransportCar)
+	in.TravelMatrix.Profiles[contracts.TransportCar][1][0] = contracts.TravelCell{Reachable: true, DurationSec: testutil.Ptr(120), DistanceM: testutil.Ptr(250)}
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Routes) != 1 || len(got.Routes[0].Legs) != 1 || got.Routes[0].Legs[0].FromLocationID != "p1" || got.Routes[0].Legs[0].DistanceM != 250 || !got.Routes[0].Visits[0].ArrivalAt.Equal(at(6, 2)) {
+	if len(got.Routes) != 1 || len(got.Routes[0].Legs) != 1 || got.Routes[0].Legs[0].FromLocationID != "p1" || got.Routes[0].Legs[0].DistanceM != 250 || !got.Routes[0].Visits[0].ArrivalAt.Equal(testutil.At(6, 2)) {
 		t.Fatalf("expected p1→depot directed matrix leg: %+v", got.Routes)
 	}
 }
 
 func TestBaselineReservesEquipmentFromEngineerStateWithoutMutatingInput(t *testing.T) {
-	in := baseRequest()
-	in.Orders = []contracts.Order{order("o1", "p1", 1, 7, 0, 10, 0), order("o2", "p2", 2, 7, 0, 10, 0)}
+	in := testutil.BaseRequest()
+	in.Orders = []contracts.Order{testutil.Order("o1", "p1", 1, 7, 0, 10, 0), testutil.Order("o2", "p2", 2, 7, 0, 10, 0)}
 	in.Orders[0].EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: 1}
 	in.Orders[1].EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: 1}
 	in.Engineers[0].EquipmentStock = map[contracts.Equipment]int64{contracts.EquipmentRouter: 99}
 	in.EngineerStates[0].EquipmentAvailable = map[contracts.Equipment]int64{contracts.EquipmentRouter: 1}
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 	before, _ := json.Marshal(in)
 	got, err := solve(t, in)
 	if err != nil {
@@ -238,7 +187,7 @@ func TestBaselineReservesEquipmentFromEngineerStateWithoutMutatingInput(t *testi
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("Solve mutated input")
 	}
-	if len(assignedIDs(got)) != 1 || len(got.Unassigned) != 1 {
+	if len(testutil.AssignedIDs(got)) != 1 || len(got.Unassigned) != 1 {
 		t.Fatalf("must reserve equipment_available across future visits: %+v", got)
 	}
 }
@@ -258,7 +207,7 @@ func TestBaselineReportsProvableStaticIneligibility(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			in := baseRequest()
+			in := testutil.BaseRequest()
 			tc.mutate(&in)
 			got, err := solve(t, in)
 			if err != nil {
@@ -274,13 +223,13 @@ func TestBaselineReportsProvableStaticIneligibility(t *testing.T) {
 func TestBaselineCanReassignSentAndEnRouteOrders(t *testing.T) {
 	for _, status := range []contracts.OrderStatus{contracts.OrderStatusSent, contracts.OrderStatusEnRoute} {
 		t.Run(string(status), func(t *testing.T) {
-			in := baseRequest()
-			in.Engineers = append(in.Engineers, engineer("e2", 2))
-			in.EngineerStates = append(in.EngineerStates, contracts.EngineerState{EngineerID: "e2", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}})
+			in := testutil.BaseRequest()
+			in.Engineers = append(in.Engineers, testutil.Engineer("e2", 2))
+			in.EngineerStates = append(in.EngineerStates, contracts.EngineerState{EngineerID: "e2", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}})
 			in.Orders[0].Status = status
 			execution := &contracts.OrderExecution{EngineerID: "e2"}
 			if status == contracts.OrderStatusEnRoute {
-				departed := at(6, 0)
+				departed := testutil.At(6, 0)
 				execution.DepartedAt = &departed
 			}
 			in.Orders[0].Execution = execution
@@ -288,7 +237,7 @@ func TestBaselineCanReassignSentAndEnRouteOrders(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if actual := assignedIDs(got)[in.Orders[0].ID]; actual != "e1" {
+			if actual := testutil.AssignedIDs(got)[in.Orders[0].ID]; actual != "e1" {
 				t.Fatalf("prior execution engineer should not bind: assigned to %q", actual)
 			}
 		})
@@ -313,13 +262,13 @@ func TestBaselineRejectsInvalidInputs(t *testing.T) {
 			r.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = nil
 		},
 		"unreachable cell has values": func(r *contracts.SolveRequest) {
-			r.TravelMatrix.Profiles[contracts.TransportCar][0][1] = contracts.TravelCell{Reachable: false, DurationSec: ptr(0), DistanceM: ptr(0)}
+			r.TravelMatrix.Profiles[contracts.TransportCar][0][1] = contracts.TravelCell{Reachable: false, DurationSec: testutil.Ptr(0), DistanceM: testutil.Ptr(0)}
 		},
 		"negative travel": func(r *contracts.SolveRequest) {
-			r.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = ptr(-1)
+			r.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = testutil.Ptr(-1)
 		},
 		"bad diagonal": func(r *contracts.SolveRequest) {
-			r.TravelMatrix.Profiles[contracts.TransportCar][0][0].DistanceM = ptr(1)
+			r.TravelMatrix.Profiles[contracts.TransportCar][0][0].DistanceM = testutil.Ptr(1)
 		},
 		"duplicate order id": func(r *contracts.SolveRequest) { r.Orders = append(r.Orders, r.Orders[0]) },
 		"duplicate engineer id": func(r *contracts.SolveRequest) {
@@ -336,29 +285,29 @@ func TestBaselineRejectsInvalidInputs(t *testing.T) {
 		"bad window": func(r *contracts.SolveRequest) { r.Orders[0].Window.End = r.Orders[0].Window.Start.Add(-time.Second) },
 	}
 	for name, mutate := range tests {
-		t.Run(name, func(t *testing.T) { in := baseRequest(); mutate(&in); requireInvalid(t, in) })
+		t.Run(name, func(t *testing.T) { in := testutil.BaseRequest(); mutate(&in); requireInvalid(t, in) })
 	}
 }
 
 func TestBaselineReturnsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := planner.NewBaseline().Solve(ctx, baseRequest())
+	_, err := baseline.New().Solve(ctx, testutil.BaseRequest())
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Solve() error = %v, want context.Canceled", err)
 	}
 }
 
 func TestBaselineFailedAppendDoesNotConsumeTimeOrEquipment(t *testing.T) {
-	in := baseRequest()
-	blocked := order("too-late", "p1", 1, 7, 0, 20, 0)
+	in := testutil.BaseRequest()
+	blocked := testutil.Order("too-late", "p1", 1, 7, 0, 20, 0)
 	blocked.EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: 1}
-	blocked.Window = contracts.Window{Start: at(17, 55), End: at(17, 55)}
-	laterOrder := order("fits", "p2", 2, 7, 0, 20, 0)
+	blocked.Window = contracts.Window{Start: testutil.At(17, 55), End: testutil.At(17, 55)}
+	laterOrder := testutil.Order("fits", "p2", 2, 7, 0, 20, 0)
 	laterOrder.EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: 1}
 	in.Orders = []contracts.Order{blocked, laterOrder}
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
-	in.Engineers[0].Shift.End = at(18, 0)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	in.Engineers[0].Shift.End = testutil.At(18, 0)
 	in.Engineers[0].EquipmentStock[contracts.EquipmentRouter] = 1
 	in.EngineerStates[0].EquipmentAvailable[contracts.EquipmentRouter] = 1
 
@@ -366,69 +315,69 @@ func TestBaselineFailedAppendDoesNotConsumeTimeOrEquipment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actual := assignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"fits": "e1"}) {
+	if actual := testutil.AssignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"fits": "e1"}) {
 		t.Fatalf("later order should still fit after failed append: assignments=%v, unassigned=%+v", actual, got.Unassigned)
 	}
-	if len(got.Routes) != 1 || len(got.Routes[0].Legs) != 1 || !got.Routes[0].Legs[0].StartAt.Equal(at(6, 0)) {
+	if len(got.Routes) != 1 || len(got.Routes[0].Legs) != 1 || !got.Routes[0].Legs[0].StartAt.Equal(testutil.At(6, 0)) {
 		t.Fatalf("failed candidate must not advance route time/location: %+v", got.Routes)
 	}
 }
 
 func TestBaselineRequiresAllSkillsAndMatchingTransportOnSameEngineer(t *testing.T) {
 	t.Run("all required skills", func(t *testing.T) {
-		in := baseRequest()
+		in := testutil.BaseRequest()
 		in.Orders[0].RequiredSkills = []string{"repair", "install"}
 		got, err := solve(t, in)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(assignedIDs(got)) != 0 || len(got.Unassigned) != 1 {
+		if len(testutil.AssignedIDs(got)) != 0 || len(got.Unassigned) != 1 {
 			t.Fatalf("engineer missing one required skill must not receive the order: %+v", got)
 		}
 	})
 
 	t.Run("skill and transport belong to same engineer", func(t *testing.T) {
-		in := baseRequest()
+		in := testutil.BaseRequest()
 		walk := contracts.TransportWalk
 		in.Orders[0].RequiredTransport = &walk
-		in.Engineers = []contracts.Engineer{engineer("car-repair", 1), engineer("walk-install", 2)}
+		in.Engineers = []contracts.Engineer{testutil.Engineer("car-repair", 1), testutil.Engineer("walk-install", 2)}
 		in.Engineers[1].Skills = []string{"install"}
 		in.Engineers[1].Transport = contracts.TransportWalk
 		in.EngineerStates = []contracts.EngineerState{
-			{EngineerID: "car-repair", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
-			{EngineerID: "walk-install", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+			{EngineerID: "car-repair", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+			{EngineerID: "walk-install", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
 		}
 		in.Orders[0].RequiredSkills = []string{"repair"}
-		in.TravelMatrix = matrix([]string{"depot", "p1"}, contracts.TransportCar)
-		walkMatrix := matrix([]string{"depot", "p1"}, contracts.TransportWalk)
+		in.TravelMatrix = testutil.Matrix([]string{"depot", "p1"}, contracts.TransportCar)
+		walkMatrix := testutil.Matrix([]string{"depot", "p1"}, contracts.TransportWalk)
 		in.TravelMatrix.Profiles[contracts.TransportWalk] = walkMatrix.Profiles[contracts.TransportWalk]
 		got, err := solve(t, in)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(assignedIDs(got)) != 0 || len(got.Unassigned) != 1 {
+		if len(testutil.AssignedIDs(got)) != 0 || len(got.Unassigned) != 1 {
 			t.Fatalf("skill on one engineer and transport on another must not be combined: %+v", got)
 		}
 	})
 }
 
 func TestBaselineSelectsEngineersTravelProfile(t *testing.T) {
-	in := baseRequest()
-	in.Orders = []contracts.Order{order("car-order", "car-stop", 1, 7, 0, 10, 0), order("walk-order", "walk-stop", 2, 7, 0, 10, 0)}
-	in.Orders[0].RequiredTransport = transportPtr(contracts.TransportCar)
-	in.Orders[1].RequiredTransport = transportPtr(contracts.TransportWalk)
-	in.Engineers = []contracts.Engineer{engineer("car", 1), engineer("walk", 2)}
+	in := testutil.BaseRequest()
+	in.Orders = []contracts.Order{testutil.Order("car-order", "car-stop", 1, 7, 0, 10, 0), testutil.Order("walk-order", "walk-stop", 2, 7, 0, 10, 0)}
+	in.Orders[0].RequiredTransport = testutil.TransportPtr(contracts.TransportCar)
+	in.Orders[1].RequiredTransport = testutil.TransportPtr(contracts.TransportWalk)
+	in.Engineers = []contracts.Engineer{testutil.Engineer("car", 1), testutil.Engineer("walk", 2)}
 	in.Engineers[1].Transport = contracts.TransportWalk
 	in.EngineerStates = []contracts.EngineerState{
-		{EngineerID: "car", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
-		{EngineerID: "walk", StartLocationID: "depot", AvailableFrom: at(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+		{EngineerID: "car", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
+		{EngineerID: "walk", StartLocationID: "depot", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{}},
 	}
-	in.TravelMatrix = matrix([]string{"depot", "car-stop", "walk-stop"}, contracts.TransportCar)
-	walkMatrix := matrix([]string{"depot", "car-stop", "walk-stop"}, contracts.TransportWalk)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "car-stop", "walk-stop"}, contracts.TransportCar)
+	walkMatrix := testutil.Matrix([]string{"depot", "car-stop", "walk-stop"}, contracts.TransportWalk)
 	carCells := in.TravelMatrix.Profiles[contracts.TransportCar]
 	walkCells := walkMatrix.Profiles[contracts.TransportWalk]
-	carCells[0][1] = travelCell(60, 100)
-	walkCells[0][2] = travelCell(1200, 300)
+	carCells[0][1] = testutil.TravelCell(60, 100)
+	walkCells[0][2] = testutil.TravelCell(1200, 300)
 	in.TravelMatrix.Profiles[contracts.TransportCar] = carCells
 	in.TravelMatrix.Profiles[contracts.TransportWalk] = walkCells
 
@@ -436,17 +385,17 @@ func TestBaselineSelectsEngineersTravelProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actual := assignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"car-order": "car", "walk-order": "walk"}) {
+	if actual := testutil.AssignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"car-order": "car", "walk-order": "walk"}) {
 		t.Fatalf("unexpected profile-based assignments: %v", actual)
 	}
 	for _, route := range got.Routes {
 		want := int64(100)
 		if route.EngineerID == "walk" {
 			want = 300
-			if !route.Visits[0].ArrivalAt.Equal(at(6, 20)) {
+			if !route.Visits[0].ArrivalAt.Equal(testutil.At(6, 20)) {
 				t.Fatalf("walk profile duration not used: %+v", route.Visits[0])
 			}
-		} else if !route.Visits[0].ArrivalAt.Equal(at(6, 1)) {
+		} else if !route.Visits[0].ArrivalAt.Equal(testutil.At(6, 1)) {
 			t.Fatalf("car profile duration not used: %+v", route.Visits[0])
 		}
 		if route.Legs[0].DistanceM != want {
@@ -456,17 +405,17 @@ func TestBaselineSelectsEngineersTravelProfile(t *testing.T) {
 }
 
 func TestBaselineDoesNotReorderEarlierVisits(t *testing.T) {
-	in := baseRequest()
-	first := order("late-window", "p1", 1, 8, 0, 10, 0)
-	second := order("early-window", "p2", 2, 7, 0, 10, 0)
-	second.Window.End = at(7, 30)
+	in := testutil.BaseRequest()
+	first := testutil.Order("late-window", "p1", 1, 8, 0, 10, 0)
+	second := testutil.Order("early-window", "p2", 2, 7, 0, 10, 0)
+	second.Window.End = testutil.At(7, 30)
 	in.Orders = []contracts.Order{first, second}
-	in.TravelMatrix = matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 	got, err := solve(t, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actual := assignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"late-window": "e1"}) {
+	if actual := testutil.AssignedIDs(got); !reflect.DeepEqual(actual, map[string]string{"late-window": "e1"}) {
 		t.Fatalf("baseline should keep first visit and leave second unassigned: %v", actual)
 	}
 	if len(got.Unassigned) != 1 || got.Unassigned[0].OrderID != "early-window" || got.Unassigned[0].ReasonCode != contracts.ReasonNotAssignedBySolver {
@@ -476,10 +425,10 @@ func TestBaselineDoesNotReorderEarlierVisits(t *testing.T) {
 
 func TestBaselineDistinguishesDisconnectedFromMissingDirectEdge(t *testing.T) {
 	t.Run("disconnected vertex", func(t *testing.T) {
-		in := baseRequest()
-		in.TravelMatrix = matrix([]string{"depot", "p1"}, contracts.TransportCar)
+		in := testutil.BaseRequest()
+		in.TravelMatrix = testutil.Matrix([]string{"depot", "p1"}, contracts.TransportCar)
 		cells := in.TravelMatrix.Profiles[contracts.TransportCar]
-		cells[0][1] = unreachableCell()
+		cells[0][1] = testutil.UnreachableCell()
 		in.TravelMatrix.Profiles[contracts.TransportCar] = cells
 		got, err := solve(t, in)
 		if err != nil {
@@ -491,10 +440,10 @@ func TestBaselineDistinguishesDisconnectedFromMissingDirectEdge(t *testing.T) {
 	})
 
 	t.Run("indirect path exists", func(t *testing.T) {
-		in := baseRequest()
-		in.TravelMatrix = matrix([]string{"depot", "p1", "mid"}, contracts.TransportCar)
+		in := testutil.BaseRequest()
+		in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "mid"}, contracts.TransportCar)
 		cells := in.TravelMatrix.Profiles[contracts.TransportCar]
-		cells[0][1] = unreachableCell()
+		cells[0][1] = testutil.UnreachableCell()
 		in.TravelMatrix.Profiles[contracts.TransportCar] = cells
 		got, err := solve(t, in)
 		if err != nil {
@@ -516,17 +465,17 @@ func TestBaselineServiceMayEndAtShiftEndButNotAfter(t *testing.T) {
 		{"ends one second after shift", 20*60 + 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			in := baseRequest()
-			in.Orders[0].Window.Start = at(7, 0)
-			in.Orders[0].Window.End = at(7, 0)
+			in := testutil.BaseRequest()
+			in.Orders[0].Window.Start = testutil.At(7, 0)
+			in.Orders[0].Window.End = testutil.At(7, 0)
 			in.Orders[0].ServiceSec = tc.service
-			in.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = ptr(600)
-			in.Engineers[0].Shift.End = at(7, 20)
+			in.TravelMatrix.Profiles[contracts.TransportCar][0][1].DurationSec = testutil.Ptr(600)
+			in.Engineers[0].Shift.End = testutil.At(7, 20)
 			got, err := solve(t, in)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if assigned := len(assignedIDs(got)) == 1; assigned != tc.assigned {
+			if assigned := len(testutil.AssignedIDs(got)) == 1; assigned != tc.assigned {
 				t.Fatalf("assigned=%v, want %v; result=%+v", assigned, tc.assigned, got)
 			}
 		})
@@ -535,7 +484,7 @@ func TestBaselineServiceMayEndAtShiftEndButNotAfter(t *testing.T) {
 
 func TestBaselineEmptyResultUsesEmptyArraysAndNoEngineersReason(t *testing.T) {
 	t.Run("empty request serializes arrays", func(t *testing.T) {
-		in := baseRequest()
+		in := testutil.BaseRequest()
 		in.Orders = []contracts.Order{}
 		in.Engineers = []contracts.Engineer{}
 		in.EngineerStates = []contracts.EngineerState{}
@@ -557,7 +506,7 @@ func TestBaselineEmptyResultUsesEmptyArraysAndNoEngineersReason(t *testing.T) {
 	})
 
 	t.Run("orders with no engineers", func(t *testing.T) {
-		in := baseRequest()
+		in := testutil.BaseRequest()
 		in.Engineers = []contracts.Engineer{}
 		in.EngineerStates = []contracts.EngineerState{}
 		got, err := solve(t, in)
@@ -568,14 +517,4 @@ func TestBaselineEmptyResultUsesEmptyArraysAndNoEngineersReason(t *testing.T) {
 			t.Fatalf("unexpected no-engineer result: %+v", got)
 		}
 	})
-}
-
-func transportPtr(v contracts.Transport) *contracts.Transport { return &v }
-
-func travelCell(duration, distance int64) contracts.TravelCell {
-	return contracts.TravelCell{Reachable: true, DurationSec: &duration, DistanceM: &distance}
-}
-
-func unreachableCell() contracts.TravelCell {
-	return contracts.TravelCell{Reachable: false}
 }

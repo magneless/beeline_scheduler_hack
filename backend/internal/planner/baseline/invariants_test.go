@@ -1,4 +1,4 @@
-package planner_test
+package baseline_test
 
 import (
 	"context"
@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
-	"github.com/magneless/beeline_scheduler_hack/internal/planner"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/baseline"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/internal/testutil"
 )
 
 func TestBaselineConcurrentCalls(t *testing.T) {
-	input := baseRequest()
-	solver := planner.NewBaseline()
+	input := testutil.BaseRequest()
+	solver := baseline.New()
 	want, err := solver.Solve(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
@@ -46,23 +47,23 @@ func FuzzBaselineFeasibility(f *testing.F) {
 		}
 		byteAt := func(i int) int { return int(data[i%len(data)]) }
 		count := 1 + byteAt(0)%12
-		input := baseRequest()
+		input := testutil.BaseRequest()
 		input.TimeLimitMS = 60000
 		input.Orders = nil
 		locations := []string{"depot"}
 		for i := 0; i < count; i++ {
 			id := fmt.Sprintf("job-%d", i)
 			locations = append(locations, id)
-			job := order(id, id, int64(byteAt(i+1)%4), 7, byteAt(i+2)%60, 1+byteAt(i+3)%90, 0)
+			job := testutil.Order(id, id, int64(byteAt(i+1)%4), 7, byteAt(i+2)%60, 1+byteAt(i+3)%90, 0)
 			job.Window.End = job.Window.Start.Add(time.Duration(byteAt(i+4)%120) * time.Minute)
-			job.ReceivedAt = at(6, byteAt(i+5)%240)
+			job.ReceivedAt = testutil.At(6, byteAt(i+5)%240)
 			job.EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: int64(byteAt(i+6) % 3)}
 			if byteAt(i+7)%5 == 0 {
 				job.RequiredSkills = []string{"repair", "installation"}
 			}
 			input.Orders = append(input.Orders, job)
 		}
-		input.TravelMatrix = matrix(locations, contracts.TransportCar)
+		input.TravelMatrix = testutil.Matrix(locations, contracts.TransportCar)
 		for i, row := range input.TravelMatrix.Profiles[contracts.TransportCar] {
 			for j := range row {
 				if i == j {
@@ -72,7 +73,7 @@ func FuzzBaselineFeasibility(f *testing.F) {
 				if x%7 == 0 {
 					row[j] = contracts.TravelCell{}
 				} else {
-					row[j] = contracts.TravelCell{Reachable: true, DurationSec: ptr(int64(x * 20)), DistanceM: ptr(int64(x * 100))}
+					row[j] = contracts.TravelCell{Reachable: true, DurationSec: testutil.Ptr(int64(x * 20)), DistanceM: testutil.Ptr(int64(x * 100))}
 				}
 			}
 		}
@@ -99,7 +100,7 @@ func FuzzBaselineFeasibility(f *testing.F) {
 			if route.EngineerID != "e1" || len(route.Visits) != len(route.Legs) || len(route.Visits) == 0 {
 				t.Fatalf("invalid route: %+v", route)
 			}
-			previousEnd, previousLocation := at(6, 0), "depot"
+			previousEnd, previousLocation := testutil.At(6, 0), "depot"
 			var equipmentUsed int64
 			for i, visit := range route.Visits {
 				job, ok := jobs[visit.OrderID]

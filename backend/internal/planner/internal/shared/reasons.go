@@ -1,34 +1,34 @@
-package planner
+package shared
 
 import (
 	"time"
 
-	"github.com/magneless/beeline_scheduler_hack/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 )
 
 // A failed append is not a proof that no ordering can serve the order.
 // Only emit specific reasons when the corresponding check proves them.
-func explainUnassigned(order contracts.Order, workers []baselineWorker, target int, matrix contracts.TravelMatrix, stop func() (bool, error)) (contracts.UnassignedOrder, bool, error) {
+func ExplainUnassigned(order contracts.Order, workers []Worker, target int, matrix contracts.TravelMatrix, stop func() (bool, error)) (contracts.UnassignedOrder, bool, error) {
 	skill, transport, equipment, reachable, possibleTime := false, false, false, false, false
 	for i := range workers {
 		if done, err := stop(); done {
 			return contracts.UnassignedOrder{}, true, err
 		}
 		worker := &workers[i]
-		if !worker.matchesSkills(order) {
+		if !worker.MatchesSkills(order) {
 			continue
 		}
 		skill = true
-		if !worker.matchesTransport(order) {
+		if !worker.MatchesTransport(order) {
 			continue
 		}
 		transport = true
-		if !worker.hasEquipment(order) {
+		if !worker.HasEquipment(order) {
 			continue
 		}
 		equipment = true
 		if worker.reachable == nil {
-			seen, done, err := connectedLocations(matrix.Profiles[worker.engineer.Transport], worker.initialLocation, stop)
+			seen, done, err := connectedLocations(matrix.Profiles[worker.Engineer.Transport], worker.InitialLocation, stop)
 			if done {
 				return contracts.UnassignedOrder{}, true, err
 			}
@@ -40,9 +40,9 @@ func explainUnassigned(order contracts.Order, workers []baselineWorker, target i
 		reachable = true
 		// Ignore all travel and other future jobs. If even this optimistic
 		// start cannot fit, rearranging the route cannot create a slot.
-		start := later(later(worker.route.StartAt, order.ReceivedAt), order.Window.Start)
-		if !start.After(order.Window.End) && !start.After(worker.engineer.Shift.End) &&
-			time.Duration(order.ServiceSec)*time.Second <= worker.engineer.Shift.End.Sub(start) {
+		start := Later(Later(worker.Route.StartAt, order.ReceivedAt), order.Window.Start)
+		if !start.After(order.Window.End) && !start.After(worker.Engineer.Shift.End) &&
+			time.Duration(order.ServiceSec)*time.Second <= worker.Engineer.Shift.End.Sub(start) {
 			possibleTime = true
 		}
 	}
@@ -61,7 +61,7 @@ func explainUnassigned(order contracts.Order, workers []baselineWorker, target i
 	case !possibleTime:
 		code, message = contracts.ReasonNoFeasibleSlot, "Работа не укладывается в окно начала и доступную смену даже без времени дороги."
 	}
-	return unassigned(order, code, message), false, nil
+	return Unassigned(order, code, message), false, nil
 }
 
 // Connectivity is deliberately optimistic: intermediate matrix locations need
