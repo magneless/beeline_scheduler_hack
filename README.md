@@ -13,6 +13,8 @@
 
 ## Начало работы
 
+Реализация Go-2 с PostgreSQL: [запуск backend, импорт, API и подключение модулей](docs/go2_backend.md). Для локальной БД добавлен `compose.yaml`; сервер запускается из `cmd/server`. Пока Go-3/Go-4 отсутствуют, доступен явный режим разработки `DEPENDENCY_MODE=stub`.
+
 1. [Функциональный состав](docs/functional_scope.md).
 2. [Распределение работы](docs/work_breakdown.md).
 3. [Общие типы и связи модулей](docs/contracts/common.md).
