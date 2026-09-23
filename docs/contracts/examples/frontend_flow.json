@@ -40,14 +40,21 @@
           "service_sec": 1800,
           "priority": "normal",
           "source_order": 1,
-          "status": "active"
+          "status": "active",
+          "work_type": "repair",
+          "received_at": "2026-09-16T21:00:00Z",
+          "equipment_required": {
+            "router": 1
+          },
+          "execution": null
         }
       ],
       "engineers": [
         {
           "id": "eng-1",
           "skills": [
-            "repair"
+            "repair",
+            "emergency"
           ],
           "transport": "car",
           "shift": {
@@ -55,7 +62,10 @@
             "end": "2026-09-17T15:00:00Z"
           },
           "available": true,
-          "source_order": 1
+          "source_order": 1,
+          "equipment_stock": {
+            "router": 1
+          }
         }
       ],
       "issues": []
@@ -124,7 +134,8 @@
           "engineer_id": "eng-1",
           "distance_m": 1200
         }
-      ]
+      ],
+      "completed_count": 0
     },
     "baseline_metrics": {
       "assigned_count": 1,
@@ -136,10 +147,17 @@
           "engineer_id": "eng-1",
           "distance_m": 1200
         }
-      ]
+      ],
+      "completed_count": 0
     },
     "changes": [],
-    "termination": "completed"
+    "termination": "completed",
+    "completed_order_ids": [],
+    "equipment_remaining": {
+      "eng-1": {
+        "router": 1
+      }
+    }
   },
   "stale_version_error": {
     "code": "STALE_VERSION",
@@ -187,14 +205,21 @@
           "service_sec": 1800,
           "priority": "normal",
           "source_order": 1,
-          "status": "active"
+          "status": "active",
+          "work_type": "repair",
+          "received_at": "2026-09-16T21:00:00Z",
+          "equipment_required": {
+            "router": 1
+          },
+          "execution": null
         }
       ],
       "engineers": [
         {
           "id": "eng-1",
           "skills": [
-            "repair"
+            "repair",
+            "emergency"
           ],
           "transport": "car",
           "shift": {
@@ -202,7 +227,10 @@
             "end": "2026-09-17T15:00:00Z"
           },
           "available": true,
-          "source_order": 1
+          "source_order": 1,
+          "equipment_stock": {
+            "router": 1
+          }
         }
       ],
       "issues": []
@@ -243,7 +271,8 @@
       "occurred_at": "2026-09-17T05:00:00Z",
       "type": "order_cancelled",
       "payload": {
-        "order_id": "order-1"
+        "order_id": "order-1",
+        "reason": "client_refusal"
       }
     }
   },
@@ -264,7 +293,8 @@
       "unassigned_count": 0,
       "used_engineer_count": 0,
       "total_distance_m": 0,
-      "per_engineer": []
+      "per_engineer": [],
+      "completed_count": 0
     },
     "baseline_metrics": null,
     "changes": [
@@ -281,7 +311,13 @@
         "reason": "cancelled"
       }
     ],
-    "termination": "completed"
+    "termination": "completed",
+    "completed_order_ids": [],
+    "equipment_remaining": {
+      "eng-1": {
+        "router": 1
+      }
+    }
   },
   "event_run": {
     "id": "run-2",
@@ -331,14 +367,21 @@
           "service_sec": 1800,
           "priority": "normal",
           "source_order": 1,
-          "status": "cancelled"
+          "status": "cancelled",
+          "work_type": "repair",
+          "received_at": "2026-09-16T21:00:00Z",
+          "equipment_required": {
+            "router": 1
+          },
+          "execution": null
         }
       ],
       "engineers": [
         {
           "id": "eng-1",
           "skills": [
-            "repair"
+            "repair",
+            "emergency"
           ],
           "transport": "car",
           "shift": {
@@ -346,7 +389,10 @@
             "end": "2026-09-17T15:00:00Z"
           },
           "available": true,
-          "source_order": 1
+          "source_order": 1,
+          "equipment_stock": {
+            "router": 1
+          }
         }
       ],
       "issues": []
@@ -394,14 +440,21 @@
           "service_sec": 1800,
           "priority": "normal",
           "source_order": 1,
-          "status": "active"
+          "status": "active",
+          "work_type": "repair",
+          "received_at": "2026-09-16T21:00:00Z",
+          "equipment_required": {
+            "router": 1
+          },
+          "execution": null
         }
       ],
       "engineers": [
         {
           "id": "eng-1",
           "skills": [
-            "repair"
+            "repair",
+            "emergency"
           ],
           "transport": "car",
           "shift": {
@@ -409,7 +462,10 @@
             "end": "2026-09-17T15:00:00Z"
           },
           "available": true,
-          "source_order": 1
+          "source_order": 1,
+          "equipment_stock": {
+            "router": 1
+          }
         }
       ],
       "issues": [
@@ -423,5 +479,904 @@
       ]
     },
     "current_plan_id": null
+  },
+  "incoming_emergency_example": {
+    "request": {
+      "request_id": "request-emergency-1",
+      "snapshot_revision": 1,
+      "event": {
+        "id": "event-emergency-1",
+        "occurred_at": "2026-09-17T05:30:00Z",
+        "type": "urgent_order_added",
+        "payload": {
+          "order": {
+            "id": "order-emergency-1",
+            "location_id": "loc-1",
+            "work_type": "emergency",
+            "required_skills": [
+              "emergency"
+            ],
+            "required_transport": "car",
+            "window": {
+              "start": "2026-09-17T05:30:00Z",
+              "end": "2026-09-17T15:00:00Z"
+            },
+            "received_at": "2026-09-17T05:30:00Z",
+            "service_sec": 4800,
+            "priority": "urgent",
+            "equipment_required": {
+              "router": 1
+            },
+            "source_order": 0,
+            "status": "active",
+            "execution": null
+          },
+          "location": null
+        }
+      }
+    },
+    "normalized_order": {
+      "id": "order-emergency-1",
+      "location_id": "loc-1",
+      "work_type": "emergency",
+      "required_skills": [
+        "emergency"
+      ],
+      "required_transport": "car",
+      "window": {
+        "start": "2026-09-17T05:30:00Z",
+        "end": "2026-09-17T15:00:00Z"
+      },
+      "received_at": "2026-09-17T05:30:00Z",
+      "service_sec": 4800,
+      "priority": "urgent",
+      "equipment_required": {
+        "router": 1
+      },
+      "source_order": 2,
+      "status": "active",
+      "execution": null
+    },
+    "engineer_equipment_stock": {
+      "router": 1
+    },
+    "expected_priority_outcome": {
+      "emergency_order_id": "order-emergency-1",
+      "emergency_equipment_required": {
+        "router": 1
+      },
+      "repair_order_id": "order-1",
+      "repair_unassigned_reason": "NO_MATCHING_EQUIPMENT"
+    },
+    "note": "service_sec=4800 содержит только недорожные 80 минут; actual travel duration добавляется отдельно. Одного router хватает только на одну из двух заявок; более высокий приоритет аварии оставляет роутер аварийной заявке.",
+    "equipment_remaining_before_emergency": {
+      "eng-1": {
+        "router": 1
+      }
+    },
+    "stock_constraint": {
+      "engineer_id": "eng-1",
+      "available_router_count": 1,
+      "combined_router_demand": 2,
+      "result": "only_one_order_can_be_assigned; emergency_has_higher_priority"
+    },
+    "plan_id": "plan-1"
+  },
+  "execution_status_flow": {
+    "fixture_only": true,
+    "branch_from_plan_id": "plan-1",
+    "note": "HTTP mock-оболочка для тех же событий и снимков, что в backend_flow.execution_status_flow; отмена plan-2 — отдельная ветка. Для единственной заявки в ветке после её закрытия вызов Planner.Solve не выполняется.",
+    "status_steps": [
+      {
+        "plan_id": "plan-1",
+        "request": {
+          "request_id": "request-status-sent",
+          "snapshot_revision": 1,
+          "event": {
+            "id": "event-sent",
+            "occurred_at": "2026-09-17T05:50:00Z",
+            "type": "order_status_changed",
+            "payload": {
+              "order_id": "order-1",
+              "status": "sent",
+              "engineer_id": "eng-1",
+              "expected_end_at": null
+            }
+          }
+        },
+        "accepted": {
+          "run_id": "run-status-1"
+        },
+        "run": {
+          "id": "run-status-1",
+          "scenario_id": "scenario-1",
+          "status": "succeeded",
+          "plan_id": "plan-status-sent",
+          "error": null
+        },
+        "plan": {
+          "scenario_id": "scenario-1",
+          "snapshot_revision": 2,
+          "base_plan_id": "plan-1",
+          "as_of": "2026-09-17T05:50:00Z",
+          "routes": [
+            {
+              "engineer_id": "eng-1",
+              "start_location_id": "office-1",
+              "start_at": "2026-09-17T06:00:00Z",
+              "visits": [
+                {
+                  "order_id": "order-1",
+                  "arrival_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:30:00Z"
+                }
+              ],
+              "legs": [
+                {
+                  "id": "leg-1",
+                  "from_location_id": "office-1",
+                  "to_location_id": "loc-1",
+                  "start_at": "2026-09-17T06:00:00Z",
+                  "end_at": "2026-09-17T06:15:00Z",
+                  "distance_m": 1200,
+                  "geo_context_id": "geo-1",
+                  "geometry": [
+                    {
+                      "lat": 55.75,
+                      "lon": 37.61
+                    },
+                    {
+                      "lat": 55.76,
+                      "lon": 37.61
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unassigned": [],
+          "cancelled_order_ids": [],
+          "issues": [],
+          "metrics": {
+            "assigned_count": 1,
+            "unassigned_count": 0,
+            "used_engineer_count": 1,
+            "total_distance_m": 1200,
+            "per_engineer": [
+              {
+                "engineer_id": "eng-1",
+                "distance_m": 1200
+              }
+            ],
+            "completed_count": 0
+          },
+          "baseline_metrics": null,
+          "changes": [
+            {
+              "order_id": "order-1",
+              "before": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "after": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "reason": "status_changed"
+            }
+          ],
+          "termination": "completed",
+          "completed_order_ids": [],
+          "id": "plan-status-sent",
+          "equipment_remaining": {
+            "eng-1": {
+              "router": 1
+            }
+          }
+        },
+        "scenario": {
+          "snapshot": {
+            "scenario_id": "scenario-1",
+            "revision": 2,
+            "region_id": "region-1",
+            "date": "2026-09-17",
+            "timezone": "Europe/Moscow",
+            "office_location_id": "office-1",
+            "locations": [
+              {
+                "id": "office-1",
+                "address": "Москва, офис",
+                "point": {
+                  "lat": 55.75,
+                  "lon": 37.61
+                }
+              },
+              {
+                "id": "loc-1",
+                "address": "Москва, ул. Тверская, 1",
+                "point": {
+                  "lat": 55.76,
+                  "lon": 37.61
+                }
+              }
+            ],
+            "orders": [
+              {
+                "id": "order-1",
+                "location_id": "loc-1",
+                "required_skills": [
+                  "repair"
+                ],
+                "required_transport": "car",
+                "window": {
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T09:00:00Z"
+                },
+                "service_sec": 1800,
+                "priority": "normal",
+                "source_order": 1,
+                "status": "sent",
+                "work_type": "repair",
+                "received_at": "2026-09-16T21:00:00Z",
+                "equipment_required": {
+                  "router": 1
+                },
+                "execution": {
+                  "engineer_id": "eng-1",
+                  "departed_at": null,
+                  "started_at": null,
+                  "finished_at": null,
+                  "expected_end_at": null
+                }
+              }
+            ],
+            "engineers": [
+              {
+                "id": "eng-1",
+                "skills": [
+                  "repair",
+                  "emergency"
+                ],
+                "transport": "car",
+                "shift": {
+                  "start": "2026-09-17T06:00:00Z",
+                  "end": "2026-09-17T15:00:00Z"
+                },
+                "available": true,
+                "source_order": 1,
+                "equipment_stock": {
+                  "router": 1
+                }
+              }
+            ],
+            "issues": []
+          },
+          "current_plan_id": "plan-status-sent"
+        },
+        "engineer_state_after_event": {
+          "engineer_id": "eng-1",
+          "start_location_id": "office-1",
+          "available_from": "2026-09-17T06:00:00Z",
+          "equipment_available": {
+            "router": 1
+          }
+        }
+      },
+      {
+        "plan_id": "plan-status-sent",
+        "request": {
+          "request_id": "request-status-en-route",
+          "snapshot_revision": 2,
+          "event": {
+            "id": "event-en_route",
+            "occurred_at": "2026-09-17T06:00:00Z",
+            "type": "order_status_changed",
+            "payload": {
+              "order_id": "order-1",
+              "status": "en_route",
+              "engineer_id": "eng-1",
+              "expected_end_at": null
+            }
+          }
+        },
+        "accepted": {
+          "run_id": "run-status-2"
+        },
+        "run": {
+          "id": "run-status-2",
+          "scenario_id": "scenario-1",
+          "status": "succeeded",
+          "plan_id": "plan-status-en-route",
+          "error": null
+        },
+        "plan": {
+          "scenario_id": "scenario-1",
+          "snapshot_revision": 3,
+          "base_plan_id": "plan-status-sent",
+          "as_of": "2026-09-17T06:00:00Z",
+          "routes": [
+            {
+              "engineer_id": "eng-1",
+              "start_location_id": "office-1",
+              "start_at": "2026-09-17T06:00:00Z",
+              "visits": [
+                {
+                  "order_id": "order-1",
+                  "arrival_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:30:00Z"
+                }
+              ],
+              "legs": [
+                {
+                  "id": "leg-1",
+                  "from_location_id": "office-1",
+                  "to_location_id": "loc-1",
+                  "start_at": "2026-09-17T06:00:00Z",
+                  "end_at": "2026-09-17T06:15:00Z",
+                  "distance_m": 1200,
+                  "geo_context_id": "geo-1",
+                  "geometry": [
+                    {
+                      "lat": 55.75,
+                      "lon": 37.61
+                    },
+                    {
+                      "lat": 55.76,
+                      "lon": 37.61
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unassigned": [],
+          "cancelled_order_ids": [],
+          "issues": [],
+          "metrics": {
+            "assigned_count": 1,
+            "unassigned_count": 0,
+            "used_engineer_count": 1,
+            "total_distance_m": 1200,
+            "per_engineer": [
+              {
+                "engineer_id": "eng-1",
+                "distance_m": 1200
+              }
+            ],
+            "completed_count": 0
+          },
+          "baseline_metrics": null,
+          "changes": [
+            {
+              "order_id": "order-1",
+              "before": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "after": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "reason": "status_changed"
+            }
+          ],
+          "termination": "completed",
+          "completed_order_ids": [],
+          "id": "plan-status-en-route",
+          "equipment_remaining": {
+            "eng-1": {
+              "router": 1
+            }
+          }
+        },
+        "scenario": {
+          "snapshot": {
+            "scenario_id": "scenario-1",
+            "revision": 3,
+            "region_id": "region-1",
+            "date": "2026-09-17",
+            "timezone": "Europe/Moscow",
+            "office_location_id": "office-1",
+            "locations": [
+              {
+                "id": "office-1",
+                "address": "Москва, офис",
+                "point": {
+                  "lat": 55.75,
+                  "lon": 37.61
+                }
+              },
+              {
+                "id": "loc-1",
+                "address": "Москва, ул. Тверская, 1",
+                "point": {
+                  "lat": 55.76,
+                  "lon": 37.61
+                }
+              }
+            ],
+            "orders": [
+              {
+                "id": "order-1",
+                "location_id": "loc-1",
+                "required_skills": [
+                  "repair"
+                ],
+                "required_transport": "car",
+                "window": {
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T09:00:00Z"
+                },
+                "service_sec": 1800,
+                "priority": "normal",
+                "source_order": 1,
+                "status": "en_route",
+                "work_type": "repair",
+                "received_at": "2026-09-16T21:00:00Z",
+                "equipment_required": {
+                  "router": 1
+                },
+                "execution": {
+                  "engineer_id": "eng-1",
+                  "departed_at": "2026-09-17T06:00:00Z",
+                  "started_at": null,
+                  "finished_at": null,
+                  "expected_end_at": null
+                }
+              }
+            ],
+            "engineers": [
+              {
+                "id": "eng-1",
+                "skills": [
+                  "repair",
+                  "emergency"
+                ],
+                "transport": "car",
+                "shift": {
+                  "start": "2026-09-17T06:00:00Z",
+                  "end": "2026-09-17T15:00:00Z"
+                },
+                "available": true,
+                "source_order": 1,
+                "equipment_stock": {
+                  "router": 1
+                }
+              }
+            ],
+            "issues": []
+          },
+          "current_plan_id": "plan-status-en-route"
+        },
+        "engineer_state_after_event": {
+          "engineer_id": "eng-1",
+          "start_location_id": "office-1",
+          "available_from": "2026-09-17T06:00:00Z",
+          "equipment_available": {
+            "router": 1
+          }
+        }
+      },
+      {
+        "plan_id": "plan-status-en-route",
+        "request": {
+          "request_id": "request-status-in-progress",
+          "snapshot_revision": 3,
+          "event": {
+            "id": "event-in_progress",
+            "occurred_at": "2026-09-17T07:00:00Z",
+            "type": "order_status_changed",
+            "payload": {
+              "order_id": "order-1",
+              "status": "in_progress",
+              "engineer_id": "eng-1",
+              "expected_end_at": "2026-09-17T07:30:00Z"
+            }
+          }
+        },
+        "accepted": {
+          "run_id": "run-status-3"
+        },
+        "run": {
+          "id": "run-status-3",
+          "scenario_id": "scenario-1",
+          "status": "succeeded",
+          "plan_id": "plan-status-in-progress",
+          "error": null
+        },
+        "plan": {
+          "scenario_id": "scenario-1",
+          "snapshot_revision": 4,
+          "base_plan_id": "plan-status-en-route",
+          "as_of": "2026-09-17T07:00:00Z",
+          "routes": [
+            {
+              "engineer_id": "eng-1",
+              "start_location_id": "office-1",
+              "start_at": "2026-09-17T06:00:00Z",
+              "visits": [
+                {
+                  "order_id": "order-1",
+                  "arrival_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:30:00Z"
+                }
+              ],
+              "legs": [
+                {
+                  "id": "leg-1",
+                  "from_location_id": "office-1",
+                  "to_location_id": "loc-1",
+                  "start_at": "2026-09-17T06:00:00Z",
+                  "end_at": "2026-09-17T06:15:00Z",
+                  "distance_m": 1200,
+                  "geo_context_id": "geo-1",
+                  "geometry": [
+                    {
+                      "lat": 55.75,
+                      "lon": 37.61
+                    },
+                    {
+                      "lat": 55.76,
+                      "lon": 37.61
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unassigned": [],
+          "cancelled_order_ids": [],
+          "issues": [],
+          "metrics": {
+            "assigned_count": 1,
+            "unassigned_count": 0,
+            "used_engineer_count": 1,
+            "total_distance_m": 1200,
+            "per_engineer": [
+              {
+                "engineer_id": "eng-1",
+                "distance_m": 1200
+              }
+            ],
+            "completed_count": 0
+          },
+          "baseline_metrics": null,
+          "changes": [
+            {
+              "order_id": "order-1",
+              "before": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "after": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "reason": "status_changed"
+            }
+          ],
+          "termination": "completed",
+          "completed_order_ids": [],
+          "id": "plan-status-in-progress",
+          "equipment_remaining": {
+            "eng-1": {
+              "router": 0
+            }
+          }
+        },
+        "scenario": {
+          "snapshot": {
+            "scenario_id": "scenario-1",
+            "revision": 4,
+            "region_id": "region-1",
+            "date": "2026-09-17",
+            "timezone": "Europe/Moscow",
+            "office_location_id": "office-1",
+            "locations": [
+              {
+                "id": "office-1",
+                "address": "Москва, офис",
+                "point": {
+                  "lat": 55.75,
+                  "lon": 37.61
+                }
+              },
+              {
+                "id": "loc-1",
+                "address": "Москва, ул. Тверская, 1",
+                "point": {
+                  "lat": 55.76,
+                  "lon": 37.61
+                }
+              }
+            ],
+            "orders": [
+              {
+                "id": "order-1",
+                "location_id": "loc-1",
+                "required_skills": [
+                  "repair"
+                ],
+                "required_transport": "car",
+                "window": {
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T09:00:00Z"
+                },
+                "service_sec": 1800,
+                "priority": "normal",
+                "source_order": 1,
+                "status": "in_progress",
+                "work_type": "repair",
+                "received_at": "2026-09-16T21:00:00Z",
+                "equipment_required": {
+                  "router": 1
+                },
+                "execution": {
+                  "engineer_id": "eng-1",
+                  "departed_at": "2026-09-17T06:00:00Z",
+                  "started_at": "2026-09-17T07:00:00Z",
+                  "finished_at": null,
+                  "expected_end_at": "2026-09-17T07:30:00Z"
+                }
+              }
+            ],
+            "engineers": [
+              {
+                "id": "eng-1",
+                "skills": [
+                  "repair",
+                  "emergency"
+                ],
+                "transport": "car",
+                "shift": {
+                  "start": "2026-09-17T06:00:00Z",
+                  "end": "2026-09-17T15:00:00Z"
+                },
+                "available": true,
+                "source_order": 1,
+                "equipment_stock": {
+                  "router": 1
+                }
+              }
+            ],
+            "issues": []
+          },
+          "current_plan_id": "plan-status-in-progress"
+        },
+        "engineer_state_after_event": {
+          "engineer_id": "eng-1",
+          "start_location_id": "loc-1",
+          "available_from": "2026-09-17T07:30:00Z",
+          "equipment_available": {
+            "router": 0
+          }
+        }
+      },
+      {
+        "plan_id": "plan-status-in-progress",
+        "request": {
+          "request_id": "request-status-completed",
+          "snapshot_revision": 4,
+          "event": {
+            "id": "event-completed",
+            "occurred_at": "2026-09-17T07:30:00Z",
+            "type": "order_status_changed",
+            "payload": {
+              "order_id": "order-1",
+              "status": "completed",
+              "engineer_id": "eng-1",
+              "expected_end_at": null
+            }
+          }
+        },
+        "accepted": {
+          "run_id": "run-status-4"
+        },
+        "run": {
+          "id": "run-status-4",
+          "scenario_id": "scenario-1",
+          "status": "succeeded",
+          "plan_id": "plan-status-completed",
+          "error": null
+        },
+        "plan": {
+          "scenario_id": "scenario-1",
+          "snapshot_revision": 5,
+          "base_plan_id": "plan-status-in-progress",
+          "as_of": "2026-09-17T07:30:00Z",
+          "routes": [
+            {
+              "engineer_id": "eng-1",
+              "start_location_id": "office-1",
+              "start_at": "2026-09-17T06:00:00Z",
+              "visits": [
+                {
+                  "order_id": "order-1",
+                  "arrival_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:30:00Z"
+                }
+              ],
+              "legs": [
+                {
+                  "id": "leg-1",
+                  "from_location_id": "office-1",
+                  "to_location_id": "loc-1",
+                  "start_at": "2026-09-17T06:00:00Z",
+                  "end_at": "2026-09-17T06:15:00Z",
+                  "distance_m": 1200,
+                  "geo_context_id": "geo-1",
+                  "geometry": [
+                    {
+                      "lat": 55.75,
+                      "lon": 37.61
+                    },
+                    {
+                      "lat": 55.76,
+                      "lon": 37.61
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unassigned": [],
+          "cancelled_order_ids": [],
+          "issues": [],
+          "metrics": {
+            "assigned_count": 1,
+            "unassigned_count": 0,
+            "used_engineer_count": 1,
+            "total_distance_m": 1200,
+            "per_engineer": [
+              {
+                "engineer_id": "eng-1",
+                "distance_m": 1200
+              }
+            ],
+            "completed_count": 1
+          },
+          "baseline_metrics": null,
+          "changes": [
+            {
+              "order_id": "order-1",
+              "before": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "after": {
+                "engineer_id": "eng-1",
+                "sequence": 0,
+                "arrival_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:30:00Z"
+              },
+              "reason": "status_changed"
+            }
+          ],
+          "termination": "completed",
+          "completed_order_ids": [
+            "order-1"
+          ],
+          "id": "plan-status-completed",
+          "equipment_remaining": {
+            "eng-1": {
+              "router": 0
+            }
+          }
+        },
+        "scenario": {
+          "snapshot": {
+            "scenario_id": "scenario-1",
+            "revision": 5,
+            "region_id": "region-1",
+            "date": "2026-09-17",
+            "timezone": "Europe/Moscow",
+            "office_location_id": "office-1",
+            "locations": [
+              {
+                "id": "office-1",
+                "address": "Москва, офис",
+                "point": {
+                  "lat": 55.75,
+                  "lon": 37.61
+                }
+              },
+              {
+                "id": "loc-1",
+                "address": "Москва, ул. Тверская, 1",
+                "point": {
+                  "lat": 55.76,
+                  "lon": 37.61
+                }
+              }
+            ],
+            "orders": [
+              {
+                "id": "order-1",
+                "location_id": "loc-1",
+                "required_skills": [
+                  "repair"
+                ],
+                "required_transport": "car",
+                "window": {
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T09:00:00Z"
+                },
+                "service_sec": 1800,
+                "priority": "normal",
+                "source_order": 1,
+                "status": "completed",
+                "work_type": "repair",
+                "received_at": "2026-09-16T21:00:00Z",
+                "equipment_required": {
+                  "router": 1
+                },
+                "execution": {
+                  "engineer_id": "eng-1",
+                  "departed_at": "2026-09-17T06:00:00Z",
+                  "started_at": "2026-09-17T07:00:00Z",
+                  "finished_at": "2026-09-17T07:30:00Z",
+                  "expected_end_at": null
+                }
+              }
+            ],
+            "engineers": [
+              {
+                "id": "eng-1",
+                "skills": [
+                  "repair",
+                  "emergency"
+                ],
+                "transport": "car",
+                "shift": {
+                  "start": "2026-09-17T06:00:00Z",
+                  "end": "2026-09-17T15:00:00Z"
+                },
+                "available": true,
+                "source_order": 1,
+                "equipment_stock": {
+                  "router": 1
+                }
+              }
+            ],
+            "issues": []
+          },
+          "current_plan_id": "plan-status-completed"
+        },
+        "engineer_state_after_event": {
+          "engineer_id": "eng-1",
+          "start_location_id": "loc-1",
+          "available_from": "2026-09-17T07:30:00Z",
+          "equipment_available": {
+            "router": 0
+          }
+        }
+      }
+    ]
   }
 }
