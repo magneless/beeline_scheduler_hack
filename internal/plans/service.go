@@ -29,6 +29,8 @@ type PlanService interface {
 
 type Options struct {
 	TimeLimitMS int64
+	Mode        contracts.SolveMode
+	Issues      []contracts.Issue
 }
 
 type Service struct {
@@ -36,6 +38,8 @@ type Service struct {
 	geo         GeoService
 	planner     Planner
 	timeLimitMS int64
+	mode        contracts.SolveMode
+	issues      []contracts.Issue
 }
 
 var _ PlanService = (*Service)(nil)
@@ -53,5 +57,11 @@ func New(data PlanDataReader, geo GeoService, planner Planner, options Options) 
 	if options.TimeLimitMS <= 0 {
 		options.TimeLimitMS = 1000
 	}
-	return &Service{data: data, geo: geo, planner: planner, timeLimitMS: options.TimeLimitMS}, nil
+	if options.Mode == "" {
+		options.Mode = contracts.SolveModeOptimized
+	}
+	if options.Mode != contracts.SolveModeBaseline && options.Mode != contracts.SolveModeOptimized {
+		return nil, contracts.InvalidInput("invalid solve mode", nil)
+	}
+	return &Service{data: data, geo: geo, planner: planner, timeLimitMS: options.TimeLimitMS, mode: options.Mode, issues: append([]contracts.Issue{}, options.Issues...)}, nil
 }

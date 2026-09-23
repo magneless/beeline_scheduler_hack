@@ -1,41 +1,43 @@
 package contracts
 
-type Transport string
+import shared "github.com/magneless/beeline_scheduler_hack/internal/contracts"
+
+type Transport = shared.Transport
 
 const (
 	TransportCar  Transport = "car"
 	TransportWalk Transport = "walk"
 )
 
-type Priority string
+type Priority = shared.Priority
 
 const (
 	PriorityNormal Priority = "normal"
 	PriorityUrgent Priority = "urgent"
 )
 
-type OrderStatus string
+type OrderStatus = shared.OrderStatus
 
 const (
 	OrderStatusActive    OrderStatus = "active"
 	OrderStatusCancelled OrderStatus = "cancelled"
 )
 
-type SolveMode string
+type SolveMode = shared.SolveMode
 
 const (
 	SolveModeBaseline  SolveMode = "baseline"
 	SolveModeOptimized SolveMode = "optimized"
 )
 
-type Termination string
+type Termination = shared.Termination
 
 const (
 	TerminationCompleted Termination = "completed"
 	TerminationTimeLimit Termination = "time_limit"
 )
 
-type EventType string
+type EventType = string
 
 const (
 	EventUrgentOrderAdded    EventType = "urgent_order_added"
@@ -43,7 +45,7 @@ const (
 	EventEngineerUnavailable EventType = "engineer_unavailable"
 )
 
-type PlanChangeReason string
+type PlanChangeReason = string
 
 const (
 	PlanChangeReassigned  PlanChangeReason = "reassigned"
@@ -53,7 +55,7 @@ const (
 	PlanChangeCancelled   PlanChangeReason = "cancelled"
 )
 
-type RunStatus string
+type RunStatus = string
 
 const (
 	RunStatusQueued    RunStatus = "queued"
@@ -70,3 +72,21 @@ const (
 	UnassignedNoFeasibleSlot      = "NO_FEASIBLE_SLOT"
 	UnassignedBySolver            = "NOT_ASSIGNED_BY_SOLVER"
 )
+
+const (
+	OrderStatusSent         = shared.OrderStatusSent
+	OrderStatusEnRoute      = shared.OrderStatusEnRoute
+	OrderStatusInProgress   = shared.OrderStatusInProgress
+	OrderStatusCompleted    = shared.OrderStatusCompleted
+	EventOrderStatusChanged = "order_status_changed"
+	PlanChangeStatusChanged = "status_changed"
+	WorkTypeEmergency       = shared.WorkTypeEmergency
+	WorkTypeConnection      = shared.WorkTypeConnection
+	WorkTypeRepair          = shared.WorkTypeRepair
+	WorkTypeAdditional      = shared.WorkTypeAdditional
+	EquipmentRouter         = shared.EquipmentRouter
+	EquipmentTVBox          = shared.EquipmentTVBox
+)
+
+type Equipment = shared.Equipment
+type OrderExecution = shared.OrderExecution

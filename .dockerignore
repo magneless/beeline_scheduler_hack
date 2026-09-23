@@ -1,0 +1,11 @@
+.git
+.tools
+.env
+.idea
+client
+docs/presentation
+docs/qa_1
+docs/qa_2
+docs/qa_chat
+**/node_modules
+*.exe

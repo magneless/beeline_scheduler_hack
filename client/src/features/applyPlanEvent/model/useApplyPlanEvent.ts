@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { DateTime } from 'luxon';
 import { toast } from 'sonner';
 
 import { postPlanEvent } from 'shared/api';
@@ -60,6 +61,19 @@ export const useApplyPlanEvent = ({
 
             const run = await runPlanCommand(async () => {
                 if (input.kind === 'urgent') {
+                    const locationId =
+                        order?.location_id ?? snapshot.orders[0]?.location_id;
+                    if (!locationId) {
+                        throw new Error('В сценарии нет адреса для аварии');
+                    }
+                    const dayEnd =
+                        DateTime.fromISO(snapshot.date, {
+                            zone: snapshot.timezone,
+                        })
+                            .endOf('day')
+                            .set({ millisecond: 0 })
+                            .toUTC()
+                            .toISO() ?? input.occurredAt;
                     return postPlanEvent({
                         planId,
                         requestId: crypto.randomUUID(),
@@ -70,14 +84,14 @@ export const useApplyPlanEvent = ({
                             type: 'urgent_order_added',
                             payload: {
                                 order: {
-                                    id: 'order-10',
-                                    location_id: 'loc-10',
+                                    id: `emergency-${crypto.randomUUID()}`,
+                                    location_id: locationId,
                                     work_type: 'emergency',
                                     required_skills: ['emergency'],
                                     required_transport: 'car',
                                     window: {
-                                        start: `${snapshot.date}T06:00:00Z`,
-                                        end: `${snapshot.date}T15:00:00Z`,
+                                        start: input.occurredAt,
+                                        end: dayEnd,
                                     },
                                     received_at: input.occurredAt,
                                     service_sec: 4800,

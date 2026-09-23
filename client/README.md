@@ -1,5 +1,7 @@
 ## Быстрый старт (локально)
 
+Для совместного запуска UI, backend и PostgreSQL используйте `docker compose up --build -d --wait` из корня репозитория после настройки корневого `.env`. См. [инструкцию интеграции](../docs/integration.md). При локальной разработке UI по умолчанию работает с реальным API на localhost:8080; mock включается явно через `VITE_API_MODE=mock`.
+
 ```bash
 cp .env.example .env
 pnpm install

@@ -31,19 +31,20 @@ func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, un
 		intervals := make([]interval, 0, len(route.Visits)+len(route.Legs))
 		for sequence, visit := range route.Visits {
 			order, exists := orders[visit.OrderID]
-			if !exists || order.Status != contracts.OrderStatusActive {
+			if !exists || (order.Status == contracts.OrderStatusCancelled && (order.Execution == nil || order.Execution.StartedAt == nil)) {
 				return contracts.InvalidPlan("final visit references a missing or inactive order", map[string]any{"order_id": visit.OrderID})
 			}
 			if previous, exists := accounted[visit.OrderID]; exists {
 				return contracts.InvalidPlan("order appears more than once in final plan", map[string]any{"order_id": visit.OrderID, "first": previous})
 			}
-			if !hasAllSkills(engineer.Skills, order.RequiredSkills) || order.RequiredTransport != nil && *order.RequiredTransport != engineer.Transport {
+			actual := order.Execution != nil && order.Execution.StartedAt != nil
+			if !actual && (!hasAllSkills(engineer.Skills, order.RequiredSkills) || order.RequiredTransport != nil && *order.RequiredTransport != engineer.Transport) {
 				return contracts.InvalidPlan("final assignment violates skill or transport requirements", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
-			if visit.ArrivalAt.After(visit.StartAt) || visit.StartAt.Before(order.Window.Start) || visit.StartAt.After(order.Window.End) || visit.EndAt.Sub(visit.StartAt) != time.Duration(order.ServiceSec)*time.Second {
+			if visit.ArrivalAt.After(visit.StartAt) || visit.EndAt.Before(visit.StartAt) || (!actual && (visit.StartAt.Before(order.Window.Start) || visit.StartAt.After(order.Window.End) || visit.EndAt.Sub(visit.StartAt) != time.Duration(order.ServiceSec)*time.Second)) {
 				return contracts.InvalidPlan("final visit violates order timing", map[string]any{"order_id": order.ID})
 			}
-			if visit.StartAt.Before(engineer.Shift.Start) || visit.EndAt.After(engineer.Shift.End) {
+			if !actual && (visit.StartAt.Before(engineer.Shift.Start) || visit.EndAt.After(engineer.Shift.End)) {
 				return contracts.InvalidPlan("final visit is outside engineer shift", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
 			accounted[visit.OrderID] = "route"
@@ -74,7 +75,7 @@ func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, un
 	}
 	for _, item := range unassigned {
 		order, exists := orders[item.OrderID]
-		if !exists || order.Status != contracts.OrderStatusActive {
+		if !exists || (order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute) {
 			return contracts.InvalidPlan("unassigned item references a missing or inactive order", map[string]any{"order_id": item.OrderID})
 		}
 		if previous, exists := accounted[item.OrderID]; exists {

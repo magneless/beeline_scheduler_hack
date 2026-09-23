@@ -45,17 +45,27 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
-	appliedEvent, newlyCancelled, err := service.applyEvent(ctx, &target, input.Event, replay.lockedOrders)
+	appliedEvent, newlyCancelled, err := service.applyEvent(ctx, &target, base, input.Event, replay)
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
 	target.Revision = input.SnapshotRevision + 1
+	if err := refreshExecution(&target, &replay, input.Event); err != nil {
+		return contracts.PlanResult{}, err
+	}
 	if err := validateSnapshot(target, input.ScenarioID, target.Revision); err != nil {
 		return contracts.PlanResult{}, err
 	}
 
 	remaining, expired := prepareRemainingOrders(target, replay.lockedOrders, input.Event.OccurredAt)
 	engineers := availableEngineers(target)
+	eligible := make([]contracts.Engineer, 0, len(engineers))
+	for _, eng := range engineers {
+		if !replay.blocked[eng.ID] {
+			eligible = append(eligible, eng)
+		}
+	}
+	engineers = eligible
 	states := make([]contracts.EngineerState, 0, len(engineers))
 	for _, engineer := range engineers {
 		state, exists := replay.states[engineer.ID]
@@ -84,7 +94,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			return contracts.PlanResult{}, err
 		}
 		solveRequest := contracts.SolveRequest{
-			Mode:                   contracts.SolveModeOptimized,
+			Mode:                   service.mode,
 			Orders:                 remaining,
 			Engineers:              engineers,
 			EngineerStates:         states,
@@ -110,6 +120,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	unassigned := append(expired, solveResult.Unassigned...)
 	unassigned = nonNil(unassigned)
 	routes := mergeRoutes(replay.routes, solveResult.Routes)
+	resetReassigned(&target, routes)
 	cancelledIDs := mergeCancelled(base.CancelledOrderIDs, newlyCancelled)
 	if err := validateFinalPlan(target, routes, unassigned, cancelledIDs); err != nil {
 		return contracts.PlanResult{}, err
@@ -132,6 +143,49 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		BaselineMetrics:   nil,
 		Changes:           calculateChanges(base.Routes, routes, cancelledSet),
 		Termination:       solveResult.Termination,
+		CompletedOrderIDs: []string{},
+	}
+	draft.EquipmentRemaining, err = equipmentRemaining(target)
+	draft.Issues = append(draft.Issues, service.issues...)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
+	for _, o := range target.Orders {
+		if o.Status == contracts.OrderStatusCompleted {
+			draft.CompletedOrderIDs = append(draft.CompletedOrderIDs, o.ID)
+		}
+		if o.Status == contracts.OrderStatusInProgress && replay.blocked[o.Execution.EngineerID] {
+			id := o.ID
+			draft.Issues = append(draft.Issues, contracts.Issue{EntityID: &id, Code: "EXECUTION_STATE_REQUIRED", Message: "Уточните ожидаемое время окончания работы"})
+		}
+	}
+	draft.Metrics.CompletedCount = len(draft.CompletedOrderIDs)
+	draft.Issues = append(draft.Issues, actualConstraintIssues(target, routes)...)
+	for _, r := range routes {
+		for _, v := range r.Visits {
+			o := orderMap(target.Orders)[v.OrderID]
+			if o.Status == contracts.OrderStatusCancelled {
+				draft.Metrics.AssignedCount--
+			}
+		}
+	}
+	if input.Event.Type == contracts.EventOrderStatusChanged {
+		payload := contracts.DecodePayload(input.Event.Payload)
+		found := false
+		for i := range draft.Changes {
+			if draft.Changes[i].OrderID == payload.OrderID {
+				draft.Changes[i].Reason = contracts.PlanChangeStatusChanged
+				found = true
+			}
+		}
+		if !found {
+			before := assignmentMap(base.Routes)
+			after := assignmentMap(routes)
+			draft.Changes = append(draft.Changes, contracts.PlanChange{OrderID: payload.OrderID, Before: before[payload.OrderID], After: after[payload.OrderID], Reason: contracts.PlanChangeStatusChanged})
+		}
+	}
+	if service.mode == contracts.SolveModeBaseline {
+		draft.Issues = append(draft.Issues, contracts.Issue{Code: "BASELINE_ONLY", Message: "Использован базовый алгоритм; оптимизация ещё не подключена"})
 	}
 	return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &appliedEvent}, nil
 }
@@ -151,6 +205,9 @@ func prepareRemainingOrders(snapshot contracts.Snapshot, locked map[string]struc
 		copyOrder.RequiredSkills = append([]string(nil), order.RequiredSkills...)
 		if copyOrder.Window.Start.Before(eventAt) {
 			copyOrder.Window.Start = eventAt
+		}
+		if copyOrder.Window.Start.Before(copyOrder.ReceivedAt) {
+			copyOrder.Window.Start = copyOrder.ReceivedAt
 		}
 		remaining = append(remaining, copyOrder)
 	}

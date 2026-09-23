@@ -190,7 +190,7 @@ func TestReplanCancelsFutureOrderWithoutCallingPlanner(t *testing.T) {
 
 	result, err := service.Replan(context.Background(), contracts.ReplanRequest{
 		RequestID: "request-2", ScenarioID: snapshot.ScenarioID, SnapshotRevision: 1, BasePlanID: base.ID,
-		Event: contracts.Event{ID: "event-1", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventOrderCancelled, Payload: contracts.EventPayload{OrderID: "order-1"}},
+		Event: contracts.Event{ID: "event-1", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventOrderCancelled, Payload: contracts.EncodePayload(contracts.EventPayload{OrderID: "order-1", Reason: "client_refusal"})},
 	})
 	if err != nil {
 		t.Fatalf("Replan returned error: %v", err)
@@ -211,6 +211,8 @@ func TestReplanCancelsFutureOrderWithoutCallingPlanner(t *testing.T) {
 
 func TestReplanUnavailableEngineerSplitsActiveLeg(t *testing.T) {
 	snapshot := testSnapshot()
+	snapshot.Orders[0].Status = contracts.OrderStatusEnRoute
+	snapshot.Orders[0].Execution = &contracts.OrderExecution{EngineerID: "eng-1", DepartedAt: ptr(mustTime("2026-09-17T06:00:00Z"))}
 	base := testSavedPlan(snapshot)
 	geo := &fakeGeo{positionFn: func(input contracts.PositionRequest) (contracts.PositionResult, error) {
 		return contracts.PositionResult{
@@ -225,7 +227,7 @@ func TestReplanUnavailableEngineerSplitsActiveLeg(t *testing.T) {
 
 	result, err := service.Replan(context.Background(), contracts.ReplanRequest{
 		RequestID: "request-2", ScenarioID: snapshot.ScenarioID, SnapshotRevision: 1, BasePlanID: base.ID,
-		Event: contracts.Event{ID: "event-2", OccurredAt: mustTime("2026-09-17T06:07:30Z"), Type: contracts.EventEngineerUnavailable, Payload: contracts.EventPayload{EngineerID: "eng-1"}},
+		Event: contracts.Event{ID: "event-2", OccurredAt: mustTime("2026-09-17T06:07:30Z"), Type: contracts.EventEngineerUnavailable, Payload: contracts.EncodePayload(contracts.EventPayload{EngineerID: "eng-1"})},
 	})
 	if err != nil {
 		t.Fatalf("Replan returned error: %v", err)
@@ -262,10 +264,15 @@ func TestReplanAddsUrgentOrderAndReturnsResolvedEvent(t *testing.T) {
 	service := mustService(t, &fakeData{snapshot: snapshot, plan: base}, geo, planner)
 	transport := contracts.TransportCar
 	newOrder := contracts.Order{ID: "order-2", LocationID: "loc-2", RequiredSkills: []string{"repair"}, RequiredTransport: &transport, Window: contracts.Window{Start: mustTime("2026-09-17T07:00:00Z"), End: mustTime("2026-09-17T09:00:00Z")}, ServiceSec: 1800}
+	newOrder.ServiceSec = 4800
+	newOrder.WorkType = contracts.WorkTypeEmergency
+	newOrder.Priority = contracts.PriorityUrgent
+	newOrder.Status = contracts.OrderStatusActive
+	newOrder.ReceivedAt = mustTime("2026-09-17T05:00:00Z")
 
 	result, err := service.Replan(context.Background(), contracts.ReplanRequest{
 		RequestID: "request-3", ScenarioID: snapshot.ScenarioID, SnapshotRevision: 1, BasePlanID: base.ID,
-		Event: contracts.Event{ID: "event-3", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventUrgentOrderAdded, Payload: contracts.EventPayload{Order: &newOrder, Location: &contracts.LocationInput{ID: "loc-2", Address: "Москва, новый адрес"}}},
+		Event: contracts.Event{ID: "event-3", OccurredAt: mustTime("2026-09-17T05:00:00Z"), Type: contracts.EventUrgentOrderAdded, Payload: contracts.EncodePayload(contracts.EventPayload{Order: &newOrder, Location: &contracts.LocationInput{ID: "loc-2", Address: "Москва, новый адрес"}})},
 	})
 	if err != nil {
 		t.Fatalf("Replan returned error: %v", err)
@@ -277,7 +284,7 @@ func TestReplanAddsUrgentOrderAndReturnsResolvedEvent(t *testing.T) {
 	if added.Priority != contracts.PriorityUrgent || added.Status != contracts.OrderStatusActive || added.SourceOrder != 1 {
 		t.Fatalf("urgent order was not normalized: %+v", added)
 	}
-	if result.AppliedEvent == nil || result.AppliedEvent.Payload.Location == nil || result.AppliedEvent.Payload.Location.Point == nil {
+	if result.AppliedEvent == nil || contracts.DecodePayload(result.AppliedEvent.Payload).Location == nil || contracts.DecodePayload(result.AppliedEvent.Payload).Location.Point == nil {
 		t.Fatalf("applied event does not contain resolved coordinates: %+v", result.AppliedEvent)
 	}
 	if len(result.Draft.Changes) != 1 || result.Draft.Changes[0].Reason != contracts.PlanChangeAssigned {

@@ -13,7 +13,9 @@
 
 ## Начало работы
 
-Реализация Go-2 с PostgreSQL: [запуск backend, импорт, API и подключение модулей](docs/go2_backend.md). Для локальной БД добавлен `compose.yaml`; сервер запускается из `cmd/server`. Пока Go-3/Go-4 отсутствуют, доступен явный режим разработки `DEPENDENCY_MODE=stub`.
+Ветка `integration` объединяет PostgreSQL, Go-3, Go-4, baseline-планировщик и UI: [запуск и ограничения интеграции](docs/integration.md). В корне проекта скопируйте `.env.example` в `.env`, задайте пароль БД и выполните `docker compose up --build -d --wait`. Интерфейс доступен на http://localhost:3000.
+
+Сейчас используются демонстрационные координаты и поездки по прямой; оптимизированный планировщик ещё не подключён. Изолированный режим Go-2 описан в [документации backend](docs/go2_backend.md).
 
 1. [Функциональный состав](docs/functional_scope.md).
 2. [Распределение работы](docs/work_breakdown.md).

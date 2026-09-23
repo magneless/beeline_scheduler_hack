@@ -3,6 +3,9 @@ import { type OrderStatus, type WorkType } from 'shared/api/types/contracts';
 export const regionLabel: Record<string, string> = {
     north: 'Север',
     east: 'Восток',
+    southeast: 'Юго-восток',
+    southcentral: 'Югоцентр',
+    'region-1': 'Пример контракта',
     'south-east': 'Юго-восток',
     south: 'Юг',
     west: 'Запад',

@@ -23,13 +23,32 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 
 	orders := activeValidOrders(snapshot)
+	for _, o := range snapshot.Orders {
+		if o.Execution != nil {
+			return contracts.PlanResult{}, contracts.EventConflict("use Replan after execution starts", nil)
+		}
+	}
+	if input.ExpectedCurrentPlanID != nil {
+		previous, e := service.data.GetPlan(ctx, *input.ExpectedCurrentPlanID)
+		if e != nil {
+			return contracts.PlanResult{}, e
+		}
+		day, _, e := localDayBounds(snapshot)
+		if e != nil {
+			return contracts.PlanResult{}, e
+		}
+		if previous.BasePlanID != nil || previous.AsOf.After(day) {
+			return contracts.PlanResult{}, contracts.EventConflict("use Replan after events", nil)
+		}
+	}
 	engineers := availableEngineers(snapshot)
 	states := make([]contracts.EngineerState, 0, len(engineers))
 	for _, engineer := range engineers {
 		states = append(states, contracts.EngineerState{
-			EngineerID:      engineer.ID,
-			StartLocationID: snapshot.OfficeLocationID,
-			AvailableFrom:   engineer.Shift.Start,
+			EngineerID:         engineer.ID,
+			StartLocationID:    snapshot.OfficeLocationID,
+			AvailableFrom:      engineer.Shift.Start,
+			EquipmentAvailable: cloneEquipment(engineer.EquipmentStock),
 		})
 	}
 	locations, err := relevantLocations(snapshot, orders, states)
@@ -37,6 +56,9 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 		return contracts.PlanResult{}, err
 	}
 	profiles := profilesFor(engineers)
+	if len(engineers) == 0 {
+		return service.buildWithoutEngineers(snapshot, orders)
+	}
 	matrix, err := service.geo.BuildMatrix(ctx, contracts.MatrixRequest{Locations: locations, Profiles: profiles, GeoContextID: nil})
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("build travel matrix", err)
@@ -64,7 +86,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 
 	optimizedRequest := cloneSolveRequest(baseRequest)
-	optimizedRequest.Mode = contracts.SolveModeOptimized
+	optimizedRequest.Mode = service.mode
 	optimized, err := service.planner.Solve(ctx, optimizedRequest)
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("solve optimized plan", err)
@@ -96,6 +118,20 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 		BaselineMetrics:   &baselineMetrics,
 		Changes:           []contracts.PlanChange{},
 		Termination:       optimized.Termination,
+		CompletedOrderIDs: []string{},
+	}
+	draft.EquipmentRemaining, err = equipmentRemaining(snapshot)
+	draft.Issues = append(draft.Issues, service.issues...)
+	if err != nil {
+		return contracts.PlanResult{}, err
+	}
+	for _, o := range snapshot.Orders {
+		if o.Status == contracts.OrderStatusCancelled {
+			draft.CancelledOrderIDs = append(draft.CancelledOrderIDs, o.ID)
+		}
+	}
+	if service.mode == contracts.SolveModeBaseline {
+		draft.Issues = append(draft.Issues, contracts.Issue{Code: "BASELINE_ONLY", Message: "Использован базовый алгоритм; оптимизация ещё не подключена"})
 	}
 	return contracts.PlanResult{
 		Draft:          draft,

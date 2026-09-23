@@ -1,6 +1,9 @@
 package contracts
 
-import "fmt"
+import (
+	"fmt"
+	shared "github.com/magneless/beeline_scheduler_hack/internal/contracts"
+)
 
 const (
 	ErrorInvalidInput        = "INVALID_INPUT"
@@ -13,22 +16,7 @@ const (
 	ErrorComputationFailed   = "COMPUTATION_FAILED"
 )
 
-type ContractError struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details"`
-	cause   error
-}
-
-var _ error = (*ContractError)(nil)
-
-func (e *ContractError) Error() string {
-	return e.Code + ": " + e.Message
-}
-
-func (e *ContractError) Unwrap() error {
-	return e.cause
-}
+type ContractError = shared.ContractError
 
 func NewError(code, message string, details map[string]any) *ContractError {
 	if details == nil {
@@ -39,7 +27,7 @@ func NewError(code, message string, details map[string]any) *ContractError {
 
 func WrapError(code, message string, cause error, details map[string]any) *ContractError {
 	err := NewError(code, message, details)
-	err.cause = cause
+	err.Cause = cause
 	return err
 }
 

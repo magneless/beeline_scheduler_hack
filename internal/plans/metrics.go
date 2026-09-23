@@ -11,6 +11,9 @@ func calculateMetrics(routes []contracts.Route, unassigned []contracts.Unassigne
 	distanceByEngineer := make(map[string]int64)
 	used := make(map[string]struct{})
 	for _, route := range routes {
+		if _, ok := distanceByEngineer[route.EngineerID]; !ok {
+			distanceByEngineer[route.EngineerID] = 0
+		}
 		if len(route.Visits) > 0 || len(route.Legs) > 0 {
 			used[route.EngineerID] = struct{}{}
 		}

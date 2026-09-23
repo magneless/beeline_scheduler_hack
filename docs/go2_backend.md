@@ -1,5 +1,7 @@
 # Go-2: запуск и интеграция
 
+> Этот документ описывает изолированный режим Go-2. В ветке `integration` Go-3 и Go-4 уже подключены; актуальный совместный запуск описан в [integration.md](integration.md).
+
 Реализованы PostgreSQL-хранилище, миграции, импорт синтетических CSV, девять методов HTTP API, редактирование инженеров, очередь запусков и атомарное сохранение результатов Go-4. Общие структуры находятся в `internal/contracts`.
 
 В текущем репозитории нет настоящих Go-3/Go-4. Сервер требует явного `DEPENDENCY_MODE=stub`. В этом режиме координаты искусственные, а импортированные наборы получают допустимый пустой план с причиной `NOT_ASSIGNED_BY_SOLVER` и предупреждением `DEVELOPMENT_STUB`. Дорожные маршруты и оптимизация не вычисляются. Набор `contract-example` воспроизводит пример первого плана, отмену и четыре последовательных изменения статуса из контрактов. Другие события принимаются инфраструктурой, но неподдерживаемая заглушкой команда заканчивается `Run.status=failed`. Это не ограничение HTTP-интерфейса: для полного поведения нужно подключить реальный `PlanService`.
@@ -13,7 +15,7 @@ PowerShell:
 ```powershell
 Copy-Item .env.example .env
 # При необходимости измените POSTGRES_PASSWORD в .env.
-docker compose up -d --wait
+docker compose up -d --wait postgres
 $env:DATABASE_URL = 'postgres://scheduler:change-me-local@localhost:5432/scheduler?sslmode=disable'
 $env:DEPENDENCY_MODE = 'stub'
 $env:HTTP_ADDR = '127.0.0.1:8080'

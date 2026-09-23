@@ -6,23 +6,6 @@ import (
 	"time"
 )
 
-type Location struct {
-	ID      string `json:"id"`
-	Address string `json:"address"`
-	Point   Point  `json:"point"`
-}
-type LocationInput struct {
-	ID      string `json:"id"`
-	Address string `json:"address"`
-	Point   *Point `json:"point"`
-}
-type Issue struct {
-	SourceRow *int    `json:"source_row"`
-	EntityID  *string `json:"entity_id"`
-	Field     *string `json:"field"`
-	Code      string  `json:"code"`
-	Message   string  `json:"message"`
-}
 type Snapshot struct {
 	ScenarioID       string     `json:"scenario_id"`
 	Revision         int64      `json:"revision"`
@@ -147,18 +130,7 @@ type PlanService interface {
 	Build(context.Context, BuildPlanRequest) (PlanResult, error)
 	Replan(context.Context, ReplanRequest) (PlanResult, error)
 }
-type GeocodeRequest struct {
-	RegionID  string          `json:"region_id"`
-	Locations []LocationInput `json:"locations"`
-}
-type GeocodeItem struct {
-	LocationID string    `json:"location_id"`
-	Location   *Location `json:"location"`
-	Issue      *Issue    `json:"issue"`
-}
-type GeocodeResult struct {
-	Items []GeocodeItem `json:"items"`
-}
+type GeocodeItem = GeocodeResultItem
 type Geocoder interface {
 	Geocode(context.Context, GeocodeRequest) (GeocodeResult, error)
 }

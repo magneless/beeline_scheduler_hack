@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useOpenDemoRegion } from 'features/openDemoRegion';
 import { getDemoDatasets } from 'shared/api';
+import { env } from 'shared/config/env';
 import { regionLabel } from 'shared/lib/config';
 
 import { useDispatcherWorkspaceStore } from './store';
@@ -22,16 +23,14 @@ export const useRegionSwitcher = (currentRegionId?: string) => {
     const datasetsQuery = useQuery({
         queryKey: ['demo-datasets'],
         queryFn: getDemoDatasets,
-        initialData: { items: fallbackDatasets },
+        initialData:
+            env.apiMode === 'mock' ? { items: fallbackDatasets } : undefined,
     });
     const openRegion = useOpenDemoRegion({
         errorFallback: workspaceCopy.regionSwitchError,
     });
 
-    const datasets =
-        datasetsQuery.data.items.length > 0
-            ? datasetsQuery.data.items
-            : fallbackDatasets;
+    const datasets = datasetsQuery.data?.items ?? [];
 
     const switchRegion = (regionId: string) => {
         if (!regionId || regionId === currentRegionId) {
@@ -39,7 +38,10 @@ export const useRegionSwitcher = (currentRegionId?: string) => {
         }
 
         resetSelection();
-        openRegion.open(regionId);
+        const dataset = datasets.find((item) => item.region_id === regionId);
+        if (dataset) {
+            openRegion.open(dataset.id);
+        }
     };
 
     return {

@@ -9,8 +9,8 @@
         "preview": "vite preview",
         "lint": "eslint \"./src/**/*.{js,jsx,ts,tsx}\" --no-error-on-unmatched-pattern --no-warn-ignored --max-warnings=0",
         "lint:fix": "eslint --fix \"./src/**/*.{js,jsx,ts,tsx}\" --no-warn-ignored",
-        "lint:styles": "stylelint './src/**/*.module.scss' --max-warnings=0",
-        "lint:styles:fix": "stylelint './src/**/*.module.scss' --fix",
+        "lint:styles": "stylelint \"./src/**/*.module.scss\" --max-warnings=0",
+        "lint:styles:fix": "stylelint \"./src/**/*.module.scss\" --fix",
         "prepare": "cd .. && husky client/.husky"
     },
     "dependencies": {

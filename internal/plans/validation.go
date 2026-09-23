@@ -54,10 +54,16 @@ func validateSnapshot(snapshot contracts.Snapshot, scenarioID string, revision i
 		if order.Priority != contracts.PriorityNormal && order.Priority != contracts.PriorityUrgent {
 			return contracts.InvalidInput("invalid order priority", map[string]any{"order_id": order.ID, "priority": order.Priority})
 		}
-		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusCancelled {
+		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusCancelled && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute && order.Status != contracts.OrderStatusInProgress && order.Status != contracts.OrderStatusCompleted {
 			return contracts.InvalidInput("invalid order status", map[string]any{"order_id": order.ID, "status": order.Status})
 		}
 		orders[order.ID] = struct{}{}
+		if order.Status == contracts.OrderStatusActive && order.Execution != nil {
+			return contracts.InvalidInput("active order has execution", nil)
+		}
+		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusCancelled && order.Execution == nil {
+			return contracts.InvalidInput("execution is required for status", nil)
+		}
 	}
 	engineers := make(map[string]struct{}, len(snapshot.Engineers))
 	for _, engineer := range snapshot.Engineers {
@@ -164,6 +170,7 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 		}
 		cursorLocation := route.StartLocationID
 		cursorTime := state.AvailableFrom
+		stock := cloneEquipment(state.EquipmentAvailable)
 		for index, visit := range route.Visits {
 			order, exists := orders[visit.OrderID]
 			if !exists {
@@ -179,6 +186,12 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 				return contracts.InvalidPlan("engineer transport does not match order", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
 			leg := route.Legs[index]
+			for kind, amount := range order.EquipmentRequired {
+				stock[kind] -= amount
+				if stock[kind] < 0 {
+					return contracts.InvalidPlan("planner exceeded equipment balance", nil)
+				}
+			}
 			if leg.ID == "" {
 				return contracts.InvalidPlan("leg id is required", map[string]any{"engineer_id": engineer.ID, "sequence": index})
 			}
@@ -189,7 +202,7 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 			if leg.FromLocationID != cursorLocation || leg.ToLocationID != order.LocationID {
 				return contracts.InvalidPlan("leg endpoints do not match route sequence", map[string]any{"leg_id": leg.ID})
 			}
-			if leg.StartAt.Before(cursorTime) || !leg.EndAt.Equal(visit.ArrivalAt) || leg.EndAt.Before(leg.StartAt) {
+			if leg.StartAt.Before(cursorTime) || leg.StartAt.Before(order.ReceivedAt) || visit.StartAt.Before(order.ReceivedAt) || !leg.EndAt.Equal(visit.ArrivalAt) || leg.EndAt.Before(leg.StartAt) {
 				return contracts.InvalidPlan("leg times do not match visit arrival", map[string]any{"leg_id": leg.ID})
 			}
 			if len(leg.Geometry) != 0 {

@@ -60,8 +60,8 @@ type RoutesRequestLeg struct {
 
 // RoutesRequest is a request to build route geometry for a set of legs.
 type RoutesRequest struct {
-	GeoContextID string      `json:"geo_context_id"`
-	Locations    []Location  `json:"locations"`
+	GeoContextID string             `json:"geo_context_id"`
+	Locations    []Location         `json:"locations"`
 	Legs         []RoutesRequestLeg `json:"legs"`
 }
 

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useImportOrders } from 'features/importOrders';
 import { useOpenDemoRegion } from 'features/openDemoRegion';
 import { type DemoDataset, getDemoDatasets } from 'shared/api';
+import { env } from 'shared/config/env';
 
 import { demoRegions, setupCopy } from '../lib/config';
 
@@ -10,7 +11,8 @@ export const useScenarioSetup = () => {
     const datasetsQuery = useQuery({
         queryKey: ['demo-datasets'],
         queryFn: getDemoDatasets,
-        initialData: { items: [...demoRegions] },
+        initialData:
+            env.apiMode === 'mock' ? { items: [...demoRegions] } : undefined,
     });
 
     const openRegion = useOpenDemoRegion({
@@ -21,9 +23,7 @@ export const useScenarioSetup = () => {
         onSkippedRows: setupCopy.skippedRows,
     });
 
-    const datasets: DemoDataset[] = datasetsQuery.data.items.length
-        ? datasetsQuery.data.items
-        : [...demoRegions];
+    const datasets: DemoDataset[] = datasetsQuery.data?.items ?? [];
 
     return {
         datasets,

@@ -17,12 +17,15 @@ import (
 
 	c "github.com/magneless/beeline_scheduler_hack/internal/contracts"
 	"github.com/magneless/beeline_scheduler_hack/internal/data"
+	"github.com/magneless/beeline_scheduler_hack/internal/geo"
+	"github.com/magneless/beeline_scheduler_hack/internal/planner"
+	"github.com/magneless/beeline_scheduler_hack/internal/plans"
 	"github.com/magneless/beeline_scheduler_hack/internal/runs"
 	"github.com/magneless/beeline_scheduler_hack/internal/storage"
 	"github.com/magneless/beeline_scheduler_hack/internal/testkit"
 )
 
-func integrationServer(t *testing.T) (http.Handler, *storage.Store, testkit.Fixture) {
+func integrationServer(t *testing.T, integrated ...bool) (http.Handler, *storage.Store, testkit.Fixture) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -55,7 +58,17 @@ func integrationServer(t *testing.T) (http.Handler, *storage.Store, testkit.Fixt
 	api := &Server{Store: s, Importer: &data.Importer{Geo: testkit.Geocoder{}, Root: "../../datasets/original", Prepared: map[string]c.Snapshot{"contract-example": f.Snapshot}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	w := runs.Worker{Store: s, Plans: &testkit.Plans{Reader: s, Fixture: f}, Timeout: time.Second * 5}
+	var planService c.PlanService = &testkit.Plans{Reader: s, Fixture: f}
+	if len(integrated) > 0 && integrated[0] {
+		g := geo.NewGeoService(&geo.DemoProvider{})
+		api.Importer.Geo = g
+		service, err := plans.New(s, g, planner.NewBaseline(), plans.Options{TimeLimitMS: 1000, Mode: c.SolveModeBaseline})
+		if err != nil {
+			t.Fatal(err)
+		}
+		planService = service
+	}
+	w := runs.Worker{Store: s, Plans: planService, Timeout: time.Second * 5}
 	go func() { defer close(done); w.Serve(ctx) }()
 	t.Cleanup(func() { cancel(); <-done })
 	return api.Handler(), s, f

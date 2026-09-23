@@ -15,7 +15,7 @@ import {
     SelectValue,
 } from 'shared/ui/select';
 
-import { demoRegions, setupCopy } from '../lib/config';
+import { setupCopy } from '../lib/config';
 
 type SetupImportBarProps = {
     datasets: DemoDataset[];
@@ -30,16 +30,23 @@ export const SetupImportBar = ({
     isImporting,
     onImport,
 }: SetupImportBarProps) => {
-    const [regionId, setRegionId] = useState(
-        datasets[0]?.region_id ?? demoRegions[0].region_id
-    );
-    const [date, setDate] = useState(datasets[0]?.date ?? demoRegions[0].date);
+    const [selectedRegionId, setRegionId] = useState('');
+    const [selectedDate, setDate] = useState('');
+    const regionId = selectedRegionId || datasets[0]?.region_id || '';
+    const date =
+        selectedDate ||
+        datasets.find((d) => d.region_id === regionId)?.date ||
+        '';
     const [file, setFile] = useState<TypeOrNull<File>>(null);
     const uploadLabel = isImporting
         ? setupCopy.uploadPending
         : (file?.name ?? setupCopy.uploadIdle);
 
     const submitFile = (next: File) => {
+        if (!regionId || !date) {
+            toast.error('Выберите район и дату');
+            return;
+        }
         onImport({
             file: next,
             regionId,

@@ -15,7 +15,10 @@ import (
 	_ "time/tzdata"
 
 	"github.com/magneless/beeline_scheduler_hack/internal/data"
+	"github.com/magneless/beeline_scheduler_hack/internal/geo"
 	"github.com/magneless/beeline_scheduler_hack/internal/httpapi"
+	"github.com/magneless/beeline_scheduler_hack/internal/planner"
+	"github.com/magneless/beeline_scheduler_hack/internal/plans"
 	"github.com/magneless/beeline_scheduler_hack/internal/runs"
 	"github.com/magneless/beeline_scheduler_hack/internal/storage"
 	"github.com/magneless/beeline_scheduler_hack/internal/testkit"
@@ -40,8 +43,9 @@ func run() error {
 	if url == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	if os.Getenv("DEPENDENCY_MODE") != "stub" {
-		return fmt.Errorf("Go-3/Go-4 are not implemented in this repository; set DEPENDENCY_MODE=stub explicitly for development")
+	mode := env("DEPENDENCY_MODE", "integrated-demo")
+	if mode != "stub" && mode != "integrated-demo" {
+		return fmt.Errorf("DEPENDENCY_MODE must be integrated-demo or stub")
 	}
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -67,7 +71,17 @@ func run() error {
 	}
 	importer := &data.Importer{Geo: testkit.Geocoder{}, Root: env("DATASET_DIR", "datasets/original"), Prepared: map[string]c.Snapshot{"contract-example": fixture.Snapshot}}
 	api := &httpapi.Server{Store: store, Importer: importer}
-	worker := &runs.Worker{Store: store, Plans: &testkit.Plans{Reader: store, Fixture: fixture}, Timeout: 2 * time.Minute}
+	var planService c.PlanService = &testkit.Plans{Reader: store, Fixture: fixture}
+	if mode == "integrated-demo" {
+		geodata := geo.NewGeoService(&geo.DemoProvider{})
+		importer.Geo = geodata
+		service, err := plans.New(store, geodata, planner.NewBaseline(), plans.Options{TimeLimitMS: 1000, Mode: c.SolveModeBaseline, Issues: []c.Issue{{Code: "DEMO_GEO", Message: "Координаты демонстрационные; поездки рассчитаны по прямой"}}})
+		if err != nil {
+			return err
+		}
+		planService = service
+	}
+	worker := &runs.Worker{Store: store, Plans: planService, Timeout: 2 * time.Minute}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() { defer wg.Done(); worker.Serve(ctx) }()
@@ -76,7 +90,7 @@ func run() error {
 	server := &http.Server{Addr: env("HTTP_ADDR", "127.0.0.1:8080"), Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	done := make(chan error, 1)
 	go func() {
-		slog.Warn("development substitutes enabled: artificial coordinates and fixture plans")
+		slog.Warn("integration mode", "mode", mode, "geodata", "synthetic demo coordinates and straight-line routes", "solver", "baseline")
 		slog.Info("HTTP listening", "address", server.Addr)
 		done <- server.ListenAndServe()
 	}()

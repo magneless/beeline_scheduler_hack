@@ -16,7 +16,7 @@ CMD ["pnpm", "dev", "--host", "0.0.0.0", "--port", "3000"]
 
 FROM deps AS build
 COPY . .
-ARG VITE_API_MODE=mock
+ARG VITE_API_MODE=live
 ARG VITE_API_URL=/api/v1
 ARG VITE_YANDEX_MAPS_KEY=
 ENV VITE_API_MODE=$VITE_API_MODE \

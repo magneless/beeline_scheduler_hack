@@ -1,4 +1,27 @@
 services:
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgres://scheduler:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/scheduler?sslmode=disable
+      HTTP_ADDR: 0.0.0.0:8080
+      DEPENDENCY_MODE: integrated-demo
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+  client:
+    build:
+      context: ./client
+      target: preview
+      args:
+        VITE_API_MODE: live
+        VITE_API_URL: /api/v1
+        VITE_YANDEX_MAPS_KEY: ${VITE_YANDEX_MAPS_KEY:-}
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:80"
   postgres:
     image: postgres:17
     environment:

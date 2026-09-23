@@ -1,6 +1,7 @@
 import { MapPin } from 'lucide-react';
 
 import { type DemoDataset } from 'shared/api';
+import { env } from 'shared/config/env';
 import { cn, formatCount } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 
@@ -13,7 +14,7 @@ type RegionCardProps = {
 };
 
 export const RegionCard = ({ dataset, disabled, onOpen }: RegionCardProps) => {
-    const meta = regionMeta[dataset.id];
+    const meta = env.apiMode === 'mock' ? regionMeta[dataset.id] : undefined;
 
     const handleOpen = () => {
         onOpen(dataset);
@@ -38,7 +39,9 @@ export const RegionCard = ({ dataset, disabled, onOpen }: RegionCardProps) => {
                         'rounded-full bg-primary text-2xl font-extrabold'
                     )}
                 >
-                    {String(meta?.orders ?? 0).padStart(2, '0')}
+                    {meta
+                        ? String(meta.orders).padStart(2, '0')
+                        : dataset.date.slice(8)}
                 </span>
                 <span
                     className={cn(
@@ -46,7 +49,7 @@ export const RegionCard = ({ dataset, disabled, onOpen }: RegionCardProps) => {
                         'text-muted-foreground uppercase'
                     )}
                 >
-                    {meta?.index}
+                    {meta?.index ?? dataset.date}
                 </span>
             </span>
             <strong className="mt-5 block text-2xl font-extrabold tracking-tight">
@@ -54,15 +57,19 @@ export const RegionCard = ({ dataset, disabled, onOpen }: RegionCardProps) => {
             </strong>
             <span className="mt-1.5 flex items-center gap-1.5 text-sm font-normal text-muted-foreground">
                 <MapPin className="size-3.5 shrink-0" />
-                <span className="truncate">{meta?.office}</span>
+                <span className="truncate">
+                    {meta?.office ?? dataset.timezone}
+                </span>
             </span>
             <span className="mt-5 flex items-center justify-between gap-2">
                 <span className="rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold">
-                    {formatCount(meta?.crews ?? 0, [
-                        'бригада',
-                        'бригады',
-                        'бригад',
-                    ])}
+                    {meta
+                        ? formatCount(meta.crews, [
+                              'бригада',
+                              'бригады',
+                              'бригад',
+                          ])
+                        : 'Открыть сценарий'}
                 </span>
                 <span
                     className={cn(
@@ -70,7 +77,7 @@ export const RegionCard = ({ dataset, disabled, onOpen }: RegionCardProps) => {
                         'leading-snug text-muted-foreground'
                     )}
                 >
-                    {meta?.tone}
+                    {meta?.tone ?? 'Синтетический набор'}
                 </span>
             </span>
         </Button>

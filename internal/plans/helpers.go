@@ -22,6 +22,11 @@ func cloneOrders(values []contracts.Order) []contracts.Order {
 	for i, value := range values {
 		result[i] = value
 		result[i].RequiredSkills = append([]string(nil), value.RequiredSkills...)
+		result[i].EquipmentRequired = cloneEquipment(value.EquipmentRequired)
+		if value.Execution != nil {
+			copy := *value.Execution
+			result[i].Execution = &copy
+		}
 	}
 	return result
 }
@@ -31,6 +36,7 @@ func cloneEngineers(values []contracts.Engineer) []contracts.Engineer {
 	for i, value := range values {
 		result[i] = value
 		result[i].Skills = append([]string(nil), value.Skills...)
+		result[i].EquipmentStock = cloneEquipment(value.EquipmentStock)
 	}
 	return result
 }
@@ -53,6 +59,9 @@ func cloneSolveRequest(value contracts.SolveRequest) contracts.SolveRequest {
 	value.Orders = cloneOrders(value.Orders)
 	value.Engineers = cloneEngineers(value.Engineers)
 	value.EngineerStates = append([]contracts.EngineerState(nil), value.EngineerStates...)
+	for i := range value.EngineerStates {
+		value.EngineerStates[i].EquipmentAvailable = cloneEquipment(value.EngineerStates[i].EquipmentAvailable)
+	}
 	value.AlreadyUsedEngineerIDs = append([]string(nil), value.AlreadyUsedEngineerIDs...)
 	value.TravelMatrix = cloneMatrix(value.TravelMatrix)
 	return value
@@ -91,7 +100,7 @@ func activeValidOrders(snapshot contracts.Snapshot) []contracts.Order {
 	}
 	result := make([]contracts.Order, 0, len(snapshot.Orders))
 	for _, order := range snapshot.Orders {
-		if order.Status != contracts.OrderStatusActive {
+		if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute {
 			continue
 		}
 		if _, exists := invalid[order.ID]; exists {

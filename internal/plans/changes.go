@@ -9,6 +9,9 @@ import (
 func calculateChanges(before, after []contracts.Route, cancelled map[string]struct{}) []contracts.PlanChange {
 	beforeAssignments := assignments(before)
 	afterAssignments := assignments(after)
+	for id := range cancelled {
+		delete(afterAssignments, id)
+	}
 	orderIDs := make(map[string]struct{}, len(beforeAssignments)+len(afterAssignments)+len(cancelled))
 	for id := range beforeAssignments {
 		orderIDs[id] = struct{}{}
