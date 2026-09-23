@@ -130,3 +130,13 @@ export const engineerSkillOptions = [
     'optical',
     'local',
 ] as const;
+
+export const workTypeAppearance: Record<
+    WorkType,
+    { background: string; foreground: string }
+> = {
+    connection: { background: '#ffcc00', foreground: '#1a1a1a' },
+    repair: { background: '#1a1a1a', foreground: '#ffffff' },
+    emergency: { background: '#e30611', foreground: '#ffffff' },
+    additional: { background: '#73736c', foreground: '#ffffff' },
+};

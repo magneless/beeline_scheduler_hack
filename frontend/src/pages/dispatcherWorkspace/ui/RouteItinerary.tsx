@@ -1,14 +1,10 @@
 import { ArrowRight, Navigation } from 'lucide-react';
 
 import { type Plan, type Snapshot } from 'shared/api';
-import { workTypeLabel } from 'shared/lib/config';
-import {
-    displayEngineer,
-    formatClock,
-    formatCount,
-    formatKm,
-} from 'shared/lib/utils';
+import { workTypeAppearance } from 'shared/lib/config';
+import { formatClock, formatCount, formatKm } from 'shared/lib/utils';
 
+import { WorkTypeBadge } from './WorkTypeBadge';
 import { routeColor } from '../lib/routeColors';
 
 type Props = {
@@ -38,7 +34,7 @@ export const RouteItinerary = ({
         )?.distance_m ?? 0;
     if (!route?.visits.length) {
         return (
-            <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 text-sm text-slate-500">
+            <div className="shrink-0 border-t border-border bg-white px-5 py-4 text-sm text-muted-foreground">
                 У этой бригады пока нет визитов в плане.
             </div>
         );
@@ -46,20 +42,17 @@ export const RouteItinerary = ({
     return (
         <section
             aria-label="Порядок визитов"
-            className="shrink-0 border-t border-slate-200 bg-white px-5 py-4"
+            className="shrink-0 border-t border-border bg-white px-5 py-4"
         >
             <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <Navigation
                         className="size-4"
                         style={{ color: routeColor(engineerId) }}
                     />
-                    Порядок визитов{' '}
-                    <span className="font-normal text-slate-400">
-                        / {displayEngineer(engineerId)}
-                    </span>
+                    Порядок визитов
                 </h2>
-                <span className="shrink-0 text-xs text-slate-500">
+                <span className="shrink-0 text-xs text-muted-foreground">
                     {formatCount(route.visits.length, [
                         'визит',
                         'визита',
@@ -72,8 +65,8 @@ export const RouteItinerary = ({
                 className="flex gap-2 overflow-x-auto pb-1"
                 aria-label="Остановки маршрута"
             >
-                <li className="flex w-28 shrink-0 items-center gap-2 text-xs text-slate-500">
-                    <span className="rounded-[8px] bg-slate-100 px-3 py-2 font-medium">
+                <li className="flex w-28 shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-[8px] bg-muted px-3 py-2 font-medium">
                         Офис
                         <br />
                         <span className="font-normal">
@@ -88,44 +81,50 @@ export const RouteItinerary = ({
                         ? locations.get(order.location_id)?.address
                         : undefined;
                     const active = selectedOrderId === visit.order_id;
+                    const appearance = order
+                        ? workTypeAppearance[order.work_type]
+                        : undefined;
                     return (
-                        <li key={visit.order_id} className="w-56 shrink-0">
+                        <li key={visit.order_id} className="w-64 shrink-0">
                             <button
                                 type="button"
                                 data-stop-order={visit.order_id}
                                 aria-pressed={active}
+                                style={{
+                                    borderTopColor: appearance?.background,
+                                }}
                                 onClick={() => onSelect(visit.order_id)}
                                 className={[
-                                    'h-full w-full rounded-[12px] border p-3 text-left transition-colors',
+                                    'h-full w-full rounded-[12px] border border-t-[3px] p-3',
+                                    'text-left transition-colors',
                                     active
-                                        ? 'border-blue-300 bg-blue-50'
-                                        : 'border-slate-200 bg-white hover:bg-slate-50',
+                                        ? 'border-primary bg-accent'
+                                        : 'border-border bg-white hover:bg-background',
                                 ].join(' ')}
                             >
                                 <span className="mb-2 flex items-center gap-2">
                                     <span
                                         className={[
-                                            'flex size-6 items-center justify-center rounded-full',
+                                            'flex size-6 shrink-0 items-center justify-center rounded-full',
                                             'text-xs font-bold text-white',
                                         ].join(' ')}
                                         style={{
-                                            background: routeColor(engineerId),
+                                            background: appearance?.background,
+                                            color: appearance?.foreground,
                                         }}
                                     >
                                         {index + 1}
                                     </span>
-                                    <strong className="text-xs text-slate-800">
+                                    {order ? (
+                                        <WorkTypeBadge type={order.work_type} />
+                                    ) : null}
+                                    <strong className="ml-auto whitespace-nowrap text-xs text-foreground">
                                         {formatClock(visit.start_at, timezone)}–
                                         {formatClock(visit.end_at, timezone)}
                                     </strong>
-                                    <span className="ml-auto text-[10px] text-slate-500">
-                                        {order
-                                            ? workTypeLabel[order.work_type]
-                                            : 'Визит'}
-                                    </span>
                                 </span>
                                 <span
-                                    className="line-clamp-2 text-xs leading-relaxed text-slate-600"
+                                    className="line-clamp-2 text-xs leading-relaxed text-muted-foreground"
                                     title={address}
                                 >
                                     {address?.replace(

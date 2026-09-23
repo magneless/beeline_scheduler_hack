@@ -1,5 +1,7 @@
 import L from 'leaflet';
 
+import { workTypeAppearance } from 'shared/lib/config';
+
 import {
     type MapAdapter,
     type MapMarker,
@@ -12,10 +14,10 @@ import 'leaflet/dist/leaflet.css';
 
 const COLORS: Record<string, string> = {
     office: '#27332f',
-    emergency: '#d64545',
-    connection: '#3578c4',
-    repair: '#7b61a8',
-    additional: '#7d8b85',
+    emergency: workTypeAppearance.emergency.background,
+    connection: workTypeAppearance.connection.background,
+    repair: workTypeAppearance.repair.background,
+    additional: workTypeAppearance.additional.background,
     gold: '#277a62',
     ice: '#3578c4',
     lime: '#a57716',
@@ -64,6 +66,12 @@ const markerVisual = (m: MapMarker, selected: boolean) => {
         .filter(Boolean)
         .join(' ');
     icon.style.setProperty('--marker-color', color);
+    icon.style.setProperty(
+        '--marker-foreground',
+        m.sequence && m.tone === 'connection'
+            ? workTypeAppearance.connection.foreground
+            : '#ffffff'
+    );
     icon.style.width = `${size}px`;
     icon.style.height = `${size}px`;
     icon.textContent =

@@ -89,7 +89,7 @@ export const OrderPanel = ({
                         value={panel.query}
                         placeholder={workspaceCopy.orderSearch}
                         aria-label="Поиск заявок"
-                        className="h-8 bg-slate-50 pl-8 text-xs"
+                        className="h-8 bg-background pl-8 text-xs"
                         onChange={panel.handleQueryChange}
                     />
                 </div>

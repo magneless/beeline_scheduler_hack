@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
 
 import { type Plan, type Snapshot } from 'shared/api/types/contracts';
-import { workTypeLabel } from 'shared/lib/config';
+import { workTypeAppearance, workTypeLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
 import { type MapMarker, type MapPolyline } from 'shared/ui/map';
 
@@ -90,7 +90,7 @@ export const buildMapModel = (
             ),
             tone: order.work_type,
             color: selectedEngineerId
-                ? routeColor(selectedEngineerId)
+                ? workTypeAppearance[order.work_type].background
                 : undefined,
             sequence: sequenceByOrder.get(order.id),
             muted: !selectedEngineerId && !unassigned.has(order.id),

@@ -11,6 +11,7 @@ import { WorkspaceAlerts } from './WorkspaceAlerts';
 import { WorkspaceScheduleDock } from './WorkspaceScheduleDock';
 import { WorkspaceSidePanel } from './WorkspaceSidePanel';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
+import { WorkTypeBadge } from './WorkTypeBadge';
 import { routeColor } from '../lib/routeColors';
 import { useDispatcherWorkspace } from '../model/useDispatcherWorkspace';
 
@@ -24,7 +25,7 @@ export const DispatcherWorkspacePage = () => {
         <section
             className={[
                 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
-                'rounded-[16px] border border-slate-200 bg-white',
+                'rounded-[16px] border border-border bg-white',
             ].join(' ')}
         >
             <WorkspaceTopbar
@@ -106,11 +107,11 @@ export const DispatcherWorkspacePage = () => {
                     <div
                         className={[
                             'flex shrink-0 items-center justify-between gap-3 border-b',
-                            'border-slate-200 bg-white px-5 py-3',
+                            'border-border bg-white px-5 py-3',
                         ].join(' ')}
                     >
                         <div className="min-w-0">
-                            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                                 {focused ? (
                                     <span
                                         className="size-2.5 shrink-0 rounded-full"
@@ -119,7 +120,7 @@ export const DispatcherWorkspacePage = () => {
                                         }}
                                     />
                                 ) : (
-                                    <MapPin className="size-4 text-slate-400" />
+                                    <MapPin className="size-4 text-muted-foreground" />
                                 )}
                                 {focused
                                     ? `Маршрут · ${displayEngineer(focused)}`
@@ -127,26 +128,24 @@ export const DispatcherWorkspacePage = () => {
                                       ? 'Заявки без бригады'
                                       : 'Обзор района'}
                             </h2>
-                            <p className="mt-1 text-xs text-slate-500">
-                                {focused
-                                    ? 'Номера на карте — порядок визитов. Нажмите на остановку для действий.'
-                                    : unassignedOnly
-                                      ? 'Выберите заявку, чтобы посмотреть причину и доступные действия.'
-                                      : 'Выберите бригаду слева, чтобы увидеть её маршрут.'}
-                            </p>
                         </div>
                         {focused || unassignedOnly ? (
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="shrink-0 rounded-[8px] text-slate-500"
+                                className="shrink-0 rounded-[8px] text-muted-foreground"
                                 onClick={workspace.handleClearCrew}
                             >
                                 <ArrowLeft className="size-3.5" />
                                 Обзор района
                             </Button>
                         ) : (
-                            <div className="hidden shrink-0 items-center gap-3 text-[11px] text-slate-500 lg:flex">
+                            <div
+                                className={[
+                                    'hidden shrink-0 items-center gap-3 text-[11px]',
+                                    'text-muted-foreground lg:flex',
+                                ].join(' ')}
+                            >
                                 <span className="flex items-center gap-1.5">
                                     <i className="size-2 rounded-full bg-slate-400" />
                                     В плане
@@ -158,6 +157,17 @@ export const DispatcherWorkspacePage = () => {
                             </div>
                         )}
                     </div>
+                    {focused ? (
+                        <div
+                            aria-label="Типы работ на карте"
+                            className="flex shrink-0 flex-wrap gap-2 border-b border-border bg-white px-5 py-2"
+                        >
+                            <WorkTypeBadge type="connection" />
+                            <WorkTypeBadge type="repair" />
+                            <WorkTypeBadge type="emergency" />
+                            <WorkTypeBadge type="additional" />
+                        </div>
+                    ) : null}
                     <div
                         className="relative min-h-[240px] min-w-0 flex-1"
                         data-map-mode={focused ? 'route' : 'overview'}

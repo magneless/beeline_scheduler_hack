@@ -27,12 +27,14 @@ export const WorkspaceAlerts = ({
     buildErrorMessage,
     onRetryBuild,
 }: WorkspaceAlertsProps) => (
-    <div className="shrink-0 border-t border-slate-200 bg-slate-50/60 px-4 py-2">
+    <div className="shrink-0 border-t border-border bg-background/60 px-4 py-2">
         {issues.length ? (
             <details className="group text-xs">
-                <summary className="cursor-pointer py-2 text-slate-500 hover:text-slate-900">
+                <summary className="cursor-pointer py-2 text-muted-foreground hover:text-foreground">
                     Замечания к данным{' '}
-                    <span className="ml-1 text-slate-400">{issues.length}</span>
+                    <span className="ml-1 text-muted-foreground">
+                        {issues.length}
+                    </span>
                 </summary>
                 <div className="max-h-60 overflow-y-auto">
                     <IssuesBanner issues={issues} onSelect={onSelectOrder} />
@@ -41,9 +43,9 @@ export const WorkspaceAlerts = ({
         ) : null}
         {changes.length ? (
             <details className="text-xs">
-                <summary className="cursor-pointer py-2 text-slate-500 hover:text-slate-900">
+                <summary className="cursor-pointer py-2 text-muted-foreground hover:text-foreground">
                     Последние изменения{' '}
-                    <span className="ml-1 text-slate-400">
+                    <span className="ml-1 text-muted-foreground">
                         {changes.length}
                     </span>
                 </summary>

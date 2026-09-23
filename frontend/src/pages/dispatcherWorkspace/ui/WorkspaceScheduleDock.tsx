@@ -24,7 +24,7 @@ export const WorkspaceScheduleDock = ({
     onSelectEngineer,
 }: WorkspaceScheduleDockProps) => (
     <div
-        className="shrink-0 overflow-hidden border-t border-slate-200 bg-white"
+        className="shrink-0 overflow-hidden border-t border-border bg-white"
         aria-label="Расписание бригад"
     >
         <div className="overflow-visible bg-white">

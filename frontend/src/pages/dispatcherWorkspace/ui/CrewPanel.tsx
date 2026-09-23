@@ -82,8 +82,8 @@ export const CrewPanel = ({
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 space-y-2 px-3">
-                <details className="rounded-[12px] border border-slate-200 bg-white p-2 text-xs text-slate-600">
-                    <summary className="cursor-pointer select-none font-medium text-slate-700">
+                <details className="rounded-[12px] border border-border bg-white p-2 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer select-none font-medium text-foreground">
                         Управление бригадами
                     </summary>
                     <div className="mt-2 rounded-[8px] border border-amber-200 bg-amber-50 p-2 text-amber-900">
@@ -151,7 +151,7 @@ export const CrewPanel = ({
                         value={panel.query}
                         placeholder={workspaceCopy.crewSearch}
                         aria-label="Поиск бригад"
-                        className="h-8 bg-slate-50 pl-8 text-xs"
+                        className="h-8 bg-background pl-8 text-xs"
                         onChange={panel.handleQueryChange}
                     />
                 </div>

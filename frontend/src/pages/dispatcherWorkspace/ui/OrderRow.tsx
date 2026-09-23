@@ -75,10 +75,10 @@ export const OrderRow = ({
             className={cn(
                 'rounded-[12px] border px-3 py-2.5',
                 active
-                    ? 'border-blue-200 bg-blue-50'
+                    ? 'border-primary bg-accent'
                     : mine
-                      ? 'border-blue-100 bg-blue-50/50'
-                      : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
+                      ? 'border-blue-100 bg-accent/50'
+                      : 'border-transparent hover:border-border hover:bg-background'
             )}
         >
             <Button
@@ -96,7 +96,7 @@ export const OrderRow = ({
                 <span className="min-w-0 flex-1">
                     <span className="block">
                         {address ? (
-                            <span className="block line-clamp-2 text-sm font-semibold leading-snug text-slate-800">
+                            <span className="block line-clamp-2 text-sm font-semibold leading-snug text-foreground">
                                 {address.replace(
                                     /^(?:г\.?\s*)?(?:Город\s+)?Москва,?\s*/i,
                                     ''
@@ -157,7 +157,7 @@ export const OrderRow = ({
                     ) : null}
                     {row.factors.length ? (
                         <details className="text-xs">
-                            <summary className="cursor-pointer py-1 text-slate-500">
+                            <summary className="cursor-pointer py-1 text-muted-foreground">
                                 Условия назначения
                             </summary>
                             <AssignmentFactors factors={row.factors} />

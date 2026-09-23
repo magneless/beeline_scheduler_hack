@@ -110,8 +110,8 @@ export const CrewRow = ({
             className={cn(
                 'rounded-[12px] border px-2.5 py-2',
                 active
-                    ? 'border-blue-200 bg-blue-50'
-                    : 'border-transparent hover:border-slate-200 hover:bg-slate-50'
+                    ? 'border-primary bg-accent'
+                    : 'border-transparent hover:border-border hover:bg-background'
             )}
         >
             <Button
@@ -151,25 +151,17 @@ export const CrewRow = ({
             </Button>
             {active ? (
                 <div className="mt-2 ml-[2.75rem] space-y-1.5">
-                    <span
-                        className={[
-                            'inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px]',
-                            'font-semibold text-blue-800',
-                        ].join(' ')}
-                    >
-                        На карте
-                    </span>
-                    <p className="text-[11px] text-muted-foreground">
-                        Смена {formatClock(engineer.shift.start, timezone)}–
-                        {formatClock(engineer.shift.end, timezone)}
-                    </p>
-                    <details className="rounded-[8px] border border-slate-200 bg-white px-2 py-1.5">
+                    <details className="rounded-[8px] border border-border bg-white px-2 py-1.5">
                         <summary
                             title={baselineLabel || undefined}
-                            className="cursor-pointer text-[11px] font-medium text-slate-600"
+                            className="cursor-pointer text-[11px] font-medium text-muted-foreground"
                         >
                             Параметры бригады
                         </summary>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                            Смена {formatClock(engineer.shift.start, timezone)}–
+                            {formatClock(engineer.shift.end, timezone)}
+                        </p>
                         <div className="mt-2 flex flex-wrap gap-1">
                             {engineer.skills.map((skill) => (
                                 <Badge

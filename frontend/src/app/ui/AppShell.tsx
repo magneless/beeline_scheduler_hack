@@ -21,11 +21,11 @@ export const AppShell = ({ children }: AppShellProps) => {
     const onMap = pathname.startsWith('/s/');
 
     return (
-        <div className="flex h-screen gap-2 bg-slate-100 p-2 max-sm:gap-1 max-sm:p-1">
+        <div className="flex h-screen gap-2 bg-muted p-2 max-sm:gap-1 max-sm:p-1">
             <aside
                 className={[
                     'flex w-14 shrink-0 flex-col items-center gap-3 rounded-[16px]',
-                    'border border-slate-200 bg-white py-3 max-sm:w-11',
+                    'border border-border bg-white py-3 max-sm:w-11',
                 ].join(' ')}
                 style={{ boxShadow: 'var(--shadow-soft)' }}
             >

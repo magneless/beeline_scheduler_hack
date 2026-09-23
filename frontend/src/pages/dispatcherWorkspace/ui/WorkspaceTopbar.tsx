@@ -55,7 +55,7 @@ export const WorkspaceTopbar = ({
         <header
             className={[
                 'relative z-30 flex shrink-0 flex-wrap items-center',
-                'justify-between gap-3 border-b border-slate-200 bg-white px-5',
+                'justify-between gap-3 border-b border-border bg-white px-5',
                 'py-4',
             ].join(' ')}
         >
@@ -63,7 +63,7 @@ export const WorkspaceTopbar = ({
                 <Button
                     size="icon"
                     variant="ghost"
-                    className="size-9 rounded-[8px] text-slate-500"
+                    className="size-9 rounded-[8px] text-muted-foreground"
                     onClick={onTogglePanel}
                     aria-label={
                         panelOpen
@@ -75,22 +75,22 @@ export const WorkspaceTopbar = ({
                     <PanelLeft className="size-5" />
                 </Button>
                 <div>
-                    <h1 className="text-lg leading-tight font-bold tracking-tight text-slate-900">
+                    <h1 className="text-lg leading-tight font-bold tracking-tight text-foreground">
                         Диспетчерская
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-muted-foreground">
                         {snapshot
                             ? `${regionLabel[snapshot.region_id] ?? snapshot.region_id} · ${formatDay(snapshot.date)}`
                             : 'Загрузка смены…'}
                     </p>
                 </div>
                 {metrics ? (
-                    <span className="ml-3 hidden border-l border-slate-200 pl-4 text-xs text-slate-500 xl:block">
-                        <strong className="font-semibold text-slate-800">
+                    <span className="ml-3 hidden border-l border-border pl-4 text-xs text-muted-foreground xl:block">
+                        <strong className="font-semibold text-foreground">
                             {metrics.assigned_count}
                         </strong>{' '}
                         в плане <span className="mx-2">·</span>
-                        <strong className="font-semibold text-slate-800">
+                        <strong className="font-semibold text-foreground">
                             {metrics.completed_count}
                         </strong>{' '}
                         выполнено
@@ -99,7 +99,10 @@ export const WorkspaceTopbar = ({
             </div>
             <div className="flex flex-wrap items-center gap-2">
                 {(buildPending || eventPending) && runStatus ? (
-                    <span role="status" className="text-xs text-slate-500">
+                    <span
+                        role="status"
+                        className="text-xs text-muted-foreground"
+                    >
                         {runStatusLabel[runStatus]}
                     </span>
                 ) : null}
@@ -109,7 +112,7 @@ export const WorkspaceTopbar = ({
                         variant="ghost"
                         disabled={buildPending || eventPending}
                         onClick={onRebuild}
-                        className="rounded-[8px] text-slate-600"
+                        className="rounded-[8px] text-muted-foreground"
                     >
                         <RotateCw className="size-3.5" />
                         {buildPending ? 'Считаем…' : 'Пересобрать'}
@@ -121,7 +124,7 @@ export const WorkspaceTopbar = ({
                     disabled={!metrics}
                     onClick={onToggleSchedule}
                     aria-pressed={scheduleOpen}
-                    className="rounded-[8px] border-slate-200"
+                    className="rounded-[8px] border-border"
                 >
                     <CalendarRange className="size-4" />
                     {scheduleOpen ? 'Скрыть расписание' : 'Расписание'}
