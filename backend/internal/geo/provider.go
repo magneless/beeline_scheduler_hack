@@ -35,3 +35,12 @@ type RouteProvider interface {
 type MatrixProvider interface {
 	RouteMatrix(ctx context.Context, points []contracts.Point, transport contracts.Transport) ([]RouteResult, error)
 }
+
+type AddressSearchResult struct {
+	Exact       []contracts.AddressCandidate
+	Suggestions []contracts.AddressCandidate
+}
+
+type AddressSearchProvider interface {
+	SearchAddress(context.Context, string) (AddressSearchResult, error)
+}

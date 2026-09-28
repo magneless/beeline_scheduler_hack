@@ -1,16 +1,27 @@
-import { apiGet, apiPost } from 'shared/api/instance/httpClient';
+import {
+    apiGet,
+    apiPost,
+    apiPostWithProgress,
+    type CalculationCallbacks,
+} from 'shared/api/instance/httpClient';
 import {
     type Plan,
     type PlanEvent,
+    type PlanProposal,
     type Run,
+    type Snapshot,
     type SolveMode,
 } from 'shared/api/types/contracts';
 import { type TypeOrNull } from 'shared/lib/types';
 
 import {
+    getAcceptProposalUrl,
     getBuildPlanUrl,
+    getComparePlansUrl,
+    getCurrentProposalUrl,
     getPlanEventsUrl,
     getPlanUrl,
+    getProposalsUrl,
     getRunUrl,
 } from '../../getUrl';
 
@@ -28,9 +39,64 @@ export const buildPlan = (input: {
         expected_current_plan_id: input.expectedCurrentPlanId,
     });
 
+export type PlanComparison = {
+    snapshot: Snapshot;
+    baseline: Plan;
+    optimized: Plan;
+};
+
+export const comparePlans = (
+    scenarioId: string,
+    currentPlanId: string,
+    callbacks?: CalculationCallbacks
+) =>
+    apiPostWithProgress<PlanComparison>(
+        getComparePlansUrl(scenarioId),
+        {
+            expected_current_plan_id: currentPlanId,
+        },
+        callbacks
+    );
+
 export const getRun = (runId: string) => apiGet<Run>(getRunUrl(runId));
 
 export const getPlan = (planId: string) => apiGet<Plan>(getPlanUrl(planId));
+
+export const createPlanProposal = (
+    input: {
+        scenarioId: string;
+        requestId: string;
+        snapshotRevision: number;
+        expectedCurrentPlanId: TypeOrNull<string>;
+        solveMode?: SolveMode;
+        event?: PlanEvent;
+    },
+    callbacks?: CalculationCallbacks
+) =>
+    apiPostWithProgress<PlanProposal>(
+        getProposalsUrl(input.scenarioId),
+        {
+            request_id: input.requestId,
+            snapshot_revision: input.snapshotRevision,
+            expected_current_plan_id: input.expectedCurrentPlanId,
+            solve_mode: input.solveMode,
+            ...(input.event ? { event: input.event } : {}),
+        },
+        callbacks
+    );
+
+export const getCurrentPlanProposal = (scenarioId: string) =>
+    apiGet<PlanProposal | null>(getCurrentProposalUrl(scenarioId));
+
+export const acceptPlanProposal = (input: {
+    proposalId: string;
+    requestId: string;
+    optionKey: string;
+}) =>
+    apiPost<Plan>(getAcceptProposalUrl(input.proposalId), {
+        request_id: input.requestId,
+        option_key: input.optionKey,
+    });
 
 export const postPlanEvent = (input: {
     planId: string;
@@ -56,6 +122,7 @@ export const waitForRun = async (
     onStatus?: (run: Run) => void
 ) => {
     const deadline = Date.now() + 6 * 60 * 1000;
+    let interval = 250;
 
     while (Date.now() < deadline) {
         const run = await getRun(runId);
@@ -66,7 +133,8 @@ export const waitForRun = async (
             return run;
         }
 
-        await wait(1000);
+        await wait(interval);
+        interval = Math.min(1000, interval * 2);
     }
 
     throw new Error(

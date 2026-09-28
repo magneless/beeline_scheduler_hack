@@ -19,11 +19,16 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/geo"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/experiment"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/plans"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/runs"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/storage"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/testkit"
 )
+
+// Legacy contract tests exercise the original run API with the real planner.
+// The wrapper intentionally exposes only PlanService to the HTTP layer.
+type legacyPlanService struct{ c.PlanService }
 
 func integrationServer(t *testing.T, integrated ...bool) (http.Handler, *storage.Store, testkit.Fixture) {
 	return integrationServerMode(t, c.SolveModeBaseline, integrated...)
@@ -66,11 +71,19 @@ func integrationServerMode(t *testing.T, solverMode c.SolveMode, integrated ...b
 	if len(integrated) > 0 && integrated[0] {
 		g := geo.NewGeoService(&geo.DemoProvider{})
 		api.Importer.Geo = g
-		service, err := plans.New(s, g, planner.New(), plans.Options{TimeLimitMS: 1000, Mode: solverMode})
+		var solver c.Planner = planner.New()
+		if os.Getenv("PLANNER_EXPERIMENT_URL") != "" {
+			solver = experiment.FromEnvironment()
+		}
+		service, err := plans.New(s, g, solver, plans.Options{TimeLimitMS: 1000, Mode: solverMode})
 		if err != nil {
 			t.Fatal(err)
 		}
 		planService = service
+	}
+	api.Plans = planService
+	if len(integrated) > 0 && integrated[0] && (len(integrated) < 2 || !integrated[1]) {
+		api.Plans = legacyPlanService{PlanService: planService}
 	}
 	w := runs.Worker{Store: s, Plans: planService, Timeout: time.Second * 5}
 	go func() { defer close(done); w.Serve(ctx) }()

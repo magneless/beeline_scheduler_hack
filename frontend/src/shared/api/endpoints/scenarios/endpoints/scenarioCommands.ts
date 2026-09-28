@@ -39,6 +39,7 @@ export type EngineerPatch = {
     transport?: Engineer['transport'];
     shift?: Engineer['shift'];
     available?: boolean;
+    reserve?: boolean;
     equipment_stock?: Engineer['equipment_stock'];
 };
 
@@ -66,6 +67,10 @@ export const patchEngineer = ({
 
     if (fields.available !== undefined) {
         body.available = fields.available;
+    }
+
+    if (fields.reserve !== undefined) {
+        body.reserve = fields.reserve;
     }
 
     if (fields.equipment_stock !== undefined) {

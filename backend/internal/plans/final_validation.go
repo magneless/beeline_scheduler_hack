@@ -7,8 +7,21 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
 )
 
-func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, unassigned []contracts.UnassignedOrder, cancelledIDs []string) error {
+func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, unassigned []contracts.UnassignedOrder, cancelledIDs []string, lateness ...[]contracts.OrderLateness) error {
 	orders := orderMap(snapshot.Orders)
+	late := map[string]contracts.OrderLateness{}
+	if len(lateness) > 0 {
+		for _, item := range lateness[0] {
+			order, ok := orders[item.OrderID]
+			if !ok || order.WorkType != contracts.WorkTypeEmergency || order.Priority != contracts.PriorityUrgent || item.Window != order.Window || item.LateSec <= 0 || item.StartAt.Sub(order.Window.End) != time.Duration(item.LateSec)*time.Second {
+				return contracts.InvalidPlan("invalid emergency lateness", map[string]any{"order_id": item.OrderID})
+			}
+			if _, exists := late[item.OrderID]; exists {
+				return contracts.InvalidPlan("duplicate emergency lateness", nil)
+			}
+			late[item.OrderID] = item
+		}
+	}
 	engineers := engineerMap(snapshot.Engineers)
 	accounted := make(map[string]string)
 	seenRoutes := make(map[string]struct{})
@@ -41,8 +54,15 @@ func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, un
 			if !actual && (!hasAllSkills(engineer.Skills, order.RequiredSkills) || order.RequiredTransport != nil && *order.RequiredTransport != engineer.Transport) {
 				return contracts.InvalidPlan("final assignment violates skill or transport requirements", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
-			if visit.ArrivalAt.After(visit.StartAt) || visit.EndAt.Before(visit.StartAt) || (!actual && (visit.StartAt.Before(order.Window.Start) || visit.StartAt.After(order.Window.End) || visit.EndAt.Sub(visit.StartAt) != time.Duration(order.ServiceSec)*time.Second)) {
+			lateItem, allowedLate := late[order.ID]
+			if visit.ArrivalAt.After(visit.StartAt) || visit.EndAt.Before(visit.StartAt) || (!actual && (visit.StartAt.Before(order.Window.Start) || (visit.StartAt.After(order.Window.End) && !allowedLate) || visit.EndAt.Sub(visit.StartAt) != time.Duration(order.ServiceSec)*time.Second)) {
 				return contracts.InvalidPlan("final visit violates order timing", map[string]any{"order_id": order.ID})
+			}
+			if allowedLate {
+				if !actual && (!visit.StartAt.After(order.Window.End) || !visit.ArrivalAt.Equal(lateItem.ArrivalAt) || !visit.StartAt.Equal(lateItem.StartAt)) {
+					return contracts.InvalidPlan("emergency lateness does not match visit", map[string]any{"order_id": order.ID})
+				}
+				delete(late, order.ID)
 			}
 			if !actual && (visit.StartAt.Before(engineer.Shift.Start) || visit.EndAt.After(engineer.Shift.End)) {
 				return contracts.InvalidPlan("final visit is outside engineer shift", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
@@ -85,6 +105,9 @@ func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, un
 			return contracts.InvalidPlan("unassigned order must contain reason code and message", map[string]any{"order_id": item.OrderID})
 		}
 		accounted[item.OrderID] = "unassigned"
+	}
+	if len(late) > 0 {
+		return contracts.InvalidPlan("lateness references an unassigned order", nil)
 	}
 	cancelled := make(map[string]struct{}, len(cancelledIDs))
 	for _, orderID := range cancelledIDs {

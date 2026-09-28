@@ -10,6 +10,7 @@ type EventPayload struct {
 	Order         *Order         `json:"order,omitempty"`
 	Location      *LocationInput `json:"location,omitempty"`
 	OrderID       string         `json:"order_id,omitempty"`
+	OrderIDs      []string       `json:"order_ids,omitempty"`
 	EngineerID    string         `json:"engineer_id,omitempty"`
 	Status        OrderStatus    `json:"status,omitempty"`
 	Reason        string         `json:"reason,omitempty"`

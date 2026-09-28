@@ -93,6 +93,7 @@ func run() error {
 		}
 		planService = service
 	}
+	api.Plans = planService
 	worker := &runs.Worker{Store: store, Plans: planService, Timeout: 5 * time.Minute}
 	var wg sync.WaitGroup
 	wg.Add(1)

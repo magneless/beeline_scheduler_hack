@@ -4,9 +4,30 @@ import (
 	"context"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 )
 
 func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequest) (contracts.PlanResult, error) {
+	if input.OptionKey == "late_emergency" {
+		strict, err := service.buildWithPolicy(ctx, input, dispatchPolicy{key: "strict"})
+		if err != nil {
+			return contracts.PlanResult{}, err
+		}
+		eligible := lateEligible(strict, nil)
+		if len(eligible) == 0 {
+			strict.Draft.OptionKey = "late_emergency"
+			return strict, nil
+		}
+		return service.buildWithPolicy(ctx, input, dispatchPolicy{key: "late_emergency", lateIDs: eligible})
+	}
+	if input.OptionKey != "" && input.OptionKey != "strict" {
+		return contracts.PlanResult{}, contracts.InvalidInput("unsupported initial plan option", nil)
+	}
+	return service.buildWithPolicy(ctx, input, dispatchPolicy{key: "strict"})
+}
+
+func (service *Service) buildWithPolicy(ctx context.Context, input contracts.BuildPlanRequest, policy dispatchPolicy) (contracts.PlanResult, error) {
+	progress.Report(ctx, "preparing", "Читаем заявки и бригады")
 	if err := ctx.Err(); err != nil {
 		return contracts.PlanResult{}, err
 	}
@@ -27,6 +48,9 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 
 	orders := activeValidOrders(snapshot)
+	if policy.key == "late_emergency" {
+		orders = widenEmergencyWindows(orders, policy.lateIDs, snapshot.Engineers)
+	}
 	for _, o := range snapshot.Orders {
 		if o.Execution != nil {
 			return contracts.PlanResult{}, contracts.EventConflict("use Replan after execution starts", nil)
@@ -49,7 +73,15 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 			return contracts.PlanResult{}, contracts.EventConflict("use Replan after events", nil)
 		}
 	}
-	engineers := availableEngineers(snapshot)
+	// A from-scratch comparison includes the original day's pool, including
+	// crews that became reserve after accepting the first plan.
+	planningSnapshot := cloneSnapshot(snapshot)
+	for i := range planningSnapshot.Engineers {
+		if snapshot.ReserveInitialized && planningSnapshot.Engineers[i].Reserve {
+			planningSnapshot.Engineers[i].Available = true
+		}
+	}
+	engineers := availableEngineers(planningSnapshot)
 	states := make([]contracts.EngineerState, 0, len(engineers))
 	for _, engineer := range engineers {
 		states = append(states, contracts.EngineerState{
@@ -65,8 +97,16 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 	profiles := profilesFor(engineers)
 	if len(engineers) == 0 {
-		return service.buildWithoutEngineers(snapshot, orders, mode)
+		result, err := service.buildWithoutEngineers(snapshot, orders, mode)
+		if err == nil {
+			result.Draft.OptionKey = input.OptionKey
+			if input.OptionKey != "" {
+				result.Draft.DeferredOrderIDs = deferredOrderIDs(result.Draft.Unassigned)
+			}
+		}
+		return result, err
 	}
+	progress.Report(ctx, "matrix", "Получаем время в пути")
 	matrix, err := service.geo.BuildMatrix(ctx, contracts.MatrixRequest{Locations: locations, Profiles: profiles, GeoContextID: nil})
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("build travel matrix", err)
@@ -76,6 +116,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 
 	baseRequest := contracts.SolveRequest{
+		EmergencyFirst:         policy.key == "late_emergency",
 		Orders:                 orders,
 		Engineers:              engineers,
 		EngineerStates:         states,
@@ -85,6 +126,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 	baselineRequest := cloneSolveRequest(baseRequest)
 	baselineRequest.Mode = contracts.SolveModeBaseline
+	progress.Report(ctx, "solving", "Рассчитываем базовый маршрут")
 	baseline, err := service.planner.Solve(ctx, baselineRequest)
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("solve baseline plan", err)
@@ -95,6 +137,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 
 	optimizedRequest := cloneSolveRequest(baseRequest)
 	optimizedRequest.Mode = mode
+	progress.Report(ctx, "solving", "Рассчитываем маршрут")
 	optimized, err := service.planner.Solve(ctx, optimizedRequest)
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("solve optimized plan", err)
@@ -102,6 +145,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	if err := validateSolveResult(optimizedRequest, optimized); err != nil {
 		return contracts.PlanResult{}, err
 	}
+	progress.Report(ctx, "geometry", "Загружаем маршруты на карту")
 	routes, err := service.addGeometry(ctx, optimized.Routes, engineers, locations, matrix.GeoContextID)
 	if err != nil {
 		return contracts.PlanResult{}, err
@@ -114,6 +158,7 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	baselineMetrics := calculateMetrics(baseline.Routes, baseline.Unassigned)
 	unassigned := nonNil(append([]contracts.UnassignedOrder(nil), optimized.Unassigned...))
 	draft := contracts.PlanDraft{
+		OptionKey:         input.OptionKey,
 		SolveMode:         mode,
 		ScenarioID:        snapshot.ScenarioID,
 		SnapshotRevision:  snapshot.Revision,
@@ -141,6 +186,15 @@ func (service *Service) Build(ctx context.Context, input contracts.BuildPlanRequ
 	}
 	if mode == contracts.SolveModeBaseline {
 		draft.Issues = append(draft.Issues, contracts.Issue{Code: "BASELINE_ONLY", Message: "Выбран базовый алгоритм планирования"})
+	}
+	if policy.key == "late_emergency" {
+		draft.Lateness = measureLateness(snapshot, routes)
+		if err := validateFinalPlan(snapshot, routes, unassigned, draft.CancelledOrderIDs, draft.Lateness); err != nil {
+			return contracts.PlanResult{}, err
+		}
+	}
+	if input.OptionKey != "" {
+		draft.DeferredOrderIDs = deferredOrderIDs(unassigned)
 	}
 	return contracts.PlanResult{
 		Draft:          draft,

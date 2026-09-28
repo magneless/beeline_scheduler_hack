@@ -63,11 +63,12 @@ func TestOSMWaitCancellationAndSpacing(t *testing.T) {
 	p, _ := NewOSMProvider(OSMOptions{PhotonURL: s.URL, CarURL: s.URL, FootURL: s.URL, MinInterval: 20 * time.Millisecond})
 	ctx, c := context.WithCancel(context.Background())
 	defer c()
-	if _, e := p.Geocode(ctx, "a"); e != nil {
+	var response map[string]any
+	if e := p.get(ctx, s.URL+"/api/?q=a", &response); e != nil {
 		t.Fatal(e)
 	}
 	c()
-	if _, e := p.Geocode(ctx, "b"); e == nil {
+	if e := p.get(ctx, s.URL+"/api/?q=b", &response); e == nil {
 		t.Fatal("expected cancellation")
 	}
 	if calls.Load() != 1 {
@@ -82,9 +83,9 @@ func TestOSMCacheTTL(t *testing.T) {
 	}))
 	defer s.Close()
 	p, _ := NewOSMProvider(OSMOptions{PhotonURL: s.URL, CarURL: s.URL, FootURL: s.URL, MinInterval: time.Nanosecond, CacheDir: t.TempDir(), CacheTTL: time.Millisecond})
-	_, _ = p.Geocode(context.Background(), "a")
+	_ = p.get(context.Background(), s.URL+"/api/?q=a", &map[string]any{})
 	time.Sleep(5 * time.Millisecond)
-	_, _ = p.Geocode(context.Background(), "a")
+	_ = p.get(context.Background(), s.URL+"/api/?q=a", &map[string]any{})
 	if calls.Load() != 2 {
 		t.Fatalf("calls=%d", calls.Load())
 	}
@@ -105,7 +106,7 @@ func TestPhotonExactAddressExcludesFuzzyHouses(t *testing.T) {
 	}
 	points, err = provider.Geocode(context.Background(), "Тверская")
 	if err != nil || len(points) != 0 {
-		t.Fatalf("incomplete address must not resolve: %+v %v", points, err)
+		t.Fatalf("incomplete address must not be accepted: %+v %v", points, err)
 	}
 }
 
@@ -122,7 +123,10 @@ func TestOSMConcurrentRequestsRespectInterval(t *testing.T) {
 	}
 	errors := make(chan error, 3)
 	for _, address := range []string{"a", "b", "c"} {
-		go func(address string) { _, err := provider.Geocode(context.Background(), address); errors <- err }(address)
+		go func(address string) {
+			err := provider.get(context.Background(), server.URL+"/api/?q="+address, &map[string]any{})
+			errors <- err
+		}(address)
 	}
 	for range 3 {
 		if err := <-errors; err != nil {

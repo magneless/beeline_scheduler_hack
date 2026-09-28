@@ -10,11 +10,11 @@ import {
     type Visit,
 } from 'shared/api/types/contracts';
 import { type TypeOrNull } from 'shared/lib/types';
-import { displayEngineer } from 'shared/lib/utils';
+import { displayEngineer, formatClock } from 'shared/lib/utils';
 
 import { assignmentFactors } from '../lib/assignmentFactors';
 import { workspaceCopy } from '../lib/config';
-import { defaultExpectedEndAt } from '../lib/eventTime';
+import { alignToPlannedMinute, defaultExpectedEndAt } from '../lib/eventTime';
 
 import { type WorkspaceEventInput } from './types';
 
@@ -45,10 +45,15 @@ export const useOrderRow = ({
 }: UseOrderRowParams) => {
     const rowRef = useRef<HTMLDivElement>(null);
     const [occurredAt, setOccurredAt] = useState(defaultOccurredAt);
-    const [expectedEndAt, setExpectedEndAt] = useState(
-        order.execution?.expected_end_at ??
-            defaultExpectedEndAt(defaultOccurredAt, visit?.end_at)
-    );
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        setOccurredAt(defaultOccurredAt);
+    }, [defaultOccurredAt]);
+
+    useEffect(() => {
+        setError('');
+    }, [occurredAt, order.status]);
 
     const assignee = open
         ? workspaceCopy.noSlot
@@ -71,13 +76,51 @@ export const useOrderRow = ({
             return;
         }
 
+        const eventAt = alignToPlannedMinute(
+            occurredAt,
+            status === 'in_progress'
+                ? visit?.start_at
+                : status === 'completed'
+                  ? visit?.end_at
+                  : undefined
+        );
+        const at = Date.parse(eventAt);
+        if (
+            status === 'completed' &&
+            order.execution?.started_at &&
+            at <= Date.parse(order.execution.started_at)
+        ) {
+            setError(
+                `Укажите время завершения позже начала работы (${formatClock(order.execution.started_at, timezone)}).`
+            );
+            return;
+        }
+        if (status === 'in_progress') {
+            if (
+                order.status !== 'in_progress' &&
+                visit &&
+                at <
+                    Math.max(
+                        Date.parse(visit.arrival_at),
+                        Date.parse(order.window.start)
+                    )
+            ) {
+                setError(
+                    'Нельзя начать работу раньше прибытия бригады или начала окна заявки.'
+                );
+                return;
+            }
+        }
+        setError('');
+        setOccurredAt(eventAt);
+
         onEvent({
             kind: 'status',
-            occurredAt,
+            occurredAt: eventAt,
             status,
             expectedEndAt:
-                status === 'in_progress' && expectedEndAt
-                    ? expectedEndAt
+                status === 'in_progress'
+                    ? defaultExpectedEndAt(eventAt, order.service_sec)
                     : undefined,
         });
     };
@@ -103,14 +146,11 @@ export const useOrderRow = ({
         rowRef,
         occurredAt,
         setOccurredAt,
-        expectedEndAt,
-        setExpectedEndAt,
+        error,
         assignee,
         factors,
         closed,
         handleSelect,
-        handleSent: () => sendStatus('sent'),
-        handleEnRoute: () => sendStatus('en_route'),
         handleInProgress: () => sendStatus('in_progress'),
         handleCompleted: () => sendStatus('completed'),
         handleClientRefusal: () => sendCancel('client_refusal'),

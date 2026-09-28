@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin } from 'lucide-react';
 
-import { displayEngineer } from 'shared/lib/utils';
+import { displayEngineer, formatKm } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
+import { CalculationProgressBar } from 'shared/ui/calculationProgress';
 import { MapView } from 'shared/ui/map';
 
 import { BuildPlanPrompt } from './BuildPlanPrompt';
+import { PlanComparison } from './PlanComparison';
+import { PlanProposalDialog } from './PlanProposalDialog';
 import { RouteItinerary } from './RouteItinerary';
 import { WorkspaceAlerts } from './WorkspaceAlerts';
 import { WorkspaceScheduleDock } from './WorkspaceScheduleDock';
@@ -18,6 +22,7 @@ import { useDispatcherWorkspace } from '../model/useDispatcherWorkspace';
 export const DispatcherWorkspacePage = () => {
     const { scenarioId = '' } = useParams();
     const workspace = useDispatcherWorkspace(scenarioId);
+    const [comparisonOpen, setComparisonOpen] = useState(false);
     const focused = workspace.selectedEngineerId;
     const unassignedOnly =
         workspace.panelTab !== 'crews' && workspace.filter === 'unassigned';
@@ -38,18 +43,41 @@ export const DispatcherWorkspacePage = () => {
                 canRebuild={
                     Boolean(workspace.plan) && workspace.canEditEngineers
                 }
+                canCompare={Boolean(workspace.plan)}
                 buildPending={workspace.buildPending}
                 eventPending={workspace.eventPending}
+                progressVisible={Boolean(
+                    workspace.proposalCalculation || workspace.runCalculation
+                )}
                 runStatus={workspace.runStatus}
                 scheduleOpen={workspace.scheduleOpen}
                 panelOpen={workspace.panelOpen}
                 timezone={workspace.timezone}
-                defaultOccurredAt={workspace.occurredAtDefault}
+                defaultOccurredAt={workspace.scenarioTime}
+                onScenarioTime={workspace.setScenarioTime}
+                hasProposal={Boolean(workspace.proposal)}
+                onOpenProposal={() => workspace.setProposalOpen(true)}
                 onNewOrder={workspace.handleOrderEvent!}
                 onRebuild={workspace.handleBuildPlan}
+                onCompare={() => setComparisonOpen(true)}
                 onToggleSchedule={workspace.toggleSchedule}
                 onTogglePanel={workspace.togglePanel}
             />
+            {workspace.proposalCalculation || workspace.runCalculation ? (
+                <CalculationProgressBar
+                    state={
+                        workspace.proposalCalculation ??
+                        workspace.runCalculation!
+                    }
+                    title={
+                        workspace.proposalCalculation
+                            ? 'Расчёт вариантов плана'
+                            : (workspace.runCalculation?.title ??
+                              'Пересчёт маршрута')
+                    }
+                    className="mx-3 my-2 shrink-0"
+                />
+            ) : null}
             <div className="flex min-h-0 flex-1 max-lg:flex-col max-lg:overflow-y-auto">
                 {workspace.panelOpen ? (
                     <WorkspaceSidePanel
@@ -59,7 +87,7 @@ export const DispatcherWorkspacePage = () => {
                         panelTab={workspace.panelTab}
                         ordersCount={workspace.ordersCount}
                         crewsCount={workspace.crewsCount}
-                        orders={workspace.snapshot?.orders ?? []}
+                        orders={workspace.displayOrders}
                         engineers={workspace.snapshot?.engineers ?? []}
                         scenarioId={scenarioId}
                         revision={workspace.snapshot?.revision ?? 0}
@@ -67,21 +95,31 @@ export const DispatcherWorkspacePage = () => {
                         selectedEngineerId={workspace.selectedEngineerId}
                         engineerByOrder={workspace.engineerByOrder}
                         unassigned={workspace.unassigned}
+                        lateness={workspace.plan?.lateness}
+                        inTransitOrderIds={workspace.inTransitOrderIds}
+                        deferredOrderIds={
+                            new Set(workspace.plan?.deferred_order_ids ?? [])
+                        }
                         visits={workspace.visitByOrder}
                         timezone={workspace.timezone}
                         date={workspace.snapshot?.date ?? ''}
                         addressByOrder={workspace.addressByOrder}
                         remaining={workspace.plan?.equipment_remaining}
                         issues={workspace.issues}
-                        defaultOccurredAt={workspace.occurredAtDefault}
+                        defaultOccurredAt={workspace.scenarioTime}
                         filter={workspace.filter}
                         distances={workspace.distances}
                         baselineDistances={workspace.baselineDistances}
                         assignedCounts={workspace.assignedCounts}
                         canEditEngineers={workspace.canEditEngineers}
                         canEvent={Boolean(workspace.plan)}
-                        pending={workspace.crewPending}
-                        statusPending={workspace.eventPending}
+                        pending={
+                            workspace.crewPending || Boolean(workspace.proposal)
+                        }
+                        statusPending={
+                            workspace.eventPending ||
+                            Boolean(workspace.proposal)
+                        }
                         onPanelTab={workspace.setPanelTab}
                         onFilter={workspace.setFilter}
                         onSelectOrder={workspace.selectOrder}
@@ -94,7 +132,7 @@ export const DispatcherWorkspacePage = () => {
                         <WorkspaceAlerts
                             issues={workspace.issues}
                             changes={workspace.plan?.changes ?? []}
-                            orders={workspace.snapshot?.orders ?? []}
+                            orders={workspace.displayOrders}
                             runStatus={workspace.runStatus}
                             showRunBanner={workspace.showRunBanner}
                             onSelectOrder={workspace.selectOrder}
@@ -132,6 +170,14 @@ export const DispatcherWorkspacePage = () => {
                                       ? 'Заявки без бригады'
                                       : 'Обзор района'}
                             </h2>
+                            {workspace.plan ? (
+                                <p className="mt-0.5 pl-6 text-xs text-muted-foreground">
+                                    Все маршруты ·{' '}
+                                    {formatKm(
+                                        workspace.plan.metrics.total_distance_m
+                                    )}
+                                </p>
+                            ) : null}
                         </div>
                         {focused || unassignedOnly ? (
                             <Button
@@ -185,7 +231,8 @@ export const DispatcherWorkspacePage = () => {
                         />
                         {workspace.plan ||
                         workspace.eventPending ||
-                        workspace.buildPending ? null : (
+                        workspace.buildPending ||
+                        workspace.proposal ? null : (
                             <BuildPlanPrompt
                                 pending={workspace.buildPending}
                                 statusLabel={workspace.runStatusLabel}
@@ -215,6 +262,23 @@ export const DispatcherWorkspacePage = () => {
                     ) : null}
                 </div>
             </div>
+            {comparisonOpen && workspace.plan ? (
+                <PlanComparison
+                    scenarioId={scenarioId}
+                    currentPlanId={workspace.plan.id}
+                    initialMode={workspace.solveMode}
+                    onClose={() => setComparisonOpen(false)}
+                />
+            ) : null}
+            {workspace.proposal && workspace.proposalOpen ? (
+                <PlanProposalDialog
+                    unlocatedOrders={workspace.snapshot?.unlocated_orders}
+                    proposal={workspace.proposal}
+                    accepting={workspace.proposalAccepting}
+                    onAccept={workspace.acceptProposal}
+                    onClose={() => workspace.setProposalOpen(false)}
+                />
+            ) : null}
         </section>
     );
 };

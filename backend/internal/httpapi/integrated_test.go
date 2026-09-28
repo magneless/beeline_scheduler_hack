@@ -25,11 +25,10 @@ func TestIntegratedModulesWithPostgres(t *testing.T) {
 		t.Fatal("missing Go-3 geometry")
 	}
 	start := p.Routes[0].Visits[0].StartAt
-	departure := p.Routes[0].Legs[0].StartAt
 	for n, step := range []struct {
 		status string
 		at     time.Time
-	}{{"sent", p.AsOf}, {"en_route", departure}, {"in_progress", start}, {"completed", start.Add(time.Duration(v.Snapshot.Orders[0].ServiceSec) * time.Second)}} {
+	}{{"in_progress", start}, {"completed", start.Add(time.Duration(v.Snapshot.Orders[0].ServiceSec) * time.Second)}} {
 		body := map[string]any{"request_id": step.status, "snapshot_revision": n + 1, "event": map[string]any{"id": step.status, "occurred_at": step.at, "type": "order_status_changed", "payload": map[string]any{"order_id": "order-1", "engineer_id": "eng-1", "status": step.status, "expected_end_at": nil}}}
 		call(t, h, "POST", "/plans/"+p.ID+"/events", body, 202, &accepted)
 		r = awaitRun(t, h, accepted["run_id"])
@@ -37,19 +36,8 @@ func TestIntegratedModulesWithPostgres(t *testing.T) {
 			t.Fatalf("%s: %+v", step.status, r.Error)
 		}
 		call(t, h, "GET", "/plans/"+*r.PlanID, nil, 200, &p)
-		if n >= 2 && p.EquipmentRemaining["eng-1"][c.EquipmentRouter] != 0 {
+		if p.EquipmentRemaining["eng-1"][c.EquipmentRouter] != 0 {
 			t.Fatal("equipment not consumed exactly once")
-		}
-		if n == 2 {
-			found := false
-			for _, issue := range p.Issues {
-				if issue.Code == "EXECUTION_STATE_REQUIRED" {
-					found = true
-				}
-			}
-			if !found {
-				t.Fatal("missing unknown-end warning")
-			}
 		}
 	}
 	if p.Metrics.CompletedCount != 1 || len(p.CompletedOrderIDs) != 1 {

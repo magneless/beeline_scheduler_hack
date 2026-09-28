@@ -72,6 +72,7 @@ export const useScheduleBoard = ({
     const [pxPerHour, setPxPerHour] = useState(ZOOM_DEFAULT);
     const [hand, setHand] = useState(false);
     const [panning, setPanning] = useState(false);
+    const [scrollbarHeight, setScrollbarHeight] = useState(0);
 
     const dense = lanes.length > 6;
     const rowPx = dense ? ROW_DENSE : ROW_COMFORT;
@@ -264,6 +265,24 @@ export const useScheduleBoard = ({
     }, [pxPerHour]);
 
     useLayoutEffect(() => {
+        const grid = gridRef.current;
+        if (!grid) {
+            return;
+        }
+        const update = () =>
+            setScrollbarHeight(
+                Math.max(0, grid.offsetHeight - grid.clientHeight)
+            );
+        const observer = new ResizeObserver(update);
+        observer.observe(grid);
+        if (grid.firstElementChild) {
+            observer.observe(grid.firstElementChild);
+        }
+        update();
+        return () => observer.disconnect();
+    }, [visibleLanes.length, pxPerHour]);
+
+    useLayoutEffect(() => {
         if (primed.current || !lanes.length) {
             return;
         }
@@ -297,14 +316,24 @@ export const useScheduleBoard = ({
 
     useEffect(() => {
         const grid = gridRef.current;
-        const block = lanes
-            .flatMap((lane) => lane.blocks)
-            .find(
+        const laneIndex = visibleLanes.findIndex((lane) =>
+            lane.blocks.some(
                 (item) =>
                     item.kind === 'work' && item.orderId === selectedOrderId
-            );
+            )
+        );
+        const block = visibleLanes[laneIndex]?.blocks.find(
+            (item) => item.kind === 'work' && item.orderId === selectedOrderId
+        );
         if (!grid || !block || !start) {
             return;
+        }
+        const top = laneIndex * rowPx;
+        if (
+            top < grid.scrollTop ||
+            top + rowPx > grid.scrollTop + grid.clientHeight
+        ) {
+            grid.scrollTop = Math.max(0, top - rowPx);
         }
         const left = block.start.diff(start, 'hours').hours * pxRef.current;
         const right = block.end.diff(start, 'hours').hours * pxRef.current;
@@ -313,9 +342,9 @@ export const useScheduleBoard = ({
             right > grid.scrollLeft + grid.clientWidth
         ) {
             grid.scrollLeft = Math.max(0, left - 24);
-            syncFromGrid();
         }
-    }, [lanes, selectedOrderId, start]);
+        syncFromGrid();
+    }, [rowPx, selectedOrderId, start, visibleLanes]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -367,6 +396,33 @@ export const useScheduleBoard = ({
             if (event.code === 'Home' || event.code === 'KeyN') {
                 event.preventDefault();
                 scrollToFocus(true);
+                return;
+            }
+
+            const grid = gridRef.current;
+            if (!grid) {
+                return;
+            }
+            const vertical =
+                event.code === 'ArrowDown'
+                    ? rowPx
+                    : event.code === 'ArrowUp'
+                      ? -rowPx
+                      : event.code === 'PageDown'
+                        ? grid.clientHeight
+                        : event.code === 'PageUp'
+                          ? -grid.clientHeight
+                          : 0;
+            const horizontal =
+                event.code === 'ArrowRight'
+                    ? H_SCROLL * 4
+                    : event.code === 'ArrowLeft'
+                      ? -H_SCROLL * 4
+                      : 0;
+            if (vertical || horizontal) {
+                event.preventDefault();
+                grid.scrollBy({ left: horizontal, top: vertical });
+                syncFromGrid();
             }
         };
         const onKeyUp = (event: KeyboardEvent) => {
@@ -387,7 +443,7 @@ export const useScheduleBoard = ({
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('keyup', onKeyUp);
         };
-    }, [applyZoom, scrollToFocus, zoomBy, zoomFit]);
+    }, [applyZoom, rowPx, scrollToFocus, zoomBy, zoomFit]);
 
     useEffect(() => {
         const grid = gridRef.current;
@@ -399,6 +455,15 @@ export const useScheduleBoard = ({
 
         const onWheel = (event: WheelEvent) => {
             if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+                if (
+                    !grid.contains(event.target as Node) &&
+                    (event.shiftKey ||
+                        Math.abs(event.deltaX) > Math.abs(event.deltaY))
+                ) {
+                    event.preventDefault();
+                    grid.scrollLeft += event.deltaX || event.deltaY;
+                    syncFromGrid();
+                }
                 return;
             }
 
@@ -470,6 +535,7 @@ export const useScheduleBoard = ({
         nowLeft,
         nowVisible,
         chartHeight,
+        scrollbarHeight,
         zoomLabel,
         laneFilter,
         pxPerHour,

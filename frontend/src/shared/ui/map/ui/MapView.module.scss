@@ -8,101 +8,22 @@
     background: #eef1f0;
 }
 
-/* Yandex injects custom <ymaps> nodes for chrome. */
-/* stylelint-disable selector-type-no-unknown */
-.root :global(ymaps[class*='copyright']),
-.root :global(ymaps[class*='gototech']),
-.root :global(ymaps[class*='promo']) {
-    display: none !important;
-}
-/* stylelint-enable selector-type-no-unknown */
-
 .canvas {
     width: 100%;
     height: 100%;
 }
 
-.attribution {
-    position: absolute;
-    right: 8px;
-    bottom: 4px;
-    z-index: 1001;
-    padding: 3px 6px;
-    font-size: 10px;
-    color: #333;
-    background: rgb(255 255 255 / 90%);
-    border-radius: 4px;
-
-    a {
-        color: inherit;
-        text-decoration: underline;
-    }
-}
-
-.root :global(.osmMapStatus) {
-    position: absolute;
-    top: 76px;
-    left: 50%;
-    z-index: 1200;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    padding: 12px 14px;
-    color: #1a1a1a;
-    background: rgb(255 255 255 / 94%);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
-    transform: translateX(-50%);
-}
-
-.root :global(.osmMapStatus button) {
-    padding: 5px 9px;
-    color: #1a1a1a;
-    cursor: pointer;
-    background: #fc0;
-    border: 0;
-    border-radius: 5px;
-}
-
-/* stylelint-disable selector-class-pattern -- Global classes owned by the Leaflet adapter. */
-.root :global(.leaflet-control-zoom) {
-    margin-top: 12px;
-    margin-right: 12px;
-    margin-left: 0;
-}
-
-.root :global(.leaflet-control-zoom a),
-.root :global(.leaflet-control-route-fit) button,
-.root :global(button.leaflet-control-route-fit) {
-    width: 34px;
-    height: 34px;
-    color: #27332f;
-    background: #fff;
-    border: 1px solid #dfe4e1;
-    box-shadow: 0 3px 12px rgb(29 48 40 / 14%);
-}
-
-.root :global(.leaflet-control-route-fit) {
-    margin: 12px;
-}
-
-.root :global(.leaflet-control-route-fit) button,
-.root :global(button.leaflet-control-route-fit) {
-    width: auto;
-    padding: 0 11px;
+/* stylelint-disable selector-class-pattern -- Marker classes belong to the map adapter. */
+.root :global(.route-fit) {
+    padding: 9px 11px;
     font-size: 12px;
     font-weight: 650;
+    color: #27332f;
     cursor: pointer;
-    border-radius: 9px;
-}
-
-.root :global(.osm-map .leaflet-tile-pane) {
-    filter: saturate(0.15) brightness(1.08) contrast(0.9);
-}
-
-.root :global(.osm-marker-icon) {
-    background: transparent;
-    border: 0;
+    background: #fff;
+    border: 1px solid #dfe4e1;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgb(29 48 40 / 12%);
 }
 
 .root :global(.osm-marker) {
@@ -112,6 +33,7 @@
     font-weight: 750;
     line-height: 1;
     color: var(--marker-foreground, #fff);
+    cursor: pointer;
     background: var(--marker-color);
     border: 2px solid #fff;
     border-radius: 50%;
@@ -133,11 +55,6 @@
 .root :global(.osm-marker-selected) {
     outline: 3px solid rgb(39 51 47 / 34%);
     outline-offset: 3px;
-}
-
-.root :global(.leaflet-control-scale) {
-    margin-bottom: 8px;
-    margin-left: 12px;
 }
 
 /* stylelint-enable selector-class-pattern */

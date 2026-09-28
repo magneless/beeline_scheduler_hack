@@ -33,13 +33,17 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 	if err != nil {
 		return nil, &FormatError{"Нет заголовка CSV"}
 	}
-	if len(h) != len(engineerHeader) {
+	if len(h) != len(engineerHeader) && len(h) != len(engineerHeader)+1 {
 		return nil, &FormatError{"Некорректный заголовок CSV"}
 	}
-	for i := range h {
+	for i := range engineerHeader {
 		if strings.TrimSpace(h[i]) != engineerHeader[i] {
 			return nil, &FormatError{"Некорректный заголовок CSV"}
 		}
+	}
+	hasReserve := len(h) == len(engineerHeader)+1
+	if hasReserve && strings.TrimSpace(h[len(engineerHeader)]) != "reserve" {
+		return nil, &FormatError{"Последняя дополнительная колонка должна называться reserve"}
 	}
 	day, err := time.ParseInLocation("2006-01-02", date, loc)
 	if err != nil {
@@ -55,8 +59,8 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 		if e != nil {
 			return nil, &FormatError{fmt.Sprintf("Строка %d: некорректный CSV", line)}
 		}
-		if len(row) != len(engineerHeader) {
-			return nil, &FormatError{fmt.Sprintf("Строка %d: ожидается 8 полей", line)}
+		if len(row) != len(h) {
+			return nil, &FormatError{fmt.Sprintf("Строка %d: ожидается %d полей", line, len(h))}
 		}
 		for i := range row {
 			row[i] = strings.TrimSpace(row[i])
@@ -101,6 +105,19 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 		default:
 			return nil, &FormatError{fmt.Sprintf("Строка %d: available должен быть true или false", line)}
 		}
+		reserve := false
+		if hasReserve {
+			switch row[8] {
+			case "true":
+				return nil, &FormatError{fmt.Sprintf("Строка %d: резерв определяется по первому принятому плану; уберите reserve=true", line)}
+			case "false":
+			default:
+				return nil, &FormatError{fmt.Sprintf("Строка %d: reserve должен быть true или false", line)}
+			}
+			if available && reserve {
+				return nil, &FormatError{fmt.Sprintf("Строка %d: резервный инженер не может одновременно работать", line)}
+			}
+		}
 		router, e := parseNonnegative(row[6])
 		if e != nil {
 			return nil, &FormatError{fmt.Sprintf("Строка %d: некорректный router", line)}
@@ -109,7 +126,7 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 		if e != nil {
 			return nil, &FormatError{fmt.Sprintf("Строка %d: некорректный tv_box", line)}
 		}
-		out = append(out, c.Engineer{ID: row[0], Skills: skills, Transport: transport, Shift: c.Window{Start: start.UTC(), End: end.UTC()}, Available: available, EquipmentStock: map[c.Equipment]int64{c.EquipmentRouter: router, c.EquipmentTVBox: tv}, SourceOrder: int64(len(out) + 1)})
+		out = append(out, c.Engineer{ID: row[0], Skills: skills, Transport: transport, Shift: c.Window{Start: start.UTC(), End: end.UTC()}, Available: available, Reserve: reserve, EquipmentStock: map[c.Equipment]int64{c.EquipmentRouter: router, c.EquipmentTVBox: tv}, SourceOrder: int64(len(out) + 1)})
 	}
 	if len(out) == 0 {
 		return nil, &FormatError{"Состав инженеров не может быть пустым"}

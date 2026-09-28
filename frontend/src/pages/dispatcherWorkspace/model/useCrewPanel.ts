@@ -31,6 +31,9 @@ export const useCrewPanel = ({
         (engineer) =>
             engineer.available && !(assignedCounts?.[engineer.id] ?? 0)
     ).length;
+    const reserveCount = engineers.filter(
+        (engineer) => engineer.reserve
+    ).length;
 
     const visible = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -42,6 +45,10 @@ export const useCrewPanel = ({
             }
 
             if (load === 'free' && (jobs > 0 || !engineer.available)) {
+                return false;
+            }
+
+            if (load === 'reserve' && !engineer.reserve) {
                 return false;
             }
 
@@ -94,6 +101,7 @@ export const useCrewPanel = ({
         editingId,
         busyCount,
         freeCount,
+        reserveCount,
         visible,
         emptyMessage,
         handleQueryChange,

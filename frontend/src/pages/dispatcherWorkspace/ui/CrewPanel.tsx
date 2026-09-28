@@ -192,7 +192,12 @@ export const CrewPanel = ({
                     />
                 </div>
                 <Tabs value={panel.load} onValueChange={panel.handleLoadChange}>
-                    <TabsList className="grid grid-cols-3">
+                    <TabsList
+                        className={cn(
+                            'grid grid-cols-2 gap-1 rounded-[12px]',
+                            '[&>button]:min-w-0 [&>button]:whitespace-normal'
+                        )}
+                    >
                         <TabsTrigger value="all">
                             {workspaceCopy.crewFilterAll}
                             <span className="tabular-nums text-[11px] text-muted-foreground">
@@ -209,6 +214,12 @@ export const CrewPanel = ({
                             {workspaceCopy.crewFilterFree}
                             <span className="tabular-nums text-[11px] text-muted-foreground">
                                 {panel.freeCount}
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger value="reserve">
+                            Резерв
+                            <span className="tabular-nums text-[11px] text-muted-foreground">
+                                {panel.reserveCount}
                             </span>
                         </TabsTrigger>
                     </TabsList>

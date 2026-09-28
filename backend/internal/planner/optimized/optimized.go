@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
@@ -191,13 +192,19 @@ func (p *routingProblem) score(result contracts.SolveResult) planScore {
 	return score
 }
 
-func betterPlan(a, b planScore) bool {
-	for i := range a.counts {
+func betterPlan(a, b planScore, emergencyFirst bool) bool {
+	if a.counts[0] != b.counts[0] {
+		return a.counts[0] > b.counts[0]
+	}
+	if emergencyFirst && a.delay != b.delay {
+		return a.delay < b.delay
+	}
+	for i := 1; i < len(a.counts); i++ {
 		if a.counts[i] != b.counts[i] {
 			return a.counts[i] > b.counts[i]
 		}
 	}
-	if a.delay != b.delay {
+	if !emergencyFirst && a.delay != b.delay {
 		return a.delay < b.delay
 	}
 	if a.used != b.used {
@@ -318,11 +325,126 @@ func (p *routingProblem) explain(ctx context.Context, result *contracts.SolveRes
 			return err
 		}
 		if done {
+			for j := i; j < len(result.Unassigned); j++ {
+				result.Unassigned[j].Message = "Поиск завершён по лимиту времени. Точная причина неназначения не установлена; невозможность назначения не доказана."
+			}
 			return nil
 		}
 		if reason.ReasonCode != contracts.ReasonNotAssignedBySolver {
 			result.Unassigned[i] = reason
+		} else {
+			result.Unassigned[i].Message = p.explainCurrentSchedule(p.orders[p.orderIndex[u.OrderID]], *result, stop)
 		}
 	}
 	return nil
+}
+
+// Finish with improving insertions so the bounded global search does not leave
+// a usable gap unnoticed. Every candidate is fully validated and must improve
+// the same lexicographic objective, including emergency delay priority.
+func (p *routingProblem) fillAvailableSlots(ctx context.Context, result contracts.SolveResult, deadline time.Time) (contracts.SolveResult, error) {
+	orders := append([]contracts.Order(nil), p.orders...)
+	sort.SliceStable(orders, func(i, j int) bool { return workClass(orders[i]) < workClass(orders[j]) })
+	for _, order := range orders {
+		assigned := true
+		for _, item := range result.Unassigned {
+			if item.OrderID == order.ID {
+				assigned = false
+				break
+			}
+		}
+		if assigned {
+			continue
+		}
+		sequences := p.sequences(result)
+		best, score := result, p.score(result)
+		for vehicle, worker := range p.workers {
+			if !worker.MatchesSkills(order) || !worker.MatchesTransport(order) {
+				continue
+			}
+			for pos := 0; pos <= len(sequences[vehicle]); pos++ {
+				if err := ctx.Err(); err != nil {
+					return result, err
+				}
+				if !time.Now().Before(deadline) {
+					return best, nil
+				}
+				candidate := append([][]int(nil), sequences...)
+				seq := append([]int(nil), sequences[vehicle][:pos]...)
+				seq = append(seq, p.orderIndex[order.ID])
+				candidate[vehicle] = append(seq, sequences[vehicle][pos:]...)
+				value, err := p.materialize(candidate)
+				if err != nil {
+					continue
+				}
+				candidateScore := p.score(value)
+				if betterPlan(candidateScore, score, p.input.EmergencyFirst) {
+					best, score = value, candidateScore
+				}
+			}
+		}
+		result = best
+	}
+	return result, nil
+}
+
+// These are constraints of the selected schedule, not a claim that no global
+// rearrangement could serve the order. Keep that distinction in the message.
+func (p *routingProblem) explainCurrentSchedule(order contracts.Order, result contracts.SolveResult, stop func() (bool, error)) string {
+	sequences := p.sequences(result)
+	skill, transport, stock, timeBlocked := 0, 0, 0, 0
+	for vehicle, worker := range p.workers {
+		if !worker.MatchesSkills(order) {
+			skill++
+			continue
+		}
+		if !worker.MatchesTransport(order) {
+			transport++
+			continue
+		}
+		remaining := map[contracts.Equipment]int64{}
+		for k, v := range worker.Remaining {
+			remaining[k] = v
+		}
+		for _, idx := range sequences[vehicle] {
+			for k, v := range p.orders[idx].EquipmentRequired {
+				remaining[k] -= v
+			}
+		}
+		worker.Remaining = remaining
+		if !worker.HasEquipment(order) {
+			stock++
+			continue
+		}
+		for pos := 0; pos <= len(sequences[vehicle]); pos++ {
+			if done, _ := stop(); done {
+				return "Поиск завершён по лимиту времени. Точная причина неназначения не установлена; невозможность назначения не доказана."
+			}
+			candidate := append([][]int(nil), sequences...)
+			seq := append([]int(nil), sequences[vehicle][:pos]...)
+			seq = append(seq, p.orderIndex[order.ID])
+			candidate[vehicle] = append(seq, sequences[vehicle][pos:]...)
+			if value, err := p.materialize(candidate); err == nil {
+				if p.input.EmergencyFirst && p.score(value).delay > p.score(result).delay {
+					return "Вставка в выбранный маршрут увеличивает опоздание на аварии. В этом варианте минимальное опоздание на аварии важнее добавления обычных заявок."
+				}
+				return "В текущем расписании есть допустимое место, но ограниченный по времени поиск его не использовал. Повторный расчёт может улучшить результат."
+			}
+		}
+		timeBlocked++
+	}
+	parts := []string{}
+	for _, item := range []struct {
+		label string
+		count int
+	}{
+		{"нет нужных навыков", skill}, {"нет нужного транспорта", transport},
+		{"не хватает оборудования после назначений", stock},
+		{"нет интервала с учётом дороги, окон и смены", timeBlocked},
+	} {
+		if item.count > 0 {
+			parts = append(parts, fmt.Sprintf("%s — %d", item.label, item.count))
+		}
+	}
+	return "По бригадам в выбранном плане: " + strings.Join(parts, "; ") + ". Чтобы добавить заявку, потребуется изменить другие визиты."
 }

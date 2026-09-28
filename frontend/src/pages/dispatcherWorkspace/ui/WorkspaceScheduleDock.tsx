@@ -13,6 +13,8 @@ type WorkspaceScheduleDockProps = {
     selectedEngineerId: TypeOrNull<string>;
     onSelectOrder: (id: string) => void;
     onSelectEngineer: (id: TypeOrNull<string>) => void;
+    fillHeight?: boolean;
+    highlightOrderIds?: string[];
 };
 
 export const WorkspaceScheduleDock = ({
@@ -22,12 +24,24 @@ export const WorkspaceScheduleDock = ({
     selectedEngineerId,
     onSelectOrder,
     onSelectEngineer,
+    fillHeight = false,
+    highlightOrderIds,
 }: WorkspaceScheduleDockProps) => (
     <div
-        className="shrink-0 overflow-hidden border-t border-border bg-white"
+        className={
+            fillHeight
+                ? 'h-full min-h-0 overflow-hidden border-t border-border bg-white'
+                : 'shrink-0 overflow-hidden border-t border-border bg-white'
+        }
         aria-label="Расписание бригад"
     >
-        <div className="overflow-visible bg-white">
+        <div
+            className={
+                fillHeight
+                    ? 'h-full min-h-0 bg-white'
+                    : 'overflow-visible bg-white'
+            }
+        >
             <ScheduleBoard
                 lanes={lanes}
                 focusAt={focusAt}
@@ -35,6 +49,8 @@ export const WorkspaceScheduleDock = ({
                 selectedEngineerId={selectedEngineerId}
                 onSelectOrder={onSelectOrder}
                 onSelectEngineer={onSelectEngineer}
+                fillHeight={fillHeight}
+                highlightOrderIds={highlightOrderIds}
             />
         </div>
     </div>

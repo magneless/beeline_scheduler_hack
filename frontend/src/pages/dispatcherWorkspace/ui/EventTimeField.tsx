@@ -40,6 +40,7 @@ export const EventTimeField = ({
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
                 <DatePicker
                     value={date}
+                    aria-label={`${label}: дата`}
                     className={cn(
                         'h-8 min-w-0 w-full px-3 text-xs',
                         compact && 'rounded-[6px] font-normal'
@@ -50,7 +51,7 @@ export const EventTimeField = ({
                 />
                 <TimeSelect
                     value={clock}
-                    aria-label="Время"
+                    aria-label={`${label}: время`}
                     className={cn(
                         'w-full',
                         compact && 'rounded-[6px] border border-border bg-white'

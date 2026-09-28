@@ -20,6 +20,7 @@ import (
 type Server struct {
 	Store    *storage.Store
 	Importer *data.Importer
+	Plans    c.PlanService
 }
 type responseError struct {
 	status  int
@@ -36,9 +37,15 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/scenarios", s.create)
 	m.HandleFunc("POST /api/v1/scenarios/import", s.importCSV)
 	m.HandleFunc("GET /api/v1/scenarios/{id}", s.scenario)
+	m.HandleFunc("POST /api/v1/geocode", s.searchAddress)
+	m.HandleFunc("POST /api/v1/scenarios/{id}/orders/{order_id}/address", s.resolveOrderAddress)
 	m.HandleFunc("PATCH /api/v1/scenarios/{id}/engineers/{engineer_id}", s.patch)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/engineers/import", s.importEngineers)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/plans", s.build)
+	m.HandleFunc("POST /api/v1/scenarios/{id}/proposals", s.createProposal)
+	m.HandleFunc("GET /api/v1/scenarios/{id}/proposals/current", s.currentProposal)
+	m.HandleFunc("POST /api/v1/proposals/{id}/accept", s.acceptProposal)
+	m.HandleFunc("POST /api/v1/scenarios/{id}/plans/compare", s.compare)
 	m.HandleFunc("POST /api/v1/plans/{id}/events", s.event)
 	m.HandleFunc("GET /api/v1/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.Store.GetRun(r.Context(), r.PathValue("id"))
@@ -87,6 +94,11 @@ func respond(w http.ResponseWriter, status int, v any, e error) {
 	write(w, status, v)
 }
 func failure(w http.ResponseWriter, e error) {
+	status, ce := errorResponse(e)
+	write(w, status, ce)
+}
+
+func errorResponse(e error) (int, *c.ContractError) {
 	var re *responseError
 	var fe *data.FormatError
 	var ce *c.ContractError
@@ -117,7 +129,7 @@ func failure(w http.ResponseWriter, e error) {
 		copy.Details = map[string]any{}
 		ce = &copy
 	}
-	write(w, status, ce)
+	return status, ce
 }
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -177,6 +189,10 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	respond(w, 200, v, e)
 }
 func (s *Server) build(w http.ResponseWriter, r *http.Request) {
+	if _, enabled := s.Plans.(optionService); enabled {
+		failure(w, c.NewError("EVENT_CONFLICT", "Для нового плана сначала рассчитайте варианты через proposals и примите один из них"))
+		return
+	}
 	var in struct {
 		SolveMode c.SolveMode     `json:"solve_mode"`
 		RequestID string          `json:"request_id"`
@@ -227,13 +243,55 @@ func (s *Server) event(w http.ResponseWriter, r *http.Request) {
 		failure(w, e)
 		return
 	}
-	in.Event.OccurredAt = in.Event.OccurredAt.UTC()
-	in.Event = normalizeEvent(in.Event)
 	p, e := s.Store.GetPlan(r.Context(), r.PathValue("id"))
 	if e != nil {
 		failure(w, e)
 		return
 	}
+	if _, enabled := s.Plans.(optionService); enabled {
+		unassignedCancellation := false
+		if in.Event.Type == "order_cancelled" {
+			var cancellation c.OrderCancelled
+			if e := payload(in.Event.Payload, &cancellation); e != nil {
+				failure(w, e)
+				return
+			}
+			ids, err := cancellation.IDs()
+			if err != nil {
+				failure(w, err)
+				return
+			}
+			unassigned := make(map[string]bool, len(p.Unassigned))
+			for _, item := range p.Unassigned {
+				unassigned[item.OrderID] = true
+			}
+			unassignedCancellation = true
+			for _, id := range ids {
+				unassignedCancellation = unassignedCancellation && unassigned[id]
+			}
+			if !unassignedCancellation && cancellation.OrderIDs != nil {
+				failure(w, c.NewError("EVENT_CONFLICT", "Для общей отмены выберите только неназначенные заявки. Обновите список."))
+				return
+			}
+		}
+		if in.Event.Type != "order_status_changed" && !unassignedCancellation {
+			failure(w, c.NewError("EVENT_CONFLICT", "Для изменения расписания сначала рассчитайте варианты через proposals и примите один из них"))
+			return
+		}
+		if in.Event.Type == "order_status_changed" {
+			var change c.OrderStatusChanged
+			if e := payload(in.Event.Payload, &change); e != nil {
+				failure(w, e)
+				return
+			}
+			if change.Status != c.OrderStatusInProgress && change.Status != c.OrderStatusCompleted {
+				failure(w, invalid("Инженер сообщает только о начале и завершении работы; статус «В пути» определяется автоматически"))
+				return
+			}
+		}
+	}
+	in.Event.OccurredAt = in.Event.OccurredAt.UTC()
+	in.Event = normalizeEvent(in.Event)
 	cmd := storage.Command{Kind: "replan", Replan: &c.ReplanRequest{SolveMode: in.SolveMode, RequestID: in.RequestID, ScenarioID: p.ScenarioID, SnapshotRevision: in.Revision, BasePlanID: p.ID, Event: in.Event}}
 	id, e := s.Store.Register(r.Context(), cmd)
 	respond(w, 202, map[string]string{"run_id": id}, e)
@@ -265,9 +323,8 @@ func validateEvent(e c.Event) error {
 		if err := payload(e.Payload, &p); err != nil {
 			return err
 		}
-		if p.OrderID == "" || (p.Reason != "client_refusal" && p.Reason != "cannot_perform") {
-			return invalid("Требуются order_id и допустимая причина отмены")
-		}
+		_, err := p.IDs()
+		return err
 	case "engineer_unavailable":
 		var p c.EngineerUnavailable
 		if err := payload(e.Payload, &p); err != nil {
@@ -327,6 +384,9 @@ func (s *Server) patch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch key {
+		case "reserve":
+			failure(w, invalid("Резерв определяется по первому принятому плану и не задаётся вручную"))
+			return
 		case "skills", "transport", "shift", "available", "equipment_stock":
 		default:
 			failure(w, invalid("Неизвестное поле: "+key))
@@ -346,6 +406,8 @@ func (s *Server) patch(w http.ResponseWriter, r *http.Request) {
 				target = &eng.Shift
 			case "available":
 				target = &eng.Available
+			case "reserve":
+				target = &eng.Reserve
 			case "equipment_stock":
 				eng.EquipmentStock = map[c.Equipment]int64{}
 				target = &eng.EquipmentStock
@@ -355,6 +417,9 @@ func (s *Server) patch(w http.ResponseWriter, r *http.Request) {
 			if err := decoder.Decode(target); err != nil {
 				return invalid("Некорректное поле " + key)
 			}
+		}
+		if _, reserveChanged := raw["reserve"]; reserveChanged && eng.Reserve {
+			eng.Available = false
 		}
 		if eng.Transport != c.TransportCar && eng.Transport != c.TransportWalk {
 			return invalid("Некорректный транспорт")

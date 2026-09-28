@@ -28,9 +28,16 @@ type GeocodeRequest struct {
 // GeocodeResultItem holds the result for a single input location.
 // Exactly one of Location or Issue is non-nil.
 type GeocodeResultItem struct {
-	LocationID string    `json:"location_id"`
-	Location   *Location `json:"location"`
-	Issue      *Issue    `json:"issue"`
+	LocationID string             `json:"location_id"`
+	Location   *Location          `json:"location"`
+	Issue      *Issue             `json:"issue"`
+	Candidates []AddressCandidate `json:"candidates,omitempty"`
+}
+
+type AddressCandidate struct {
+	Address string `json:"address"`
+	Point   Point  `json:"point"`
+	Source  string `json:"source,omitempty"`
 }
 
 // GeocodeResult is the response for a geocoding request.

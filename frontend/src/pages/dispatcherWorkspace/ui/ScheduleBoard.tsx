@@ -27,6 +27,8 @@ type ScheduleBoardProps = {
     selectedEngineerId: TypeOrNull<string>;
     onSelectOrder: (id: string) => void;
     onSelectEngineer: (id: TypeOrNull<string>) => void;
+    fillHeight?: boolean;
+    highlightOrderIds?: string[];
 };
 
 export const ScheduleBoard = ({
@@ -37,6 +39,8 @@ export const ScheduleBoard = ({
     selectedEngineerId,
     onSelectOrder,
     onSelectEngineer,
+    fillHeight = false,
+    highlightOrderIds,
 }: ScheduleBoardProps) => {
     const board = useScheduleBoard({
         lanes,
@@ -52,7 +56,8 @@ export const ScheduleBoard = ({
                 itinerary ? styles.itinerary : '',
                 board.dense ? styles.dense : '',
                 board.panning ? styles.panning : '',
-                board.hand && !board.panning ? styles.ready : ''
+                board.hand && !board.panning ? styles.ready : '',
+                fillHeight ? styles.boardFill : ''
             )}
         >
             <ScheduleBoardHead
@@ -73,7 +78,9 @@ export const ScheduleBoard = ({
                     style={{
                         ['--row' as string]: `${board.rowPx}px`,
                         ['--hours' as string]: '28px',
-                        height: `calc(var(--hours) + ${board.chartHeight}px)`,
+                        height: fillHeight
+                            ? undefined
+                            : `calc(var(--hours) + ${board.chartHeight}px)`,
                     }}
                 >
                     <div className={styles.caption}>
@@ -119,6 +126,7 @@ export const ScheduleBoard = ({
                     <div
                         ref={board.peopleRef}
                         className={styles.people}
+                        style={{ paddingBottom: board.scrollbarHeight }}
                         onScroll={board.syncFromPeople}
                     >
                         {board.visibleLanes.map((lane) =>
@@ -208,6 +216,15 @@ export const ScheduleBoard = ({
                                             block={block}
                                             focusAt={focusAt}
                                             selectedOrderId={selectedOrderId}
+                                            highlighted={
+                                                block.kind === 'work' &&
+                                                Boolean(
+                                                    block.orderId &&
+                                                    highlightOrderIds?.includes(
+                                                        block.orderId
+                                                    )
+                                                )
+                                            }
                                             onSelectOrder={onSelectOrder}
                                         />
                                     ))}

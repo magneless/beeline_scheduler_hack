@@ -49,7 +49,7 @@
 | `Order` | `id`, `location_id`, `work_type: WorkType`, `required_skills: string[]`, `required_transport: Transport?`, `window: Window`, `received_at`, `service_sec: int64`, `priority: Priority`, `equipment_required: map[Equipment]int64`, `source_order: int64`, `status: OrderStatus`, `execution: OrderExecution?` |
 | `OrderStatus` | `active \| sent \| en_route \| in_progress \| completed \| cancelled` |
 | `OrderExecution` | `engineer_id`, `departed_at?`, `started_at?`, `finished_at?`, `expected_end_at?` |
-| `Engineer` | `id`, `skills: string[]`, `transport: Transport`, `shift: Window`, `available: bool`, `equipment_stock: map[Equipment]int64`, `source_order: int64` |
+| `Engineer` | `id`, `skills: string[]`, `transport: Transport`, `shift: Window`, `available: bool`, `reserve?: bool`, `equipment_stock: map[Equipment]int64`, `source_order: int64` |
 | `Issue` | `source_row: int?`, `entity_id: string?`, `field: string?`, `code`, `message` |
 | `Snapshot` | `scenario_id`, `revision: int64`, `region_id`, `date`, `timezone`, `office_location_id`, `locations: Location[]`, `orders: Order[]`, `engineers: Engineer[]`, `issues: Issue[]` |
 | `ScenarioView` | `snapshot: Snapshot`, `current_plan_id: string?` |
@@ -64,9 +64,9 @@ Go-2 сопоставляет классификаторы ВК / Beekeeper и H
 
 Время заправки и очереди на АЗС не моделируются. Ориентировочная реакция 1–2 часа в новом QA относится к сетевой аварии и не заменяет норматив выполнения. Поскольку точное событие окончания реакции не определено, контракт не добавляет жёсткий SLA, нижнюю границу ожидания в час или автоматическую отмену при превышении двух часов. Авария остаётся приоритетной, но физически начатая работа не прерывается ради неё.
 
-`active` — ещё не отправлена исполнителю; `sent` — отправлена; `en_route` — бригада в пути; `in_progress` — работа начата; `completed` — диспетчер подтвердил завершение; `cancelled` — отменена. Наличие назначения в плане само по себе не меняет фактический статус. У `active` поле `execution=null`; у `sent` и следующих состояний оно содержит исполнителя. `started_at`/`finished_at` — подтверждённые времена, `expected_end_at` — только оценка для начатой работы. Завершение по часам плана не подтверждается автоматически.
+`active` — работа ещё не начата; `sent` — исторический статус передачи; `en_route` — бригада в пути по времени выезда действующего плана; `in_progress` — работа начата; `completed` — диспетчер подтвердил завершение; `cancelled` — отменена. Наличие назначения в плане само по себе не меняет фактический статус. У `active` поле `execution=null`; у `sent` и следующих состояний оно содержит исполнителя. `started_at`/`finished_at` — подтверждённые времена, `expected_end_at` — только оценка для начатой работы. Выезд определяется автоматически; начало и завершение работы подтверждаются диспетчером.
 
-`equipment_stock` — выдача в офисе на весь день. Принятая модель расхода: полная потребность заявки списывается при первом подтверждённом начале работы. Завершение не списывает её повторно; отмена начатой работы не возвращает оборудование автоматически. Запланированные, но не начатые работы только резервируют остаток внутри расчёта. Пополнение в течение дня и полный складской учёт в основу не входят.
+`equipment_stock` — выдача в офисе на весь день. Принятая модель расхода: полная потребность заявки списывается при первом подтверждённом начале работы. Завершение не списывает её повторно. Начатую работу нельзя отменить событием; её фактический расход сохраняется. Запланированные, но не начатые работы только резервируют остаток внутри расчёта. Пополнение в течение дня и полный складской учёт в основу не входят.
 
 `equipment_required={}` допустимо: оборудование нужно не каждой заявке. Проверка выданного запаса обязательна при ненулевой потребности, а отдельного ограничения веса или числа переносимых устройств в основе нет. Пример 1–2 устройств у пешего инженера — возможное допущение генератора данных, не норматив и не обязательный предел для `walk` или другого транспорта.
 
@@ -85,7 +85,11 @@ Go-2 сопоставляет классификаторы ВК / Beekeeper и H
 
 Ожидание перед работой определяется интервалом от `arrival_at` до `start_at`. Поездки и работы одного инженера не пересекаются. План содержит маршруты задействованных инженеров, включая имеющих только сохранённую часть дня.
 
-`PlanDraft` содержит `solve_mode: baseline | optimized` (может отсутствовать у старых планов), `scenario_id`, `snapshot_revision`, `base_plan_id?`, `as_of`, `routes`, `unassigned`, `cancelled_order_ids`, `completed_order_ids`, `equipment_remaining: map[string]map[Equipment]int64`, `issues`, `metrics`, `baseline_metrics?`, `changes: PlanChange[]`, `termination: completed | time_limit`.
+`PlanDraft` содержит `solve_mode: baseline | optimized` (может отсутствовать у старых планов), `option_key?`, `lateness?: OrderLateness[]`, `reserve_engineer_ids?: string[]`, `deferred_order_ids?: string[]`, `scenario_id`, `snapshot_revision`, `base_plan_id?`, `as_of`, `routes`, `unassigned`, `cancelled_order_ids`, `completed_order_ids`, `equipment_remaining: map[string]map[Equipment]int64`, `issues`, `metrics`, `baseline_metrics?`, `changes: PlanChange[]`, `termination: completed | time_limit`.
+
+`reserve=true` означает бригаду исходного состава, не получившую задач в первом принятом плане. Резерв формируется один раз; завершение последней работы не создаёт новый резерв. До принятия варианта с резервом он не участвует в рабочем составе; привлечённые инженеры получают `available=true`, `reserve=false` в целевом снимке, остальные сохраняют `available=false`, `reserve=true`. `available=true` и `reserve=true` одновременно недопустимы. `deferred_order_ids` отмечает неназначенные заявки принятого плана: их причины остаются в `unassigned`, но при следующих событиях они не возвращаются в расчёт автоматически.
+
+`OrderLateness = {order_id, window: Window, arrival_at, start_at, late_sec}` сохраняет исходное окно аварии рядом с плановым прибытием и длительностью опоздания. `PlanOption = {key, label, result: PlanResult, lateness: OrderLateness[], reserve_engineer_ids: string[], identical_to?: string}` — вычисленный вариант для сравнения. `identical_to` указывает ключ предыдущего варианта с теми же назначениями и исключениями. Ключи: `strict`, `late_emergency`, `reserve`, `original`; последний сохраняет прежнее расписание при событии, для аварии недоступен.
 
 `PlanResult = {draft: PlanDraft, target_snapshot: Snapshot, applied_event: Event?}` — внутренний результат Go-4 для сохранения. `Plan` — сохранённый `PlanDraft` с добавленным `id`. В HTTP поля `PlanDraft` располагаются непосредственно в `Plan`; служебный `target_snapshot` в него не включается.
 
@@ -105,7 +109,7 @@ Go-4 передаёт `equipment_available = equipment_stock − потребн�
 | `ordinary_order_added` | `{order: Order, location: LocationInput?}`; при новом адресе `location.id = order.location_id`; `work_type=connection \| repair \| additional`, `priority=normal`, `status=active`, `execution=null`, `received_at=occurred_at`; длительность и требования соответствуют типу работ |
 | `order_cancelled` | `{order_id, reason: client_refusal \| cannot_perform}` |
 | `engineer_unavailable` | `{engineer_id}` |
-| `order_status_changed` | `{order_id, status: sent \| en_route \| in_progress \| completed, engineer_id, expected_end_at?}`; диспетчер подтверждает факт по информации бригады |
+| `order_status_changed` | `{order_id, status: in_progress \| completed, engineer_id, expected_end_at?}`; диспетчер фиксирует начало или завершение работы; состояние `en_route` определяется по расписанию |
 
 ID события и новой заявки задаёт вызывающая сторона. `source_order` новой заявки назначает Go-4 после существующих заявок; входное значение не используется. После нормализации `applied_event` содержит разрешённые координаты.
 
@@ -113,7 +117,7 @@ ID события и новой заявки задаёт вызывающая �
 
 При отсутствии допустимой вставки новая заявка сохраняется неназначенной, предыдущие назначения не вытесняются. `NO_FEASIBLE_INSERTION` означает отсутствие места при фиксированном плане, а не доказанную невозможность обслужить заявку при любом перепланировании. Если сам прежний план уже конфликтует с фактическим состоянием, Go-4 оставляет его назначения, добавляет `Issue` с кодом `EXISTING_PLAN_CONFLICT`, сохраняет новую заявку с `reason_code=NOT_ASSIGNED_BY_SOLVER` и объяснением конфликта и не вызывает `Solve`. Это допустимый результат, не HTTP-ошибка. Авария допускает пересчёт оставшейся части дня в `optimized`, с сохранением начатых работ.
 
-Переходы: `active → sent → en_route → in_progress → completed`; `sent → in_progress` допустим без отдельной поездки. При `sent` задаётся исполнитель текущего назначения; `en_route` устанавливает `departed_at`, `in_progress` — `started_at`, `completed` — `finished_at` по `occurred_at`. Повтор `in_progress → in_progress` обновляет только оценку окончания. Переданный `expected_end_at` должен быть позже события; для других статусов он `null`. Отмена возможна из любого незавершённого состояния; для начатой работы сохраняет `started_at` и устанавливает `finished_at`. Завершённая или уже отменённая заявка неизменяема. Детали проверки и сохранения фактов — [plans.md](plans.md).
+В рабочем процессе выезд (`en_route` и `departed_at`) определяется по плану, диспетчер подтверждает `in_progress` и затем `completed`. Сохранённый статус `sent` поддерживается при чтении старых планов; отдельной команды передачи в диспетчерском процессе нет. `in_progress` устанавливает `started_at`, `completed` — `finished_at` по `occurred_at`. Повтор `in_progress → in_progress` обновляет только оценку окончания. Переданный `expected_end_at` должен быть позже события; для других статусов он `null`. Отмена возможна только до начала работы, в том числе в пути; начатая работа сохраняется до подтверждённого завершения. Завершённая или уже отменённая заявка неизменяема. Детали проверки и сохранения фактов — [plans.md](plans.md).
 
 ## Версии и ошибки
 

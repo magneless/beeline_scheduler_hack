@@ -2,9 +2,11 @@ package geo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"sync/atomic"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
@@ -67,10 +69,22 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 	}
 
 	items := make([]contracts.GeocodeResultItem, len(input.Locations))
+	type cachedSearch struct {
+		result AddressSearchResult
+		err    error
+	}
+	searched := map[string]cachedSearch{}
+	var searchUnavailable error
 	for i, loc := range input.Locations {
 		item := contracts.GeocodeResultItem{LocationID: loc.ID}
 
 		if loc.Point != nil {
+			if !validPoint(loc.Point.Lat, loc.Point.Lon) {
+				id := loc.ID
+				item.Issue = &contracts.Issue{EntityID: &id, Code: "INVALID_INPUT", Message: "Координаты адреса вне допустимого диапазона"}
+				items[i] = item
+				continue
+			}
 			// Already has coordinates — no geocoding needed.
 			resolved := &contracts.Location{
 				ID:      loc.ID,
@@ -83,8 +97,51 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 		}
 
 		// Geocode the address.
-		candidates, err := s.provider.Geocode(ctx, loc.Address)
+		var candidates []contracts.Location
+		var err error
+		if searcher, ok := s.provider.(AddressSearchProvider); ok {
+			key := strings.TrimSpace(loc.Address)
+			cached, exists := searched[key]
+			if !exists {
+				if searchUnavailable != nil {
+					cached.err = searchUnavailable
+				} else {
+					cached.result, cached.err = searcher.SearchAddress(ctx, loc.Address)
+				}
+				searched[key] = cached
+			}
+			err = cached.err
+			item.Candidates = cached.result.Suggestions
+			for _, match := range cached.result.Exact {
+				candidates = append(candidates, contracts.Location{Address: loc.Address, Point: match.Point})
+			}
+		} else {
+			candidates, err = s.provider.Geocode(ctx, loc.Address)
+		}
 		if err != nil {
+			if ctx.Err() != nil {
+				return contracts.GeocodeResult{}, ctx.Err()
+			}
+			var inputError *geocodeInputError
+			if errors.As(err, &inputError) {
+				id := loc.ID
+				item.Issue = &contracts.Issue{EntityID: &id, Code: "INVALID_INPUT", Message: inputError.Error()}
+				items[i] = item
+				continue
+			}
+			if _, ok := s.provider.(AddressSearchProvider); ok {
+				// Preserve already imported work and every unresolved input when
+				// the upstream fails. Do not repeat a failing network call for
+				// every remaining row; the dispatcher can retry address search.
+				if searchUnavailable == nil {
+					slog.WarnContext(ctx, "address search unavailable", "error", err)
+				}
+				searchUnavailable = err
+				id := loc.ID
+				item.Issue = &contracts.Issue{EntityID: &id, Code: "GEO_UNAVAILABLE", Message: "Поиск адресов временно недоступен. Повторите поиск или укажите точку на карте"}
+				items[i] = item
+				continue
+			}
 			return contracts.GeocodeResult{}, providerError(ctx, "geocode", err,
 				"Сервис определения адресов временно недоступен. Повторите попытку позже.",
 				map[string]any{"entity_id": loc.ID})
@@ -96,7 +153,7 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 			item.Issue = &contracts.Issue{
 				EntityID: &entityID,
 				Code:     "GEO_UNAVAILABLE",
-				Message:  fmt.Sprintf("no geocoding results for address %q", loc.Address),
+				Message:  fmt.Sprintf("Не найден точный дом по адресу %q. Уточните адрес или укажите координаты", loc.Address),
 			}
 		case 1:
 			resolved := candidates[0]
@@ -107,7 +164,7 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 			item.Issue = &contracts.Issue{
 				EntityID: &entityID,
 				Code:     "INVALID_INPUT",
-				Message:  fmt.Sprintf("ambiguous address %q: %d candidates found", loc.Address, len(candidates)),
+				Message:  fmt.Sprintf("Адрес %q неоднозначен: найдено %d подходящих точек. Уточните адрес или укажите координаты", loc.Address, len(candidates)),
 			}
 		}
 		items[i] = item

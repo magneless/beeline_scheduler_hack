@@ -84,6 +84,7 @@ export const cancelReasonLabel = {
 } as const;
 
 export const reasonCodeLabel: Record<string, string> = {
+    ADDRESS_UNRESOLVED: 'Не определены координаты',
     NO_MATCHING_SKILL: 'Нет навыка',
     NO_MATCHING_TRANSPORT: 'Нет транспорта',
     NO_MATCHING_EQUIPMENT: 'Нет оборудования',
@@ -110,7 +111,7 @@ export const issueCodeLabel: Record<string, string> = {
     DEMO_ENGINEERS: 'Демонстрационный состав',
     DEMO_OFFICE_OVERRIDE: 'Демонстрационный офис',
     DEMO_GEO: 'Демонстрационные геоданные',
-    EXECUTION_STATE_REQUIRED: 'Уточните время завершения',
+    EXECUTION_STATE_REQUIRED: 'Ожидается подтверждение завершения',
     ACTUAL_CONSTRAINT_VIOLATION: 'Нарушение ограничения',
     GEO_UNAVAILABLE: 'Адрес не распознан',
 };

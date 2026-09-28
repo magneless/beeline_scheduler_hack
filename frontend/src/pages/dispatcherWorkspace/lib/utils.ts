@@ -20,7 +20,8 @@ export const buildMapModel = (
     plan: Plan | undefined,
     selectedEngineerId?: TypeOrNull<string>,
     onlyUnassigned = false,
-    selectedOrderId?: TypeOrNull<string>
+    selectedOrderId?: TypeOrNull<string>,
+    showAllRoutes = false
 ) => {
     const activePlan =
         plan && plan.scenario_id === snapshot.scenario_id ? plan : undefined;
@@ -37,11 +38,17 @@ export const buildMapModel = (
     const selectedRoute = activePlan?.routes.find(
         (route) => route.engineer_id === selectedEngineerId
     );
+    const numberedRoutes = selectedRoute
+        ? [selectedRoute]
+        : showAllRoutes
+          ? (activePlan?.routes ?? [])
+          : [];
     const sequenceByOrder = new Map(
-        selectedRoute?.visits.map((visit, index) => [
-            visit.order_id,
-            index + 1,
-        ]) ?? []
+        numberedRoutes.flatMap((route) =>
+            route.visits.map(
+                (visit, index) => [visit.order_id, index + 1] as const
+            )
+        )
     );
     const unassigned = new Set(
         activePlan?.unassigned.map((item) => item.order_id) ?? []
@@ -104,7 +111,7 @@ export const buildMapModel = (
         activePlan?.routes
             .filter(
                 (route) =>
-                    Boolean(selectedEngineerId) &&
+                    (showAllRoutes && !selectedEngineerId) ||
                     route.engineer_id === selectedEngineerId
             )
             .map((route) => ({

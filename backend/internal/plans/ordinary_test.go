@@ -128,7 +128,43 @@ func TestOrdinaryReplanProtectsCurrentTrip(t *testing.T) {
 	if len(r.Draft.Unassigned) != 0 || len(r.Draft.Routes[0].Visits) != 2 || r.Draft.Routes[0].Visits[0].OrderID != "order-1" {
 		t.Fatal("current trip redirected or insertion lost")
 	}
-	if !reflect.DeepEqual(r.Draft.Routes[0].Legs[0], p.Routes[0].Legs[0]) {
-		t.Fatal("current trip geometry/times changed")
+	legs := r.Draft.Routes[0].Legs
+	if len(legs) < 2 || legs[0].DistanceM+legs[1].DistanceM != p.Routes[0].Legs[0].DistanceM || !legs[0].EndAt.Equal(legs[1].StartAt) || !legs[1].EndAt.Equal(p.Routes[0].Legs[0].EndAt) {
+		t.Fatalf("elapsed and remaining travel were not preserved: %+v", legs)
+	}
+}
+
+func TestOrdinaryFallbackKeepsFutureVisitsAfterCurrentTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		at        string
+		available bool
+	}{
+		{"unavailable_crew", "2026-09-17T06:07:30Z", false},
+		{"overdue_unconfirmed_start", "2026-09-17T07:31:00Z", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, p := ordinaryFixture()
+			s.Engineers[0].Available = tc.available
+			p.AsOf = mustTime("2026-09-17T06:07:00Z")
+			departure := p.Routes[0].Legs[0].StartAt
+			s.Orders[0].Status = contracts.OrderStatusEnRoute
+			s.Orders[0].Execution = &contracts.OrderExecution{EngineerID: "eng-1", DepartedAt: &departure}
+			next := s.Orders[0]
+			next.ID, next.SourceOrder = "next", 2
+			next.Status, next.Execution = contracts.OrderStatusActive, nil
+			s.Orders = append(s.Orders, next)
+			start := mustTime("2026-09-17T08:00:00Z")
+			p.Routes[0].Visits = append(p.Routes[0].Visits, contracts.Visit{OrderID: next.ID, ArrivalAt: start, StartAt: start, EndAt: start.Add(30 * time.Minute)})
+			p.Routes[0].Legs = append(p.Routes[0].Legs, contracts.Leg{ID: "leg-next", FromLocationID: "loc-1", ToLocationID: "loc-1", StartAt: start, EndAt: start, GeoContextID: "geo-1", Geometry: []contracts.Point{s.Locations[1].Point, s.Locations[1].Point}})
+
+			r := ordinaryReplan(t, s, p, mustTime(tc.at), "loc-1", mustTime("2026-09-17T09:00:00Z"))
+			if !reflect.DeepEqual(r.Draft.Routes, p.Routes) {
+				t.Fatal("failed insertion changed the accepted schedule")
+			}
+			if len(r.Draft.Unassigned) != 1 || r.Draft.Unassigned[0].OrderID != "fresh" || r.Draft.Unassigned[0].ReasonCode != contracts.UnassignedBySolver {
+				t.Fatalf("new work must remain unassigned with an explanation: %+v", r.Draft.Unassigned)
+			}
+		})
 	}
 }

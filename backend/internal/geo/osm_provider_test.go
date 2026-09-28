@@ -19,17 +19,17 @@ func TestOSMGeocodeAndPersistentCache(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"type":"FeatureCollection","features":[{"geometry":{"type":"Point","coordinates":[37.6,55.7]}}]}`))
+		_, _ = w.Write([]byte(`{"type":"FeatureCollection","features":[{"geometry":{"type":"Point","coordinates":[37.6,55.7]},"properties":{"city":"Москва","street":"улица Петровка","housenumber":"2"}}]}`))
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
 	o := OSMOptions{PhotonURL: srv.URL, CarURL: srv.URL, FootURL: srv.URL, MinInterval: time.Nanosecond, CacheDir: dir, CacheTTL: time.Hour}
 	p, _ := NewOSMProvider(o)
-	if _, e := p.Geocode(context.Background(), "Moscow"); e != nil {
+	if _, e := p.Geocode(context.Background(), "Москва, Петровка, 2"); e != nil {
 		t.Fatal(e)
 	}
 	p, _ = NewOSMProvider(o)
-	if _, e := p.Geocode(context.Background(), "Moscow"); e != nil {
+	if _, e := p.Geocode(context.Background(), "Москва, Петровка, 2"); e != nil {
 		t.Fatal(e)
 	}
 	if calls.Load() != 1 {

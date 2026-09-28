@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 
 import { type PlanEventInput } from 'features/applyPlanEvent';
 import {
+    type Point,
     type Snapshot,
     type Transport,
     type WorkType,
@@ -11,6 +12,7 @@ import { Button } from 'shared/ui/button';
 import { Label } from 'shared/ui/label';
 
 import { EventTimeField } from './EventTimeField';
+import { NewOrderAddress } from './NewOrderAddress';
 
 type Props = {
     snapshot: Snapshot;
@@ -21,6 +23,12 @@ type Props = {
     onClose: () => void;
 };
 const ordinaryTypes: WorkType[] = ['connection', 'repair', 'additional'];
+const serviceSecondsByWorkType: Record<WorkType, number> = {
+    connection: 4200,
+    repair: 1800,
+    additional: 1200,
+    emergency: 4800,
+};
 export const OrderForm = ({
     snapshot,
     timezone,
@@ -32,6 +40,7 @@ export const OrderForm = ({
     const [kind, setKind] = useState<'urgent' | 'ordinary'>('urgent');
     const [locationId, setLocationId] = useState('');
     const [address, setAddress] = useState('');
+    const [point, setPoint] = useState<Point>();
     const [workType, setWorkType] = useState<WorkType>('emergency');
     const [skills, setSkills] = useState('');
     const [transport, setTransport] = useState<Transport | ''>('');
@@ -43,33 +52,37 @@ export const OrderForm = ({
             .toUTC()
             .toISO({ suppressMilliseconds: true }) ?? occurredAt
     );
-    const [duration, setDuration] = useState(3600);
+    const serviceSec = serviceSecondsByWorkType[workType];
     const [router, setRouter] = useState(0);
     const [tvBox, setTvBox] = useState(0);
     const [error, setError] = useState('');
-    const localEnd = end
-        ? DateTime.fromISO(end).setZone(timezone).toFormat("yyyy-MM-dd'T'HH:mm")
-        : '';
     const submit = () => {
         if (!locationId && !address.trim()) {
             return setError('Укажите адрес или выберите существующую локацию');
         }
+        if (!locationId && !point) {
+            return setError('Выберите дом на карте');
+        }
         if (
             !DateTime.fromISO(eventAt).isValid ||
             DateTime.fromISO(eventAt).setZone(timezone).toISODate() !==
-                snapshot.date ||
+                snapshot.date
+        ) {
+            return setError(
+                'Время поступления должно быть в пределах дня сценария'
+            );
+        }
+        if (
             !DateTime.fromISO(start).isValid ||
             !DateTime.fromISO(end).isValid ||
-            DateTime.fromISO(end) < DateTime.fromISO(start) ||
-            DateTime.fromISO(end) < DateTime.fromISO(eventAt)
+            DateTime.fromISO(end) < DateTime.fromISO(start)
         ) {
             return setError('Проверьте окно обслуживания');
         }
-        if (
-            kind === 'ordinary' &&
-            (!Number.isInteger(duration) || duration <= 0)
-        ) {
-            return setError('Укажите длительность');
+        if (DateTime.fromISO(end) < DateTime.fromISO(eventAt)) {
+            return setError(
+                'Окно обслуживания заканчивается раньше поступления заявки'
+            );
         }
         if (
             !Number.isInteger(router) ||
@@ -88,6 +101,7 @@ export const OrderForm = ({
             occurredAt: eventAt,
             locationId: locationId || undefined,
             address: address.trim() || undefined,
+            point: locationId ? undefined : point,
             workType: kind === 'urgent' ? 'emergency' : workType,
             requiredSkills: skills
                 .split(',')
@@ -96,7 +110,7 @@ export const OrderForm = ({
             transport: transport || null,
             windowStart: start,
             windowEnd: end,
-            serviceSec: kind === 'urgent' ? 4800 : duration,
+            serviceSec,
             equipment: {
                 ...(router > 0 ? { router } : {}),
                 ...(tvBox > 0 ? { tv_box: tvBox } : {}),
@@ -135,7 +149,10 @@ export const OrderForm = ({
                 aria-label="Адрес заявки"
                 className="w-full rounded border p-2"
                 value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
+                onChange={(e) => {
+                    setLocationId(e.target.value);
+                    setPoint(undefined);
+                }}
             >
                 <option value="">Новая локация</option>
                 {snapshot.locations.map((l) => (
@@ -145,11 +162,21 @@ export const OrderForm = ({
                 ))}
             </select>
             {!locationId && (
-                <input
-                    className="w-full rounded border p-2"
-                    placeholder="Адрес"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                <NewOrderAddress
+                    address={address}
+                    point={point}
+                    regionId={snapshot.region_id}
+                    center={
+                        snapshot.locations.find(
+                            (location) =>
+                                location.id === snapshot.office_location_id
+                        )?.point ?? { lat: 55.75, lon: 37.62 }
+                    }
+                    onAddress={(value) => {
+                        setAddress(value);
+                        setError('');
+                    }}
+                    onPoint={setPoint}
                 />
             )}
             {kind === 'ordinary' && (
@@ -187,52 +214,29 @@ export const OrderForm = ({
                 <option value="walk">Пешком</option>
             </select>
             <EventTimeField
-                label="Время события"
+                label="Заявка поступила"
                 value={eventAt}
                 timezone={timezone}
                 onChange={setEventAt}
             />
+            <p className="text-xs text-muted-foreground">
+                Расчёт учитывает положение и занятость бригад на этот момент.
+            </p>
             <EventTimeField
                 label="Окно обслуживания: с"
                 value={start}
                 timezone={timezone}
                 onChange={setStart}
             />
-            <Label htmlFor="new-order-window-end">Окно обслуживания: до</Label>
-            <input
-                id="new-order-window-end"
-                type="datetime-local"
-                className="w-full rounded border p-2"
-                value={localEnd}
-                onChange={(e) =>
-                    setEnd(
-                        DateTime.fromISO(e.target.value, { zone: timezone })
-                            .toUTC()
-                            .toISO({ suppressMilliseconds: true }) ?? ''
-                    )
-                }
+            <EventTimeField
+                label="Окно обслуживания: до"
+                value={end}
+                timezone={timezone}
+                onChange={setEnd}
             />
-            {kind === 'ordinary' && (
-                <>
-                    <Label htmlFor="new-order-duration">
-                        Длительность обслуживания, сек
-                    </Label>
-                    <input
-                        type="number"
-                        min="1"
-                        className="w-full rounded border p-2"
-                        id="new-order-duration"
-                        value={duration}
-                        onChange={(e) => setDuration(Number(e.target.value))}
-                        placeholder="Длительность обслуживания, сек"
-                    />
-                </>
-            )}
-            {kind === 'urgent' && (
-                <p className="text-xs text-muted-foreground">
-                    Длительность аварии: 80 минут
-                </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+                По нормативу: {serviceSec / 60} мин
+            </p>
             <div className="grid grid-cols-2 gap-2">
                 <Label htmlFor="new-order-router">Роутеры, шт.</Label>
                 <Label htmlFor="new-order-tv">TV-приставки, шт.</Label>
@@ -260,7 +264,9 @@ export const OrderForm = ({
                 <Button
                     size="sm"
                     className="flex-1"
-                    disabled={pending}
+                    disabled={
+                        pending || (!locationId && (!address.trim() || !point))
+                    }
                     onClick={submit}
                 >
                     Добавить заявку

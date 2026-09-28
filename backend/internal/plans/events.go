@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 	"math"
 )
 
@@ -19,6 +20,16 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			return normalized, nil, contracts.InvalidInput("new order event requires order", nil)
 		}
 		order := cloneOrders([]contracts.Order{*payload.Order})[0]
+		var restored *contracts.Order
+		for _, item := range snapshot.UnlocatedOrders {
+			if item.Order.ID == order.ID {
+				original := cloneOrders([]contracts.Order{item.Order})[0]
+				original.ReceivedAt = event.OccurredAt
+				order = original
+				restored = &original
+				break
+			}
+		}
 		if order.ID == "" || order.LocationID == "" || order.Status != contracts.OrderStatusActive || order.Execution != nil || order.ServiceSec <= 0 || !order.ReceivedAt.Equal(event.OccurredAt) || order.Window.End.Before(order.Window.Start) {
 			return normalized, nil, contracts.InvalidInput("invalid new order", nil)
 		}
@@ -38,6 +49,9 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 				order.SourceOrder = existing.SourceOrder + 1
 			}
 		}
+		if restored != nil {
+			order.SourceOrder = restored.SourceOrder
+		}
 		loc, exists := locationMap(*snapshot)[order.LocationID]
 		if payload.Location != nil && payload.Location.ID != order.LocationID {
 			return normalized, nil, contracts.InvalidInput("location id mismatch", nil)
@@ -46,9 +60,14 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			if payload.Location == nil {
 				return normalized, nil, contracts.InvalidInput("new location is required", nil)
 			}
+			progress.Report(ctx, "geocoding", "Проверяем адрес новой заявки")
 			out, err := service.geo.Geocode(ctx, contracts.GeocodeRequest{RegionID: snapshot.RegionID, Locations: []contracts.LocationInput{*payload.Location}})
 			if err != nil {
 				return normalized, nil, dependencyError("geocode new order", err)
+			}
+			if len(out.Items) == 1 && out.Items[0].LocationID == order.LocationID && out.Items[0].Issue != nil {
+				issue := out.Items[0].Issue
+				return normalized, nil, contracts.EventConflict(issue.Message, map[string]any{"address": payload.Location.Address, "geocode_issue": issue.Code})
 			}
 			if len(out.Items) != 1 || out.Items[0].LocationID != order.LocationID || out.Items[0].Location == nil || out.Items[0].Issue != nil {
 				return normalized, nil, contracts.EventConflict("Адрес не найден или неоднозначен. Уточните город, улицу и номер дома.", nil)
@@ -60,6 +79,22 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			snapshot.Locations = append(snapshot.Locations, loc)
 		}
 		snapshot.Orders = append(snapshot.Orders, order)
+		// A confirmed address restores the same imported order, including its
+		// work type, priority and equipment; it must not remain in two lists.
+		unlocated := make([]contracts.UnlocatedOrder, 0, len(snapshot.UnlocatedOrders))
+		for _, item := range snapshot.UnlocatedOrders {
+			if item.Order.ID != order.ID {
+				unlocated = append(unlocated, item)
+			}
+		}
+		snapshot.UnlocatedOrders = unlocated
+		issues := make([]contracts.Issue, 0, len(snapshot.Issues))
+		for _, issue := range snapshot.Issues {
+			if issue.EntityID == nil || *issue.EntityID != order.LocationID {
+				issues = append(issues, issue)
+			}
+		}
+		snapshot.Issues = issues
 		payload.Order = &order
 		payload.Location = &contracts.LocationInput{ID: loc.ID, Address: loc.Address, Point: ptr(loc.Point)}
 		normalized.Payload = contracts.EncodePayload(payload)
@@ -68,10 +103,11 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 		for n := range snapshot.Engineers {
 			eng := &snapshot.Engineers[n]
 			if eng.ID == payload.EngineerID {
-				if !eng.Available {
+				if !eng.Available && !eng.Reserve {
 					return normalized, nil, contracts.EventConflict("engineer already unavailable", nil)
 				}
 				eng.Available = false
+				eng.Reserve = false
 				return normalized, nil, nil
 			}
 		}
@@ -94,11 +130,8 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			if payload.Reason != "client_refusal" && payload.Reason != "cannot_perform" {
 				return normalized, nil, contracts.InvalidInput("cancellation reason is required", nil)
 			}
-			if order.Execution != nil && order.Execution.StartedAt != nil {
-				if !event.OccurredAt.After(*order.Execution.StartedAt) {
-					return normalized, nil, contracts.EventConflict("cancellation must follow work start", nil)
-				}
-				order.Execution.FinishedAt = ptr(event.OccurredAt)
+			if order.Execution != nil && order.Execution.StartedAt != nil && order.Execution.FinishedAt == nil {
+				return normalized, nil, contracts.EventConflict("started work cannot be interrupted by cancellation", nil)
 			}
 			order.Status = contracts.OrderStatusCancelled
 			return normalized, []string{order.ID}, nil
@@ -143,8 +176,26 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 				order.Execution.ExpectedEndAt = payload.ExpectedEndAt
 				return normalized, nil, nil
 			}
-			if order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute {
-				return normalized, nil, contracts.EventConflict("order must be sent or en route", nil)
+			if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute {
+				return normalized, nil, contracts.EventConflict("order must be assigned before work starts", nil)
+			}
+			orders := orderMap(snapshot.Orders)
+			for _, route := range base.Routes {
+				if route.EngineerID != engineer.ID {
+					continue
+				}
+				for _, visit := range route.Visits {
+					if visit.OrderID == order.ID {
+						break
+					}
+					previous := orders[visit.OrderID]
+					if previous.Status != contracts.OrderStatusCompleted && previous.Status != contracts.OrderStatusCancelled {
+						return normalized, nil, contracts.EventConflict("previous work must be completed before starting next", map[string]any{
+							"previous_order_id": previous.ID,
+							"previous_address":  locationMap(*snapshot)[previous.LocationID].Address,
+						})
+					}
+				}
 			}
 			if err := ensureIdle(*snapshot, order.ID, engineer.ID); err != nil {
 				return normalized, nil, err
@@ -161,6 +212,9 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 				if stock[engineer.ID][kind] < amount {
 					return normalized, nil, contracts.EventConflict("insufficient equipment", nil)
 				}
+			}
+			if order.Execution == nil {
+				order.Execution = &contracts.OrderExecution{EngineerID: engineer.ID}
 			}
 			order.Execution.StartedAt = ptr(event.OccurredAt)
 			order.Execution.ExpectedEndAt = payload.ExpectedEndAt

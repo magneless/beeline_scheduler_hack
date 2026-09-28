@@ -12,6 +12,7 @@ type Planner interface {
 
 type SolveRequest struct {
 	Mode                   SolveMode       `json:"mode"`
+	EmergencyFirst         bool            `json:"emergency_first,omitempty"`
 	Orders                 []Order         `json:"orders"`
 	Engineers              []Engineer      `json:"engineers"`
 	EngineerStates         []EngineerState `json:"engineer_states"`
@@ -58,6 +59,7 @@ type Engineer struct {
 	Transport      Transport           `json:"transport"`
 	Shift          Window              `json:"shift"`
 	Available      bool                `json:"available"`
+	Reserve        bool                `json:"reserve,omitempty"`
 	EquipmentStock map[Equipment]int64 `json:"equipment_stock"`
 	SourceOrder    int64               `json:"source_order"`
 }

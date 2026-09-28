@@ -14,7 +14,7 @@ services:
       GEO_OSRM_CAR_URL: ${GEO_OSRM_CAR_URL:-https://routing.openstreetmap.de/routed-car}
       GEO_OSRM_FOOT_URL: ${GEO_OSRM_FOOT_URL:-https://routing.openstreetmap.de/routed-foot}
       GEO_USER_AGENT: ${GEO_USER_AGENT:-beeline-scheduler/1.0 (https://github.com/magneless/beeline_scheduler_hack)}
-      GEO_MIN_INTERVAL_MS: ${GEO_MIN_INTERVAL_MS:-1000}
+      GEO_MIN_INTERVAL_MS: ${GEO_MIN_INTERVAL_MS:-0}
       GEO_CACHE_DIR: /var/cache/scheduler
       SOLVER_MODE: ${SOLVER_MODE:-optimized}
     volumes:

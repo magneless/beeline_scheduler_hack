@@ -79,11 +79,13 @@ export const CrewRow = ({
     const stockItems = (
         Object.entries(stock) as Array<[Equipment, number]>
     ).filter(([, count]) => count > 0);
-    const statusLabel = !engineer.available
-        ? workspaceCopy.crewUnavailable
-        : jobs
-          ? formatCount(jobs, ['задание', 'задания', 'заданий'])
-          : workspaceCopy.crewFree;
+    const statusLabel = engineer.reserve
+        ? 'Резерв · без задач с начала дня'
+        : !engineer.available
+          ? workspaceCopy.crewUnavailable
+          : jobs
+            ? formatCount(jobs, ['задание', 'задания', 'заданий'])
+            : workspaceCopy.crewFree;
     const distanceLabel =
         distance !== undefined ? ` · ${formatKm(distance)}` : '';
     const baselineLabel =
@@ -253,7 +255,9 @@ export const CrewRow = ({
                                     Изменить параметры
                                 </Button>
                             ) : null}
-                            {canEvent && onUnavailable ? (
+                            {canEvent &&
+                            onUnavailable &&
+                            (engineer.available || engineer.reserve) ? (
                                 <details className="group mt-3 border-t border-border pt-3">
                                     <summary
                                         className={cn(

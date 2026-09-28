@@ -26,6 +26,11 @@ export const buildWorkspaceView = ({
             ? plan
             : undefined;
     const timezone = snapshot?.timezone ?? 'Europe/Moscow';
+    const unlocated = snapshot?.unlocated_orders ?? [];
+    const displayOrders = [
+        ...(snapshot?.orders ?? []),
+        ...unlocated.map((item) => item.order),
+    ];
     const distances = Object.fromEntries(
         activePlan?.metrics.per_engineer.map((item) => [
             item.engineer_id,
@@ -41,7 +46,16 @@ export const buildWorkspaceView = ({
     const assignedCounts = Object.fromEntries(
         activePlan?.routes.map((route) => [
             route.engineer_id,
-            route.visits.length,
+            route.visits.filter((visit) => {
+                const order = snapshot?.orders.find(
+                    (item) => item.id === visit.order_id
+                );
+                return (
+                    order &&
+                    order.status !== 'completed' &&
+                    order.status !== 'cancelled'
+                );
+            }).length,
         ]) ?? []
     );
     const lanes =
@@ -69,6 +83,13 @@ export const buildWorkspaceView = ({
     const unassigned = new Map(
         activePlan?.unassigned.map((item) => [item.order_id, item]) ?? []
     );
+    unlocated.forEach((item) =>
+        unassigned.set(item.order.id, {
+            order_id: item.order.id,
+            reason_code: 'ADDRESS_UNRESOLVED',
+            message: item.message,
+        })
+    );
     const visibleOrders =
         snapshot?.orders.filter((order) => {
             if (selectedEngineerId) {
@@ -90,9 +111,7 @@ export const buildWorkspaceView = ({
             )
         ).values(),
     ];
-    const canEditEngineers =
-        !activePlan?.base_plan_id &&
-        !(snapshot?.orders.some((order) => order.execution) ?? false);
+    const canEditEngineers = !activePlan;
     const occurredAtDefault = snapshot
         ? defaultOccurredAt(snapshot.date, timezone, activePlan?.as_of)
         : '';
@@ -108,9 +127,13 @@ export const buildWorkspaceView = ({
     const urgentDone = Boolean(
         snapshot?.orders.some((order) => order.id === 'order-10')
     );
+    unlocated.forEach((item) => {
+        addressByOrder[item.order.id] = item.address;
+    });
 
     return {
         timezone,
+        displayOrders,
         distances,
         baselineDistances,
         assignedCounts,
@@ -125,13 +148,13 @@ export const buildWorkspaceView = ({
         occurredAtDefault,
         addressByOrder,
         urgentDone,
-        selectedOrder: snapshot?.orders.find(
+        selectedOrder: displayOrders.find(
             (order) => order.id === selectedOrderId
         ),
         selectedVisit: selectedOrderId
             ? visitByOrder.get(selectedOrderId)
             : undefined,
-        ordersCount: snapshot?.orders.length ?? 0,
+        ordersCount: displayOrders.length,
         crewsCount: snapshot?.engineers.length ?? 0,
         canEvent: Boolean(activePlan),
     };

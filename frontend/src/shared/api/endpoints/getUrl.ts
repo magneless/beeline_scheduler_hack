@@ -17,6 +17,18 @@ export const getEngineerImportUrl = (scenarioId: string) =>
 export const getBuildPlanUrl = (scenarioId: string) =>
     `/scenarios/${scenarioId}/plans`;
 
+export const getComparePlansUrl = (scenarioId: string) =>
+    `/scenarios/${scenarioId}/plans/compare`;
+
+export const getProposalsUrl = (scenarioId: string) =>
+    `/scenarios/${scenarioId}/proposals`;
+
+export const getCurrentProposalUrl = (scenarioId: string) =>
+    `${getProposalsUrl(scenarioId)}/current`;
+
+export const getAcceptProposalUrl = (proposalId: string) =>
+    `/proposals/${proposalId}/accept`;
+
 export const getRunUrl = (runId: string) => `/runs/${runId}`;
 
 export const getPlanUrl = (planId: string) => `/plans/${planId}`;

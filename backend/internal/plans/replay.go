@@ -16,11 +16,12 @@ type replayResult struct {
 	usedEngineers []string
 	geoContextID  *string
 	blocked       map[string]bool
+	enrouteOrders map[string]string
 }
 
 // Replay only confirmed execution. Future plan timestamps never establish facts.
 func (service *Service) replayAt(ctx context.Context, snapshot *contracts.Snapshot, base contracts.Plan, event contracts.Event) (replayResult, error) {
-	result := replayResult{routes: []contracts.Route{}, states: map[string]contracts.EngineerState{}, lockedOrders: map[string]struct{}{}, blocked: map[string]bool{}}
+	result := replayResult{routes: []contracts.Route{}, states: map[string]contracts.EngineerState{}, lockedOrders: map[string]struct{}{}, blocked: map[string]bool{}, enrouteOrders: map[string]string{}}
 	usedLocations := map[string]struct{}{}
 	for _, loc := range snapshot.Locations {
 		usedLocations[loc.ID] = struct{}{}
@@ -53,6 +54,57 @@ func (service *Service) replayAt(ctx context.Context, snapshot *contracts.Snapsh
 				return result, contracts.InvalidPlan("multiple geo contexts", nil)
 			}
 			confirmed := !leg.EndAt.After(base.AsOf)
+			// A departure in the accepted schedule establishes the current trip.
+			// Earlier work in the route must have an actual completion first.
+			visitIndex := -1
+			for i, visit := range route.Visits {
+				if leg.ToLocationID == orders[visit.OrderID].LocationID && leg.EndAt.Equal(visit.ArrivalAt) {
+					visitIndex = i
+					break
+				}
+			}
+			if visitIndex >= 0 {
+				order := orders[route.Visits[visitIndex].OrderID]
+				startingNow := event.Type == contracts.EventOrderStatusChanged && contracts.DecodePayload(event.Payload).OrderID == order.ID
+				// A status-only save can advance the clock during another
+				// crew's trip without splitting its accepted route. That trip
+				// stays confirmed even if the next event is after arrival.
+				departedByPlanClock := leg.StartAt.Before(base.AsOf) && base.AsOf.Before(route.Visits[visitIndex].StartAt)
+				priorComplete := true
+				for previous := 0; previous < visitIndex; previous++ {
+					prior := orders[route.Visits[previous].OrderID]
+					if prior.Status != contracts.OrderStatusCompleted && !(prior.Status == contracts.OrderStatusCancelled && prior.Execution != nil && prior.Execution.StartedAt != nil) {
+						priorComplete = false
+						break
+					}
+				}
+				// The plan clock can advance because another crew reported an
+				// event. Elapsed schedule timestamps do not confirm a departure
+				// while this crew's preceding work is still unfinished.
+				if !priorComplete && (order.Execution == nil || order.Execution.StartedAt == nil) {
+					confirmed = false
+				}
+				if priorComplete && leg.StartAt.Before(event.OccurredAt) && (event.OccurredAt.Before(route.Visits[visitIndex].StartAt) || startingNow || departedByPlanClock) && order.ID != "" && order.Status != contracts.OrderStatusCancelled && order.Status != contracts.OrderStatusCompleted && (order.Execution == nil || order.Execution.StartedAt == nil) {
+					confirmed = true
+					result.enrouteOrders[route.EngineerID] = order.ID
+					result.lockedOrders[order.ID] = struct{}{}
+					for index := range snapshot.Orders {
+						if snapshot.Orders[index].ID != order.ID {
+							continue
+						}
+						if snapshot.Orders[index].Execution == nil {
+							snapshot.Orders[index].Execution = &contracts.OrderExecution{EngineerID: route.EngineerID}
+						}
+						if snapshot.Orders[index].Execution.DepartedAt == nil {
+							snapshot.Orders[index].Execution.DepartedAt = ptr(leg.StartAt)
+						}
+						if snapshot.Orders[index].Status == contracts.OrderStatusActive || snapshot.Orders[index].Status == contracts.OrderStatusSent {
+							snapshot.Orders[index].Status = contracts.OrderStatusEnRoute
+						}
+						break
+					}
+				}
+			}
 			for _, o := range snapshot.Orders {
 				ex := o.Execution
 				if o.Status == contracts.OrderStatusCancelled && (ex == nil || ex.StartedAt == nil) {

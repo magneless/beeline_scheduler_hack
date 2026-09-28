@@ -18,7 +18,28 @@ func resetReassigned(snapshot *contracts.Snapshot, routes []contracts.Route) {
 			continue
 		}
 		a, ok := current[o.ID]
-		if !ok || a.EngineerID != o.Execution.EngineerID {
+		redirected := false
+		if ok && a.EngineerID == o.Execution.EngineerID && o.Status == contracts.OrderStatusEnRoute {
+			for _, route := range routes {
+				if route.EngineerID != a.EngineerID {
+					continue
+				}
+				for _, visit := range route.Visits {
+					if visit.OrderID == o.ID {
+						break
+					}
+					for _, earlier := range snapshot.Orders {
+						if earlier.ID == visit.OrderID && earlier.Status != contracts.OrderStatusCompleted && (earlier.Execution == nil || earlier.Execution.StartedAt == nil) {
+							redirected = true
+						}
+					}
+					if redirected {
+						break
+					}
+				}
+			}
+		}
+		if !ok || a.EngineerID != o.Execution.EngineerID || redirected {
 			o.Status = contracts.OrderStatusActive
 			o.Execution = nil
 		}

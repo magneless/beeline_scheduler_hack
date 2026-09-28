@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+    isUnassignedCancellation,
     type PlanEventInput,
     useApplyPlanEvent,
 } from 'features/applyPlanEvent';
-import { useBuildPlan } from 'features/buildPlan';
 import { type CrewPatchInput, useUpdateCrew } from 'features/updateCrew';
 import { type Run, type SolveMode } from 'shared/api/types/contracts';
 import { runStatusLabel } from 'shared/lib/config';
@@ -12,6 +12,7 @@ import { type TypeOrNull } from 'shared/lib/types';
 
 import { useWorkspaceQueries } from './queries';
 import { useDispatcherWorkspaceStore } from './store';
+import { usePlanProposal } from './usePlanProposal';
 import { useWorkspaceSelection } from './useWorkspaceSelection';
 import { buildMapModel } from '../lib/utils';
 import { buildWorkspaceView } from '../lib/viewModel';
@@ -19,8 +20,12 @@ import { buildWorkspaceView } from '../lib/viewModel';
 export const useDispatcherWorkspace = (scenarioId: string) => {
     const selection = useWorkspaceSelection();
     const queries = useWorkspaceQueries(scenarioId);
+    const [proposalOpen, setProposalOpen] = useState(true);
+    const [scenarioTime, setScenarioTime] = useState('');
     useEffect(() => {
         useDispatcherWorkspaceStore.getState().resetSelection();
+        setProposalOpen(true);
+        setScenarioTime('');
     }, [scenarioId]);
 
     const mapModel = useMemo(
@@ -63,6 +68,50 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
             selection.selectedEngineerId,
         ]
     );
+    const planAsOf = queries.plan?.as_of;
+    useEffect(() => {
+        if (planAsOf) {
+            setScenarioTime((current) =>
+                current && Date.parse(current) < Date.parse(planAsOf)
+                    ? planAsOf
+                    : current
+            );
+        }
+    }, [planAsOf]);
+    const effectiveScenarioTime = scenarioTime || view.occurredAtDefault;
+    const inTransitOrderIds = new Set<string>();
+    const atMillis = Date.parse(effectiveScenarioTime);
+    if (Number.isFinite(atMillis)) {
+        const orderById = new Map(
+            queries.snapshot?.orders.map((order) => [order.id, order]) ?? []
+        );
+        queries.plan?.routes.forEach((route) => {
+            const next = route.visits.find((visit) => {
+                const status = orderById.get(visit.order_id)?.status;
+                return status !== 'completed' && status !== 'cancelled';
+            });
+            if (!next) {
+                return;
+            }
+            const order = orderById.get(next.order_id);
+            if (order?.status !== 'active') {
+                return;
+            }
+            const leg = route.legs
+                .filter(
+                    (item) =>
+                        item.to_location_id === order.location_id &&
+                        Date.parse(item.end_at) <= Date.parse(next.arrival_at)
+                )
+                .sort(
+                    (left, right) =>
+                        Date.parse(right.end_at) - Date.parse(left.end_at)
+                )[0];
+            if (leg && Date.parse(leg.start_at) <= atMillis) {
+                inTransitOrderIds.add(next.order_id);
+            }
+        });
+    }
 
     const savedSolveMode =
         queries.plan?.solve_mode ??
@@ -82,12 +131,15 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     const setSolveMode = (mode: SolveMode) =>
         setAlgorithmChoice({ scenarioId, planId: queries.planId, mode });
 
-    const buildPlan = useBuildPlan({
+    const proposal = usePlanProposal({
         solveMode,
         scenarioId,
         snapshot: queries.currentSnapshot,
         planId: queries.planId,
+        plan: queries.plan,
+        selectedOrderId: selection.selectedOrderId,
         onReload: queries.reload,
+        onProposalReady: () => setProposalOpen(true),
     });
     const planEvent = useApplyPlanEvent({
         solveMode,
@@ -104,11 +156,13 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         onReload: queries.reload,
     });
 
-    const runStatus: TypeOrNull<Run['status']> =
-        buildPlan.runStatus ?? planEvent.runStatus;
+    const runStatus: TypeOrNull<Run['status']> = planEvent.runStatus;
     const eventPending = planEvent.pending;
     const showRunBanner =
-        eventPending && Boolean(runStatus) && runStatus !== 'succeeded';
+        eventPending &&
+        Boolean(runStatus) &&
+        !planEvent.calculation &&
+        runStatus !== 'succeeded';
 
     const selectOrder = (id: TypeOrNull<string>) => {
         const engineerId = id ? view.engineerByOrder.get(id) : undefined;
@@ -128,7 +182,19 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     };
 
     const handleOrderEvent = (input: PlanEventInput) => {
-        planEvent.apply(input);
+        if (
+            input.kind === 'status' ||
+            input.kind === 'cancel_many' ||
+            isUnassignedCancellation(
+                input,
+                queries.plan,
+                selection.selectedOrderId
+            )
+        ) {
+            planEvent.apply(input);
+        } else {
+            proposal.create(input);
+        }
     };
 
     const handlePatchEngineer = (engineerId: string, patch: CrewPatchInput) => {
@@ -139,7 +205,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         engineerId: string,
         occurredAt: string
     ) => {
-        planEvent.apply({
+        proposal.create({
             kind: 'engineer_unavailable',
             engineerId,
             occurredAt,
@@ -147,6 +213,16 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     };
 
     return {
+        proposal: proposal.proposal,
+        proposalCalculation: proposal.calculation,
+        runCalculation: planEvent.calculation,
+        proposalOpen,
+        setProposalOpen,
+        acceptProposal: proposal.accept,
+        proposalAccepting: proposal.accepting,
+        scenarioTime: effectiveScenarioTime,
+        inTransitOrderIds,
+        setScenarioTime,
         solveMode,
         setSolveMode,
         savedSolveMode: queries.plan ? savedSolveMode : undefined,
@@ -181,17 +257,21 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         showUnassigned,
         runStatus,
         runStatusLabel: runStatus ? runStatusLabel[runStatus] : undefined,
-        eventPending,
+        eventPending: eventPending || proposal.creating || proposal.accepting,
         showRunBanner,
-        buildPending: buildPlan.pending,
-        buildErrorMessage: buildPlan.errorMessage,
-        crewPending: crew.pending || eventPending || buildPlan.pending,
+        buildPending: proposal.creating,
+        buildErrorMessage: proposal.createError,
+        crewPending:
+            crew.pending ||
+            eventPending ||
+            proposal.creating ||
+            proposal.accepting,
         handleClearCrew: () => {
             selection.focusEngineer(null);
             selection.selectOrder(null);
             selection.setFilter('all');
         },
-        handleBuildPlan: buildPlan.build,
+        handleBuildPlan: () => proposal.create(),
         handleOrderEvent: queries.plan ? handleOrderEvent : undefined,
         handlePatchEngineer,
         handleEngineerUnavailable,

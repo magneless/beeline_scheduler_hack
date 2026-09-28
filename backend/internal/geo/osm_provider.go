@@ -13,13 +13,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 )
@@ -39,9 +37,15 @@ type OSMOptions struct {
 type OSMProvider struct {
 	o       OSMOptions
 	client  *http.Client
-	gate    chan struct{}
-	next    time.Time
+	gatesMu sync.Mutex
+	gates   map[string]*requestGate
 	cacheMu sync.Mutex
+}
+
+type requestGate struct {
+	lock     chan struct{}
+	next     time.Time
+	interval time.Duration
 }
 
 func NewOSMProvider(o OSMOptions) (*OSMProvider, error) {
@@ -57,9 +61,6 @@ func NewOSMProvider(o OSMOptions) (*OSMProvider, error) {
 	if o.UserAgent == "" {
 		o.UserAgent = "beeline-scheduler/1.0 (https://github.com/magneless/beeline_scheduler_hack)"
 	}
-	if o.MinInterval == 0 {
-		o.MinInterval = time.Second
-	}
 	if o.MinInterval < 0 || o.CacheTTL < 0 {
 		return nil, fmt.Errorf("negative OSM interval or cache TTL")
 	}
@@ -70,9 +71,6 @@ func NewOSMProvider(o OSMOptions) (*OSMProvider, error) {
 		u, err := url.Parse(endpoint)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 			return nil, fmt.Errorf("invalid OSM endpoint %q", endpoint)
-		}
-		if (u.Hostname() == "photon.komoot.io" || u.Hostname() == "routing.openstreetmap.de") && o.MinInterval < time.Second {
-			o.MinInterval = time.Second
 		}
 	}
 	if o.Client == nil {
@@ -88,10 +86,28 @@ func NewOSMProvider(o OSMOptions) (*OSMProvider, error) {
 			return nil, fmt.Errorf("create geo cache: %w", err)
 		}
 	}
-	return &OSMProvider{o: o, client: o.Client, gate: make(chan struct{}, 1)}, nil
+	return &OSMProvider{o: o, client: o.Client, gates: make(map[string]*requestGate)}, nil
 }
 
-// Serialize requests, including their start times, across both routing profiles.
+// Each upstream has its own queue. A slow route request must not block address
+// search. Public limits still apply to every request, including retries.
+func (p *OSMProvider) requestGate(endpoint string) *requestGate {
+	u, _ := url.Parse(endpoint)
+	p.gatesMu.Lock()
+	defer p.gatesMu.Unlock()
+	key := u.Host
+	if gate := p.gates[key]; gate != nil {
+		return gate
+	}
+	interval := p.o.MinInterval
+	if u.Hostname() == "photon.komoot.io" || u.Hostname() == "routing.openstreetmap.de" {
+		interval = max(interval, time.Second)
+	}
+	gate := &requestGate{lock: make(chan struct{}, 1), interval: interval}
+	p.gates[key] = gate
+	return gate
+}
+
 func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -101,12 +117,13 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 			return nil
 		}
 	}
+	gate := p.requestGate(endpoint)
 	select {
-	case p.gate <- struct{}{}:
+	case gate.lock <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	defer func() { <-p.gate }()
+	defer func() { <-gate.lock }()
 	// Another request may have populated the cache while we waited.
 	if body, ok := p.loadCache(endpoint); ok {
 		if err := json.Unmarshal(body, value); err == nil {
@@ -123,7 +140,7 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 				return err
 			}
 		}
-		if err := p.waitGate(ctx); err != nil {
+		if err := p.wait(ctx, time.Until(gate.next)); err != nil {
 			return err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -132,8 +149,11 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 		}
 		req.Header.Set("User-Agent", p.o.UserAgent)
 		req.Header.Set("Accept", "application/json")
-		p.next = time.Now().Add(p.o.MinInterval)
 		response, err := p.client.Do(req)
+		// Count the upstream interval from completion of the previous attempt.
+		// This also keeps requests apart when connection setup and handler
+		// scheduling take different amounts of time.
+		gate.next = time.Now().Add(gate.interval)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -154,7 +174,7 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 			continue
 		}
 		if response.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("OSM HTTP %s", response.Status)
+			lastErr = &osmHTTPError{status: response.StatusCode, text: response.Status}
 			if !retryableStatus(response.StatusCode) || attempt == 2 {
 				return lastErr
 			}
@@ -186,12 +206,6 @@ func (p *OSMProvider) get(ctx context.Context, endpoint string, value any) error
 	return lastErr
 }
 
-func (p *OSMProvider) waitGate(ctx context.Context) error {
-	if d := time.Until(p.next); d > 0 {
-		return p.wait(ctx, d)
-	}
-	return nil
-}
 func (p *OSMProvider) wait(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return nil
@@ -327,59 +341,6 @@ func (p *OSMProvider) saveCache(endpoint string, body []byte) {
 func validPoint(lat, lon float64) bool {
 	return !math.IsNaN(lat) && !math.IsInf(lat, 0) && !math.IsNaN(lon) && !math.IsInf(lon, 0) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
 }
-func (p *OSMProvider) Geocode(ctx context.Context, address string) ([]contracts.Location, error) {
-	if strings.TrimSpace(address) == "" {
-		return nil, fmt.Errorf("empty address")
-	}
-	parts := parseRussianAddress(address)
-	endpoint := strings.TrimRight(p.o.PhotonURL, "/") + "/api/?q=" + url.QueryEscape(address) + "&limit=5"
-	if parts.ok {
-		v := url.Values{}
-		// Photon /structured currently rejects spaced Russian house numbers
-		// such as "128 к5". Use the normalized free-text query and validate
-		// every returned address component below.
-		v.Set("q", parts.city+" "+parts.street+" "+parts.house)
-		v.Set("countrycode", "RU")
-		v.Set("limit", "5")
-		endpoint = strings.TrimRight(p.o.PhotonURL, "/") + "/api/?" + v.Encode()
-	}
-	var response struct {
-		Type     string `json:"type"`
-		Features []struct {
-			Geometry struct {
-				Type        string    `json:"type"`
-				Coordinates []float64 `json:"coordinates"`
-			} `json:"geometry"`
-			Properties struct {
-				Street string `json:"street"`
-				House  string `json:"housenumber"`
-				City   string `json:"city"`
-			} `json:"properties"`
-		} `json:"features"`
-	}
-	if err := p.get(ctx, endpoint, &response); err != nil {
-		return nil, err
-	}
-	if response.Type != "FeatureCollection" || response.Features == nil {
-		return nil, fmt.Errorf("malformed Photon response")
-	}
-	out := make([]contracts.Location, 0, len(response.Features))
-	seen := map[contracts.Point]bool{}
-	for _, feature := range response.Features {
-		coord := feature.Geometry.Coordinates
-		if feature.Geometry.Type != "Point" || len(coord) != 2 || !validPoint(coord[1], coord[0]) {
-			return nil, fmt.Errorf("invalid Photon coordinates")
-		}
-		point := contracts.Point{Lat: coord[1], Lon: coord[0]}
-		props := feature.Properties
-		if addressMatches(address, parts, props.City, props.Street, props.House) && !seen[point] {
-			out = append(out, contracts.Location{Address: address, Point: point})
-			seen[point] = true
-		}
-	}
-	return out, nil
-}
-
 func (p *OSMProvider) routeBase(profile contracts.Transport) (string, error) {
 	switch profile {
 	case contracts.TransportCar:
@@ -524,106 +485,9 @@ func (p *OSMProvider) RouteMatrix(ctx context.Context, points []contracts.Point,
 	return out, nil
 }
 
-// Photon returns nearby and fuzzy matches too. Only accept the complete
-// requested city, street and house; a street centroid is not a house location.
-type russianAddress struct {
-	city, street, house string
-	ok                  bool
+type osmHTTPError struct {
+	status int
+	text   string
 }
 
-var (
-	houseMarkerRE  = regexp.MustCompile(`(?i)(?:^|[ ,])(?:дом|д)\.?\s*([^,;]+)$`)
-	houseTailRE    = regexp.MustCompile(`(?i)(?:^|[ ,])([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?(?:\s*(?:корпус|корп|к|строение|стр|с)\.?\s*[0-9]+[а-яa-z]?){0,2})$`)
-	housePartsRE   = regexp.MustCompile(`^([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?)(?:к([0-9]+[а-яa-z]?))?(?:с([0-9]+[а-яa-z]?))?$`)
-	streetMarkerRE = regexp.MustCompile(`(?:^| )(?:улица|ул|пр-кт|проспект|просп|проезд|переулок|пер|шоссе|ш|площадь|пл|набережная|наб|бульвар|бул) `)
-)
-
-func addressWords(s string) []string {
-	s = strings.ReplaceAll(strings.ToLower(s), "ё", "е")
-	return strings.FieldsFunc(s, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
-	})
-}
-
-func normAddressPart(s string) string {
-	words := addressWords(s)
-	out := make([]string, 0, len(words))
-	for _, word := range words {
-		switch word {
-		case "г", "город":
-			continue
-		case "ул":
-			word = "улица"
-		case "пр-кт", "просп":
-			word = "проспект"
-		case "пер":
-			word = "переулок"
-		case "ш":
-			word = "шоссе"
-		case "пл":
-			word = "площадь"
-		case "наб":
-			word = "набережная"
-		case "бул":
-			word = "бульвар"
-		}
-		out = append(out, word)
-	}
-	return strings.Join(out, " ")
-}
-
-func normHouse(s string) string {
-	s = strings.ReplaceAll(strings.ToLower(s), "ё", "е")
-	s = strings.NewReplacer("корпус", "к", "корп", "к", "строение", "с", "стр", "с", ".", "").Replace(s)
-	s = strings.Join(strings.Fields(s), "")
-	parts := housePartsRE.FindStringSubmatch(s)
-	if parts == nil {
-		return ""
-	}
-	house := parts[1]
-	if parts[2] != "" {
-		house += " к" + parts[2]
-	}
-	if parts[3] != "" {
-		house += " с" + parts[3]
-	}
-	return house
-}
-
-func parseRussianAddress(address string) russianAddress {
-	raw := strings.TrimSpace(address)
-	m := houseMarkerRE.FindStringSubmatchIndex(raw)
-	if m == nil {
-		m = houseTailRE.FindStringSubmatchIndex(raw)
-	}
-	if m == nil {
-		return russianAddress{}
-	}
-	house := normHouse(raw[m[2]:m[3]])
-	before := strings.Trim(raw[:m[0]], " ,;")
-	segments := strings.SplitN(before, ",", 2)
-	var city, street string
-	if len(segments) == 2 {
-		city, street = normAddressPart(segments[0]), normAddressPart(segments[1])
-	} else {
-		before = normAddressPart(before)
-		if marker := streetMarkerRE.FindStringIndex(before); marker != nil {
-			city, street = strings.TrimSpace(before[:marker[0]]), strings.TrimSpace(before[marker[0]:])
-		}
-	}
-	if city == "" || street == "" || house == "" {
-		return russianAddress{}
-	}
-	return russianAddress{city: city, street: street, house: house, ok: true}
-}
-
-func addressMatches(_ string, wanted russianAddress, city, street, house string) bool {
-	if !wanted.ok || normAddressPart(city) != wanted.city || normHouse(house) != wanted.house {
-		return false
-	}
-	// OSM can place a street type or ordinal before or after the name.
-	left, right := strings.Fields(normAddressPart(street)), strings.Fields(wanted.street)
-	sort.Strings(left)
-	sort.Strings(right)
-	return strings.Join(left, " ") == strings.Join(right, " ")
-}
+func (e *osmHTTPError) Error() string { return "OSM HTTP " + e.text }

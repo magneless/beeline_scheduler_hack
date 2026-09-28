@@ -53,6 +53,7 @@ export type Engineer = {
     transport: Transport;
     shift: TimeWindow;
     available: boolean;
+    reserve?: boolean;
     equipment_stock: Partial<Record<Equipment, number>>;
     source_order: number;
 };
@@ -74,6 +75,12 @@ export type Snapshot = {
     office_location_id: string;
     locations: Location[];
     orders: Order[];
+    unlocated_orders?: {
+        order: Order;
+        address: string;
+        message: string;
+        candidates?: { address: string; point: Point; source?: string }[];
+    }[];
     engineers: Engineer[];
     issues: Issue[];
 };
@@ -164,6 +171,42 @@ export type Plan = {
     changes: PlanChange[];
     termination: 'completed' | 'time_limit';
     equipment_remaining: Record<string, Partial<Record<Equipment, number>>>;
+    option_key?: string;
+    lateness?: OrderLateness[];
+    reserve_engineer_ids?: string[];
+    deferred_order_ids?: string[];
+};
+
+export type PlanDraft = Omit<Plan, 'id'>;
+
+export type OrderLateness = {
+    order_id: string;
+    window: TimeWindow;
+    arrival_at: string;
+    start_at: string;
+    late_sec: number;
+};
+
+export type PlanOption = {
+    key: 'strict' | 'late_emergency' | 'reserve' | 'original';
+    label: string;
+    result: {
+        draft: PlanDraft;
+        target_snapshot: Snapshot;
+        applied_event: PlanEvent | null;
+    };
+    lateness: OrderLateness[];
+    reserve_engineer_ids: string[];
+    identical_to?: string;
+};
+
+export type PlanProposal = {
+    id: string;
+    scenario_id: string;
+    snapshot_revision: number;
+    expected_current_plan_id: TypeOrNull<string>;
+    event?: PlanEvent | null;
+    options: PlanOption[];
 };
 
 export type Run = {

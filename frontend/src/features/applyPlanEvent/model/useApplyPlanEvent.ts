@@ -15,6 +15,10 @@ import {
 } from 'shared/lib/commandErrors';
 import { runPlanCommand } from 'shared/lib/planCommand';
 import { type TypeOrNull } from 'shared/lib/types';
+import { type CalculationState } from 'shared/ui/calculationProgress';
+
+import { createEvent } from './createEvent';
+import { isUnassignedCancellation } from './eventRouting';
 
 import { type PlanEventInput } from './types';
 
@@ -49,6 +53,9 @@ export const useApplyPlanEvent = ({
 }: UseApplyPlanEventParams) => {
     const queryClient = useQueryClient();
     const [runStatus, setRunStatus] = useState<TypeOrNull<Run['status']>>(null);
+    const [calculation, setCalculation] = useState<CalculationState | null>(
+        null
+    );
 
     const mutation = useMutation({
         mutationFn: async (input: PlanEventInput) => {
@@ -65,77 +72,95 @@ export const useApplyPlanEvent = ({
                     ? engineerForOrder(plan, selectedOrderId)
                     : undefined);
 
-            const run = await runPlanCommand(async () => {
-                if (input.kind === 'new_order') {
-                    const locationId =
-                        input.locationId ?? `location-${crypto.randomUUID()}`;
-                    const location = input.locationId
-                        ? undefined
-                        : {
-                              id: locationId,
-                              address: input.address?.trim() ?? '',
-                          };
-                    if (!input.locationId && !input.address?.trim()) {
-                        throw new Error('Укажите адрес');
+            const startedAt = Date.now();
+            const plannedEnd = plan.routes
+                .flatMap((route) => route.visits)
+                .find((visit) => visit.order_id === selectedOrderId)?.end_at;
+            const keepsSchedule =
+                input.kind === 'status' &&
+                (input.status === 'in_progress' ||
+                    (input.status === 'completed' &&
+                        plannedEnd &&
+                        Date.parse(input.occurredAt) <=
+                            Date.parse(plannedEnd)));
+            const cancelsUnassigned = isUnassignedCancellation(
+                input,
+                plan,
+                selectedOrderId
+            );
+            setCalculation({
+                startedAt,
+                lastEventAt: startedAt,
+                ...(keepsSchedule || cancelsUnassigned
+                    ? {
+                          title: cancelsUnassigned
+                              ? input.kind === 'cancel_many'
+                                  ? 'Отмена заявок'
+                                  : 'Отмена заявки'
+                              : 'Сохранение работы',
+                          progress: {
+                              stage: 'saving',
+                              message: cancelsUnassigned
+                                  ? 'Сохраняем отмену заявки'
+                                  : 'Сохраняем состояние работы',
+                              completed: 0,
+                              total: 0,
+                          },
+                      }
+                    : {}),
+            });
+            const run = await runPlanCommand(
+                async () => {
+                    if (input.kind === 'new_order') {
+                        return postPlanEvent({
+                            planId,
+                            requestId: crypto.randomUUID(),
+                            snapshotRevision: snapshot.revision,
+                            solveMode,
+                            event: createEvent(
+                                input,
+                                snapshot,
+                                plan,
+                                selectedOrderId
+                            ),
+                        });
                     }
-                    return postPlanEvent({
-                        planId,
-                        requestId: crypto.randomUUID(),
-                        snapshotRevision: snapshot.revision,
-                        solveMode,
-                        event: {
-                            id: crypto.randomUUID(),
-                            occurred_at: input.occurredAt,
-                            type:
-                                input.orderType === 'urgent'
-                                    ? 'urgent_order_added'
-                                    : 'ordinary_order_added',
-                            payload: {
-                                ...(location ? { location } : {}),
-                                order: {
-                                    id: `order-${crypto.randomUUID()}`,
-                                    location_id: locationId,
-                                    work_type: input.workType,
-                                    required_skills: input.requiredSkills,
-                                    required_transport: input.transport,
-                                    window: {
-                                        start: input.windowStart,
-                                        end: input.windowEnd,
-                                    },
-                                    received_at: input.occurredAt,
-                                    service_sec: input.serviceSec,
-                                    priority:
-                                        input.orderType === 'urgent'
-                                            ? 'urgent'
-                                            : 'normal',
-                                    equipment_required: input.equipment,
-                                    source_order: snapshot.orders.length + 1,
-                                    status: 'active',
-                                    execution: null,
-                                },
+
+                    if (input.kind === 'engineer_unavailable') {
+                        return postPlanEvent({
+                            planId,
+                            requestId: crypto.randomUUID(),
+                            snapshotRevision: snapshot.revision,
+                            solveMode,
+                            event: {
+                                id: crypto.randomUUID(),
+                                occurred_at: input.occurredAt,
+                                type: 'engineer_unavailable',
+                                payload: { engineer_id: input.engineerId },
                             },
-                        },
-                    });
-                }
+                        });
+                    }
 
-                if (input.kind === 'engineer_unavailable') {
-                    return postPlanEvent({
-                        planId,
-                        requestId: crypto.randomUUID(),
-                        snapshotRevision: snapshot.revision,
-                        solveMode,
-                        event: {
-                            id: crypto.randomUUID(),
-                            occurred_at: input.occurredAt,
-                            type: 'engineer_unavailable',
-                            payload: { engineer_id: input.engineerId },
-                        },
-                    });
-                }
+                    if (
+                        input.kind === 'cancel' ||
+                        input.kind === 'cancel_many'
+                    ) {
+                        return postPlanEvent({
+                            planId,
+                            requestId: crypto.randomUUID(),
+                            snapshotRevision: snapshot.revision,
+                            solveMode,
+                            event: createEvent(
+                                input,
+                                snapshot,
+                                plan,
+                                selectedOrderId
+                            ),
+                        });
+                    }
 
-                if (input.kind === 'cancel') {
-                    if (!selectedOrderId) {
-                        throw new Error('Выберите заявку');
+                    if (!selectedOrderId || !engineerId) {
+                        throw new Error('У заявки нет исполнителя');
                     }
 
                     return postPlanEvent({
@@ -146,46 +171,39 @@ export const useApplyPlanEvent = ({
                         event: {
                             id: crypto.randomUUID(),
                             occurred_at: input.occurredAt,
-                            type: 'order_cancelled',
+                            type: 'order_status_changed',
                             payload: {
                                 order_id: selectedOrderId,
-                                reason: input.reason,
+                                status: input.status,
+                                engineer_id: engineerId,
+                                expected_end_at:
+                                    input.status === 'in_progress'
+                                        ? (input.expectedEndAt ?? null)
+                                        : null,
                             },
                         },
                     });
+                },
+                (status) => {
+                    setRunStatus(status);
+                    setCalculation(
+                        (current) =>
+                            current && {
+                                ...current,
+                                lastEventAt: Date.now(),
+                            }
+                    );
                 }
-
-                if (!selectedOrderId || !engineerId) {
-                    throw new Error('У заявки нет исполнителя');
-                }
-
-                return postPlanEvent({
-                    planId,
-                    requestId: crypto.randomUUID(),
-                    snapshotRevision: snapshot.revision,
-                    solveMode,
-                    event: {
-                        id: crypto.randomUUID(),
-                        occurred_at: input.occurredAt,
-                        type: 'order_status_changed',
-                        payload: {
-                            order_id: selectedOrderId,
-                            status: input.status,
-                            engineer_id: engineerId,
-                            expected_end_at:
-                                input.status === 'in_progress'
-                                    ? (input.expectedEndAt ?? null)
-                                    : null,
-                        },
-                    },
-                });
-            }, setRunStatus);
+            );
 
             await onReload();
             setRunStatus(null);
+            setCalculation(null);
             return run;
         },
         onError: (error) => {
+            setCalculation(null);
+            setRunStatus(null);
             if (isStaleVersionError(error)) {
                 toast.error('Данные устарели. Обновите смену.', {
                     action: {
@@ -202,12 +220,24 @@ export const useApplyPlanEvent = ({
 
             toast.error(commandErrorMessage(error));
         },
-        onSuccess: () => toast.success('План пересчитан'),
+        onSuccess: (_run, input) =>
+            toast.success(
+                input.kind === 'status'
+                    ? input.status === 'completed'
+                        ? 'Работа завершена'
+                        : 'Состояние работы сохранено'
+                    : input.kind === 'cancel_many'
+                      ? `Отменено заявок: ${input.orderIds.length}`
+                      : input.kind === 'cancel'
+                        ? 'Заявка отменена'
+                        : 'План пересчитан'
+            ),
     });
 
     return {
         apply: (input: PlanEventInput) => mutation.mutate(input),
         pending: mutation.isPending,
         runStatus,
+        calculation,
     };
 };

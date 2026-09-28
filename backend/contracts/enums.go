@@ -92,3 +92,11 @@ const (
 
 type Equipment = shared.Equipment
 type OrderExecution = shared.OrderExecution
+type UnassignedReason = shared.UnassignedReason
+
+const (
+	ReasonNoAvailableEngineer = shared.ReasonNoAvailableEngineer
+	ReasonNoReachableRoute    = shared.ReasonNoReachableRoute
+	ReasonNoFeasibleSlot      = shared.ReasonNoFeasibleSlot
+	ReasonNoFeasibleInsertion = shared.ReasonNoFeasibleInsertion
+)

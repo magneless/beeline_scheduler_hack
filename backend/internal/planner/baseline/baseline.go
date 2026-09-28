@@ -1,4 +1,5 @@
-// Package baseline builds schedules by appending orders in source order.
+// Package baseline builds schedules by appending orders in source order,
+// optionally placing emergencies first for the late-emergency variant.
 package baseline
 
 import (
@@ -12,6 +13,8 @@ import (
 )
 
 // Baseline appends orders to the first feasible engineer in source order.
+// EmergencyFirst processes emergencies before ordinary work, retaining source
+// order within each group.
 // It is safe for concurrent calls; each call owns its routing state.
 // The zero value is ready to use. Only mode=baseline is implemented.
 type Baseline struct {
@@ -52,6 +55,9 @@ func (b *Baseline) Solve(ctx context.Context, input contracts.SolveRequest) (con
 	// Sort copies: source order is part of the contract, not slice/map order.
 	orders := append([]contracts.Order(nil), input.Orders...)
 	sort.Slice(orders, func(i, j int) bool {
+		if input.EmergencyFirst && (orders[i].WorkType == contracts.WorkTypeEmergency) != (orders[j].WorkType == contracts.WorkTypeEmergency) {
+			return orders[i].WorkType == contracts.WorkTypeEmergency
+		}
 		if orders[i].SourceOrder != orders[j].SourceOrder {
 			return orders[i].SourceOrder < orders[j].SourceOrder
 		}

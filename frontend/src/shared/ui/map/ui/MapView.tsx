@@ -57,24 +57,6 @@ export const MapView = ({
     return (
         <div className={styles.root}>
             <div ref={containerRef} className={styles.canvas} />
-            <div className={styles.attribution}>
-                Карта и маршруты: ©{' '}
-                <a
-                    href="https://www.openstreetmap.org/copyright"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    OpenStreetMap
-                </a>
-                {' · '}
-                <a
-                    href="https://www.openstreetmap.org/fixthemap"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    Исправить карту
-                </a>
-            </div>
         </div>
     );
 };

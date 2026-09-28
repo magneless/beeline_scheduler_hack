@@ -346,6 +346,27 @@ func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, da
 	for _, o := range snap.Orders {
 		if _, ok := resolved[o.LocationID]; ok {
 			orders = append(orders, o)
+		} else {
+			item := c.UnlocatedOrder{Order: o, Message: "Не удалось определить координаты адреса"}
+			for _, input := range locations {
+				if input.ID == o.LocationID {
+					item.Address = input.Address
+					break
+				}
+			}
+			for _, issue := range snap.Issues {
+				if issue.EntityID != nil && *issue.EntityID == o.LocationID {
+					item.Message = issue.Message
+					break
+				}
+			}
+			for _, resultItem := range result.Items {
+				if resultItem.LocationID == o.LocationID {
+					item.Candidates = resultItem.Candidates
+					break
+				}
+			}
+			snap.UnlocatedOrders = append(snap.UnlocatedOrders, item)
 		}
 	}
 	snap.Orders = orders

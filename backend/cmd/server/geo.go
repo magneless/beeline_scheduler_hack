@@ -14,9 +14,9 @@ func configuredGeo() (c.GeoService, []c.Issue, error) {
 	case "demo":
 		return geo.NewGeoService(&geo.DemoProvider{}), []c.Issue{{Code: "DEMO_GEO", Message: "Координаты демонстрационные; поездки рассчитаны по прямой"}}, nil
 	case "osm":
-		interval, err := strconv.Atoi(env("GEO_MIN_INTERVAL_MS", "1000"))
-		if err != nil || interval < 1 {
-			return nil, nil, fmt.Errorf("GEO_MIN_INTERVAL_MS must be a positive integer")
+		interval, err := strconv.Atoi(env("GEO_MIN_INTERVAL_MS", "0"))
+		if err != nil || interval < 0 {
+			return nil, nil, fmt.Errorf("GEO_MIN_INTERVAL_MS must be a non-negative integer")
 		}
 		provider, err := geo.NewOSMProvider(geo.OSMOptions{
 			PhotonURL:   env("GEO_PHOTON_URL", "https://photon.komoot.io"),

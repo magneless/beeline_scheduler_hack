@@ -25,6 +25,7 @@ type ScheduleBlockButtonProps = {
     block: ScheduleBlock;
     focusAt: DateTime;
     selectedOrderId: TypeOrNull<string>;
+    highlighted?: boolean;
     onSelectOrder: (id: string) => void;
 };
 
@@ -34,6 +35,7 @@ export const ScheduleBlockButton = ({
     block,
     focusAt,
     selectedOrderId,
+    highlighted = false,
     onSelectOrder,
 }: ScheduleBlockButtonProps) => {
     if (block.kind === 'wait') {
@@ -80,6 +82,7 @@ export const ScheduleBlockButton = ({
                 block.kind === 'travel' ? styles.travel : '',
                 workClass,
                 block.end <= focusAt ? styles.past : '',
+                highlighted ? styles.highlighted : '',
                 block.orderId === selectedOrderId ? styles.selected : ''
             )}
             style={blockOffset(lane, block)}

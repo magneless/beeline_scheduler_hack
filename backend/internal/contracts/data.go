@@ -7,16 +7,27 @@ import (
 )
 
 type Snapshot struct {
-	ScenarioID       string     `json:"scenario_id"`
-	Revision         int64      `json:"revision"`
-	RegionID         string     `json:"region_id"`
-	Date             string     `json:"date"`
-	Timezone         string     `json:"timezone"`
-	OfficeLocationID string     `json:"office_location_id"`
-	Locations        []Location `json:"locations"`
-	Orders           []Order    `json:"orders"`
-	Engineers        []Engineer `json:"engineers"`
-	Issues           []Issue    `json:"issues"`
+	ReserveInitialized bool             `json:"reserve_initialized,omitempty"`
+	ScenarioID         string           `json:"scenario_id"`
+	Revision           int64            `json:"revision"`
+	RegionID           string           `json:"region_id"`
+	Date               string           `json:"date"`
+	Timezone           string           `json:"timezone"`
+	OfficeLocationID   string           `json:"office_location_id"`
+	Locations          []Location       `json:"locations"`
+	Orders             []Order          `json:"orders"`
+	UnlocatedOrders    []UnlocatedOrder `json:"unlocated_orders,omitempty"`
+	Engineers          []Engineer       `json:"engineers"`
+	Issues             []Issue          `json:"issues"`
+}
+
+// Imported work with an unresolved address remains visible without supplying
+// invented coordinates to the routing algorithm.
+type UnlocatedOrder struct {
+	Order      Order              `json:"order"`
+	Address    string             `json:"address"`
+	Message    string             `json:"message"`
+	Candidates []AddressCandidate `json:"candidates,omitempty"`
 }
 type ScenarioView struct {
 	Snapshot      Snapshot `json:"snapshot"`
@@ -48,6 +59,10 @@ type PlanChange struct {
 	Reason  string      `json:"reason"`
 }
 type PlanDraft struct {
+	OptionKey          string                         `json:"option_key,omitempty"`
+	Lateness           []OrderLateness                `json:"lateness,omitempty"`
+	ReserveEngineerIDs []string                       `json:"reserve_engineer_ids,omitempty"`
+	DeferredOrderIDs   []string                       `json:"deferred_order_ids,omitempty"`
 	SolveMode          SolveMode                      `json:"solve_mode,omitempty"`
 	ScenarioID         string                         `json:"scenario_id"`
 	SnapshotRevision   int64                          `json:"snapshot_revision"`
@@ -79,8 +94,9 @@ type UrgentOrderAdded struct {
 	Location *LocationInput `json:"location"`
 }
 type OrderCancelled struct {
-	OrderID string `json:"order_id"`
-	Reason  string `json:"reason"`
+	OrderID  string   `json:"order_id,omitempty"`
+	OrderIDs []string `json:"order_ids,omitempty"`
+	Reason   string   `json:"reason"`
 }
 type EngineerUnavailable struct {
 	EngineerID string `json:"engineer_id"`
@@ -96,6 +112,24 @@ type PlanResult struct {
 	TargetSnapshot Snapshot  `json:"target_snapshot"`
 	AppliedEvent   *Event    `json:"applied_event"`
 }
+
+// OrderLateness retains the customer's window while exposing the accepted exception.
+type OrderLateness struct {
+	OrderID   string    `json:"order_id"`
+	Window    Window    `json:"window"`
+	ArrivalAt time.Time `json:"arrival_at"`
+	StartAt   time.Time `json:"start_at"`
+	LateSec   int64     `json:"late_sec"`
+}
+
+type PlanOption struct {
+	Key                string          `json:"key"`
+	Label              string          `json:"label"`
+	Result             PlanResult      `json:"result"`
+	Lateness           []OrderLateness `json:"lateness"`
+	ReserveEngineerIDs []string        `json:"reserve_engineer_ids"`
+	IdenticalTo        *string         `json:"identical_to,omitempty"`
+}
 type PlanCommit struct {
 	RequestID             string     `json:"request_id"`
 	ExpectedRevision      int64      `json:"expected_revision"`
@@ -103,6 +137,7 @@ type PlanCommit struct {
 	Result                PlanResult `json:"result"`
 }
 type BuildPlanRequest struct {
+	OptionKey             string    `json:"option_key,omitempty"`
 	SolveMode             SolveMode `json:"solve_mode,omitempty"`
 	RequestID             string    `json:"request_id"`
 	ScenarioID            string    `json:"scenario_id"`
@@ -110,6 +145,7 @@ type BuildPlanRequest struct {
 	ExpectedCurrentPlanID *string   `json:"expected_current_plan_id"`
 }
 type ReplanRequest struct {
+	OptionKey        string    `json:"option_key,omitempty"`
 	SolveMode        SolveMode `json:"solve_mode,omitempty"`
 	RequestID        string    `json:"request_id"`
 	ScenarioID       string    `json:"scenario_id"`

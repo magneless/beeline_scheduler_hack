@@ -10,8 +10,10 @@ import {
 } from 'shared/api/types/contracts';
 import { regionLabel, runStatusLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
-import { formatDay } from 'shared/lib/utils';
+import { formatDay, fromClockInput, toClockInput } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
+import { Label } from 'shared/ui/label';
+import { TimeSelect } from 'shared/ui/timeSelect';
 
 import { OrderForm } from './OrderForm';
 import { RegionSwitcher } from './RegionSwitcher';
@@ -24,15 +26,21 @@ type WorkspaceTopbarProps = {
     metrics: Metrics | undefined;
     canEvent: boolean;
     canRebuild: boolean;
+    canCompare: boolean;
     buildPending: boolean;
     eventPending: boolean;
+    progressVisible: boolean;
     runStatus?: TypeOrNull<Run['status']>;
     scheduleOpen: boolean;
     panelOpen: boolean;
     timezone: string;
     defaultOccurredAt: string;
+    onScenarioTime: (time: string) => void;
+    hasProposal: boolean;
+    onOpenProposal: () => void;
     onNewOrder: (input: PlanEventInput) => void;
     onRebuild: () => void;
+    onCompare: () => void;
     onToggleSchedule: () => void;
     onTogglePanel: () => void;
 };
@@ -45,15 +53,21 @@ export const WorkspaceTopbar = ({
     metrics,
     canEvent,
     canRebuild,
+    canCompare,
     buildPending,
     eventPending,
+    progressVisible,
     runStatus,
     scheduleOpen,
     panelOpen,
     timezone,
     defaultOccurredAt,
+    onScenarioTime,
+    hasProposal,
+    onOpenProposal,
     onNewOrder,
     onRebuild,
+    onCompare,
     onToggleSchedule,
     onTogglePanel,
 }: WorkspaceTopbarProps) => {
@@ -105,7 +119,7 @@ export const WorkspaceTopbar = ({
                 ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                {buildPending || eventPending ? (
+                {(buildPending || eventPending) && !progressVisible ? (
                     <span
                         role="status"
                         className="text-xs text-muted-foreground"
@@ -115,6 +129,34 @@ export const WorkspaceTopbar = ({
                             : 'Рассчитываем маршруты…'}
                     </span>
                 ) : null}
+                {snapshot ? (
+                    <div className="w-[140px] space-y-1">
+                        <Label>Время сценария</Label>
+                        <TimeSelect
+                            value={toClockInput(defaultOccurredAt, timezone)}
+                            aria-label="Время сценария"
+                            className="w-full rounded-[6px] border border-border bg-white"
+                            onChange={(clock) =>
+                                onScenarioTime(
+                                    fromClockInput(
+                                        snapshot.date,
+                                        clock,
+                                        timezone
+                                    )
+                                )
+                            }
+                        />
+                    </div>
+                ) : null}
+                {hasProposal ? (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={onOpenProposal}
+                    >
+                        Варианты плана
+                    </Button>
+                ) : null}
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">
                     Алгоритм
                     <select
@@ -123,7 +165,12 @@ export const WorkspaceTopbar = ({
                         onChange={(event) =>
                             onSolveMode(event.target.value as SolveMode)
                         }
-                        disabled={!snapshot || buildPending || eventPending}
+                        disabled={
+                            !snapshot ||
+                            buildPending ||
+                            eventPending ||
+                            hasProposal
+                        }
                         title="Применяется при следующем расчёте маршрутов"
                         className={[
                             'h-9 max-w-[180px] rounded-[8px] border border-border bg-white px-2',
@@ -134,26 +181,36 @@ export const WorkspaceTopbar = ({
                         <option value="baseline">Базовый (по порядку)</option>
                     </select>
                 </label>
-                {savedSolveMode && savedSolveMode !== solveMode ? (
-                    <span
-                        role="status"
-                        className="text-xs text-muted-foreground"
+                {canCompare ? (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={buildPending || eventPending || hasProposal}
+                        onClick={onCompare}
+                        className="rounded-[8px]"
                     >
-                        {canRebuild
-                            ? 'Нужно пересобрать план'
-                            : 'Применится при следующем событии'}
-                    </span>
+                        Собрать с нуля
+                    </Button>
                 ) : null}
                 {canRebuild && metrics ? (
                     <Button
                         size="sm"
-                        variant="ghost"
-                        disabled={buildPending || eventPending}
+                        variant={
+                            savedSolveMode && savedSolveMode !== solveMode
+                                ? 'default'
+                                : 'outline'
+                        }
+                        disabled={buildPending || eventPending || hasProposal}
                         onClick={onRebuild}
-                        className="rounded-[8px] text-muted-foreground"
+                        title="Заменить рабочий план новым расчётом до начала событий"
+                        className="rounded-[8px]"
                     >
                         <RotateCw className="size-3.5" />
-                        {buildPending ? 'Считаем…' : 'Пересобрать'}
+                        {buildPending
+                            ? 'Считаем…'
+                            : savedSolveMode && savedSolveMode !== solveMode
+                              ? 'Применить алгоритм'
+                              : 'Пересобрать'}
                     </Button>
                 ) : null}
                 <Button
@@ -172,7 +229,9 @@ export const WorkspaceTopbar = ({
                     <div className="relative">
                         <Button
                             size="sm"
-                            disabled={eventPending || buildPending}
+                            disabled={
+                                eventPending || buildPending || hasProposal
+                            }
                             onClick={() => setOrderFormOpen((value) => !value)}
                             aria-expanded={orderFormOpen}
                             className="rounded-[8px]"

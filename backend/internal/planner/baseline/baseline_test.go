@@ -107,6 +107,58 @@ func TestBaselineDoesNotPrioritizeUrgentOrders(t *testing.T) {
 	}
 }
 
+func TestBaselineEmergencyFirstPlacesEmergencyBeforeEarlierNormalWork(t *testing.T) {
+	in := testutil.BaseRequest()
+	in.EmergencyFirst = true
+	normal := testutil.Order("normal", "p1", 1, 7, 0, 30, 0)
+	emergency := testutil.Order("emergency", "p2", 2, 7, 0, 80, 0)
+	emergency.WorkType, emergency.Priority, emergency.ServiceSec = contracts.WorkTypeEmergency, contracts.PriorityUrgent, 4800
+	emergency.Window.End = testutil.At(8, 30) // An explicitly widened emergency window.
+	in.Orders = []contracts.Order{normal, emergency}
+	in.Engineers[0].Shift.End = testutil.At(8, 30)
+	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
+	got, err := solve(t, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Routes) != 1 || len(got.Routes[0].Visits) != 1 || got.Routes[0].Visits[0].OrderID != "emergency" {
+		t.Fatalf("emergency must take the only feasible shift slot: %+v", got)
+	}
+	if len(got.Unassigned) != 1 || got.Unassigned[0].OrderID != "normal" {
+		t.Fatalf("normal order should remain unassigned: %+v", got.Unassigned)
+	}
+}
+
+func TestBaselineWidenedEmergencyStillRespectsEligibilityAndShift(t *testing.T) {
+	cases := map[string]func(*contracts.SolveRequest){
+		"skill": func(in *contracts.SolveRequest) { in.Orders[0].RequiredSkills = []string{"special"} },
+		"equipment": func(in *contracts.SolveRequest) {
+			in.Orders[0].EquipmentRequired = map[contracts.Equipment]int64{contracts.EquipmentRouter: 3}
+		},
+		"transport": func(in *contracts.SolveRequest) {
+			walk := contracts.TransportWalk
+			in.Orders[0].RequiredTransport = &walk
+		},
+		"shift": func(in *contracts.SolveRequest) { in.Engineers[0].Shift.End = testutil.At(8, 0) },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := testutil.BaseRequest()
+			in.EmergencyFirst = true
+			in.Orders[0].WorkType, in.Orders[0].Priority, in.Orders[0].ServiceSec = contracts.WorkTypeEmergency, contracts.PriorityUrgent, 4800
+			in.Orders[0].Window.End = testutil.At(12, 0)
+			mutate(&in)
+			got, err := solve(t, in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Routes) != 0 || len(got.Unassigned) != 1 {
+				t.Fatalf("ineligible emergency was assigned: %+v", got)
+			}
+		})
+	}
+}
+
 func TestBaselineAllowsWindowEndStartAndFinishAfterWindow(t *testing.T) {
 	in := testutil.BaseRequest()
 	in.Orders[0].Window = contracts.Window{Start: testutil.At(7, 10), End: testutil.At(7, 10)}

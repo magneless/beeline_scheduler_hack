@@ -5,6 +5,7 @@ import {
     type Equipment,
     type Issue,
     type Order,
+    type OrderLateness,
     type UnassignedOrder,
     type Visit,
 } from 'shared/api/types/contracts';
@@ -14,6 +15,7 @@ import { Button } from 'shared/ui/button';
 import { Input } from 'shared/ui/input';
 import { Tabs, TabsList, TabsTrigger } from 'shared/ui/tabs';
 
+import { OrderBulkActions } from './OrderBulkActions';
 import { OrderRow } from './OrderRow';
 import { workspaceCopy } from '../lib/config';
 import { useOrderPanel } from '../model/useOrderPanel';
@@ -27,6 +29,9 @@ type OrderPanelProps = {
     selectedEngineerId: TypeOrNull<string>;
     engineerByOrder: Map<string, string>;
     unassigned: Map<string, UnassignedOrder>;
+    lateness?: OrderLateness[];
+    inTransitOrderIds?: Set<string>;
+    deferredOrderIds: Set<string>;
     visits: Map<string, Visit>;
     timezone: string;
     addressByOrder?: Record<string, string>;
@@ -48,6 +53,9 @@ export const OrderPanel = ({
     selectedEngineerId,
     engineerByOrder,
     unassigned,
+    lateness,
+    inTransitOrderIds,
+    deferredOrderIds,
     visits,
     timezone,
     addressByOrder,
@@ -64,8 +72,10 @@ export const OrderPanel = ({
     const panel = useOrderPanel({
         orders,
         engineers,
+        visits,
         engineerByOrder,
         unassigned,
+        deferredOrderIds,
         addressByOrder,
         selectedEngineerId,
         filter,
@@ -94,17 +104,40 @@ export const OrderPanel = ({
                     />
                 </div>
                 <Tabs value={filter} onValueChange={handleFilterChange}>
-                    <TabsList className="grid grid-cols-3">
-                        <TabsTrigger value="all">
+                    <TabsList
+                        className={cn(
+                            'grid grid-cols-2 gap-1 rounded-[12px]',
+                            '[&>button]:min-w-0 [&>button]:whitespace-normal'
+                        )}
+                    >
+                        <TabsTrigger value="all" className="col-span-2">
                             {workspaceCopy.orderFilterAll}
                             <span className="tabular-nums text-[11px] text-muted-foreground">
                                 {orders.length}
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="assigned"
+                            title="Назначенные бригадам заявки, которые ещё не закрыты"
+                        >
+                            {workspaceCopy.orderFilterAssigned}
+                            <span className="tabular-nums text-[11px] text-muted-foreground">
+                                {panel.assignedCount}
                             </span>
                         </TabsTrigger>
                         <TabsTrigger value="unassigned">
                             Без бригады
                             <span className="tabular-nums text-[11px] text-muted-foreground">
                                 {panel.openCount}
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="deferred"
+                            title="Первоначально неназначенные заявки на разбор и перенос"
+                        >
+                            На разбор
+                            <span className="tabular-nums text-[11px] text-muted-foreground">
+                                {panel.deferredCount}
                             </span>
                         </TabsTrigger>
                         <TabsTrigger
@@ -118,6 +151,18 @@ export const OrderPanel = ({
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
+                {onEvent && panel.selectableIds.length > 0 ? (
+                    <OrderBulkActions
+                        selectedIds={panel.selectedIds}
+                        allSelected={panel.allSelected}
+                        pending={statusPending}
+                        timezone={timezone}
+                        defaultOccurredAt={defaultOccurredAt}
+                        onToggleAll={panel.toggleAll}
+                        onClear={panel.clearSelection}
+                        onEvent={onEvent}
+                    />
+                ) : null}
                 {panel.crewName ? (
                     <Button
                         type="button"
@@ -145,6 +190,9 @@ export const OrderPanel = ({
                     <div className="flex flex-col gap-1">
                         {panel.visible.map((order) => {
                             const engineerId = engineerByOrder.get(order.id);
+                            const previous = panel.previousUnfinished.get(
+                                order.id
+                            );
 
                             return (
                                 <OrderRow
@@ -163,6 +211,11 @@ export const OrderPanel = ({
                                     }
                                     visit={visits.get(order.id)}
                                     open={unassigned.get(order.id)}
+                                    lateness={lateness?.find(
+                                        (item) => item.order_id === order.id
+                                    )}
+                                    inTransit={inTransitOrderIds?.has(order.id)}
+                                    deferred={deferredOrderIds.has(order.id)}
                                     address={addressByOrder?.[order.id]}
                                     remaining={
                                         remaining
@@ -180,8 +233,36 @@ export const OrderPanel = ({
                                     timezone={timezone}
                                     defaultOccurredAt={defaultOccurredAt}
                                     statusPending={statusPending}
+                                    checked={panel.selectedIds.includes(
+                                        order.id
+                                    )}
+                                    onToggleSelection={
+                                        onEvent &&
+                                        panel.selectableIds.includes(order.id)
+                                            ? () =>
+                                                  panel.toggleSelected(order.id)
+                                            : undefined
+                                    }
                                     onSelect={onSelect}
                                     onEvent={onEvent}
+                                    previousOrder={
+                                        previous
+                                            ? {
+                                                  id: previous.id,
+                                                  address:
+                                                      addressByOrder?.[
+                                                          previous.id
+                                                      ],
+                                              }
+                                            : undefined
+                                    }
+                                    onOpenPrevious={() => {
+                                        if (previous) {
+                                            panel.clearQuery();
+                                            onFilter('all');
+                                            onSelect(previous.id);
+                                        }
+                                    }}
                                 />
                             );
                         })}

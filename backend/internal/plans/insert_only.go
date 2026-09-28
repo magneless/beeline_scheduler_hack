@@ -4,19 +4,22 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 )
 
 // An ordinary addition freezes every old visit. Execution history is kept outside
 // the inserter: it consumes the remaining stock and must not be scheduled again.
-func (service *Service) replanOrdinary(ctx context.Context, target contracts.Snapshot, base contracts.Plan, replay replayResult, event contracts.Event, mode contracts.SolveMode) (contracts.PlanResult, error) {
+func (service *Service) replanOrdinary(ctx context.Context, target contracts.Snapshot, base contracts.Plan, replay replayResult, event contracts.Event, mode contracts.SolveMode, policy dispatchPolicy) (contracts.PlanResult, error) {
 	fresh := target.Orders[len(target.Orders)-1]
 	finish := func(routes []contracts.Route, unassigned []contracts.UnassignedOrder, termination contracts.Termination, conflict bool) (contracts.PlanResult, error) {
 		unassigned = append(append([]contracts.UnassignedOrder{}, base.Unassigned...), unassigned...)
-		if err := validateFinalPlan(target, routes, unassigned, base.CancelledOrderIDs); err != nil {
+		lateness := carryAcceptedLateness(target, routes, base.Lateness)
+		if err := validateFinalPlan(target, routes, unassigned, base.CancelledOrderIDs, lateness); err != nil {
 			return contracts.PlanResult{}, err
 		}
 		stock, err := equipmentRemaining(target)
@@ -42,7 +45,35 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 				}
 			}
 		}
-		draft := contracts.PlanDraft{SolveMode: mode, ScenarioID: target.ScenarioID, SnapshotRevision: target.Revision, BasePlanID: ptr(base.ID), AsOf: event.OccurredAt, Routes: nonNil(routes), Unassigned: unassigned, CancelledOrderIDs: nonNil(append([]string{}, base.CancelledOrderIDs...)), CompletedOrderIDs: completed, EquipmentRemaining: stock, Issues: issues, Metrics: metrics, Changes: calculateChanges(base.Routes, routes, nil), Termination: termination}
+		if policy.reserve {
+			var recruited []string
+			for i := range target.Engineers {
+				eng := &target.Engineers[i]
+				if !eng.Reserve || policy.wasAvailable[eng.ID] {
+					continue
+				}
+				used := false
+				for _, route := range routes {
+					if route.EngineerID == eng.ID && len(route.Visits) > 0 {
+						used = true
+						break
+					}
+				}
+				if !used {
+					eng.Available = false
+				} else {
+					recruited = append(recruited, eng.ID)
+					eng.Reserve = false
+				}
+			}
+			sort.Strings(recruited)
+			policy.recruited = recruited
+		}
+		draft := contracts.PlanDraft{OptionKey: policy.key, Lateness: lateness, SolveMode: mode, ScenarioID: target.ScenarioID, SnapshotRevision: target.Revision, BasePlanID: ptr(base.ID), AsOf: event.OccurredAt, Routes: nonNil(routes), Unassigned: unassigned, CancelledOrderIDs: nonNil(append([]string{}, base.CancelledOrderIDs...)), CompletedOrderIDs: completed, EquipmentRemaining: stock, Issues: issues, Metrics: metrics, Changes: calculateChanges(base.Routes, routes, nil), Termination: termination}
+		if policy.key != "" {
+			draft.DeferredOrderIDs = deferredOrderIDs(unassigned)
+		}
+		draft.ReserveEngineerIDs = policy.recruited
 		return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &event}, nil
 	}
 	fallback := func(conflict bool) (contracts.PlanResult, error) {
@@ -50,7 +81,11 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 		if conflict {
 			item.ReasonCode, item.Message = contracts.UnassignedBySolver, "Существующий план требует уточнения; заявка сохранена без назначения"
 		}
-		return finish(clonePlanRoutes(base.Routes), []contracts.UnassignedOrder{item}, contracts.TerminationCompleted, conflict)
+		routes := clonePlanRoutes(base.Routes)
+		// A failed insertion keeps the entire accepted schedule. Replay only
+		// contains history and the protected current trip, not later visits.
+		// Replacing a saved route with that prefix would silently drop work.
+		return finish(routes, []contracts.UnassignedOrder{item}, contracts.TerminationCompleted, conflict)
 	}
 	engineers := []contracts.Engineer{}
 	states := []contracts.EngineerState{}
@@ -112,6 +147,17 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 			fixed = append(fixed, future)
 		}
 	}
+	for index := range history {
+		if replay.enrouteOrders[history[index].EngineerID] == "" {
+			continue
+		}
+		for _, protected := range replay.routes {
+			if protected.EngineerID == history[index].EngineerID {
+				history[index] = clonePlanRoutes([]contracts.Route{protected})[0]
+				break
+			}
+		}
+	}
 	if len(engineers) == 0 {
 		return fallback(false)
 	}
@@ -134,6 +180,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 		}
 	}
 	profiles := profilesFor(engineers)
+	progress.Report(ctx, "matrix", "Получаем время в пути")
 	matrix, err := service.geo.BuildMatrix(ctx, contracts.MatrixRequest{Locations: locations, Profiles: profiles, GeoContextID: replay.geoContextID})
 	if err != nil {
 		return contracts.PlanResult{}, dependencyError("build insertion matrix", err)
@@ -142,6 +189,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 		return contracts.PlanResult{}, err
 	}
 	request := contracts.SolveRequest{Mode: contracts.SolveModeInsertOnly, Orders: solveOrders, Engineers: engineers, EngineerStates: states, AlreadyUsedEngineerIDs: replay.usedEngineers, TravelMatrix: matrix, FixedRoutes: fixed, ProtectedLegIDs: protected, TimeLimitMS: service.timeLimitMS}
+	progress.Report(ctx, "solving", "Ищем место для новой заявки")
 	result, err := service.planner.Solve(ctx, cloneSolveRequest(request))
 	if err != nil {
 		var ce *contracts.ContractError
@@ -169,6 +217,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 			newSegments = append(newSegments, newRoute)
 		}
 	}
+	progress.Report(ctx, "geometry", "Загружаем маршруты на карту")
 	geometries, err := service.addGeometry(ctx, newSegments, engineers, locations, matrix.GeoContextID)
 	if err != nil {
 		return contracts.PlanResult{}, err

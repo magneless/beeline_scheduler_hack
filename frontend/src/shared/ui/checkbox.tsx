@@ -1,5 +1,5 @@
 import { type ComponentProps } from 'react';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, MinusIcon } from 'lucide-react';
 import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 
 import { cn } from 'shared/lib/utils';
@@ -17,6 +17,8 @@ const Checkbox = ({
             'disabled:cursor-not-allowed disabled:opacity-50',
             'data-[state=checked]:border-primary data-[state=checked]:bg-primary',
             'data-[state=checked]:text-primary-foreground',
+            'data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary',
+            'data-[state=indeterminate]:text-primary-foreground',
             className
         )}
         {...props}
@@ -25,7 +27,11 @@ const Checkbox = ({
             data-slot="checkbox-indicator"
             className="grid place-content-center text-current"
         >
-            <CheckIcon className="size-3.5" />
+            {props.checked === 'indeterminate' ? (
+                <MinusIcon className="size-3.5" />
+            ) : (
+                <CheckIcon className="size-3.5" />
+            )}
         </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
 );

@@ -16,6 +16,8 @@ import (
 )
 
 func solveRouting(ctx context.Context, input contracts.SolveRequest, deadline time.Time) (result contracts.SolveResult, err error) {
+	// Leave a bounded part of the budget for explaining unassigned work.
+	searchDeadline := deadline.Add(-min(250*time.Millisecond, time.Until(deadline)/10))
 	defer func() {
 		if value := recover(); value != nil {
 			result = contracts.SolveResult{}
@@ -32,14 +34,14 @@ func solveRouting(ctx context.Context, input contracts.SolveRequest, deadline ti
 		if err := p.explain(ctx, &best, deadline); err != nil {
 			return result, err
 		}
-		if !time.Now().Before(deadline) {
+		if !time.Now().Before(searchDeadline) {
 			best.Termination = contracts.TerminationTimeLimit
 		}
 		return best, nil
 	}
 	consider := func(candidate contracts.SolveResult) {
 		s := p.score(candidate)
-		if betterPlan(s, score) {
+		if betterPlan(s, score, input.EmergencyFirst) {
 			best, score = candidate, s
 		}
 	}
@@ -70,7 +72,7 @@ func solveRouting(ctx context.Context, input contracts.SolveRequest, deadline ti
 		if p.phaseAtLowerBound(phase, score) {
 			continue
 		}
-		budget := time.Until(deadline) / time.Duration(6-phase)
+		budget := time.Until(searchDeadline) / time.Duration(6-phase)
 		if budget < time.Millisecond {
 			limited = true
 			break
@@ -84,6 +86,16 @@ func solveRouting(ctx context.Context, input contracts.SolveRequest, deadline ti
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	best, err = p.fillAvailableSlots(ctx, best, time.Now().Add(time.Until(deadline)/2))
+	if err != nil {
+		return result, err
+	}
+	// Keep the native search and final insertion budgets unchanged. Spend only
+	// half of the remaining diagnostic reserve on monotone route improvement.
+	best, err = p.repairSearch(ctx, best, time.Now().Add(time.Until(deadline)/2))
+	if err != nil {
+		return result, err
+	}
 	if err := p.explain(ctx, &best, deadline); err != nil {
 		return result, err
 	}
@@ -94,18 +106,38 @@ func solveRouting(ctx context.Context, input contracts.SolveRequest, deadline ti
 	}
 	return best, nil
 }
+func (p *routingProblem) countClassForPhase(phase int) (int, bool) {
+	if p.input.EmergencyFirst {
+		switch phase {
+		case 0:
+			return 0, true
+		case 2, 3:
+			return phase - 1, true
+		}
+		return 0, false
+	}
+	return phase, phase < 3
+}
+
+func (p *routingProblem) delayPhase() int {
+	if p.input.EmergencyFirst {
+		return 1
+	}
+	return 3
+}
+
 func (p *routingProblem) phaseAtLowerBound(phase int, score planScore) bool {
-	if phase < 3 {
+	if class, ok := p.countClassForPhase(phase); ok {
 		var total int64
 		for _, o := range p.orders {
-			if workClass(o) == phase {
+			if workClass(o) == class {
 				total++
 			}
 		}
-		return score.counts[phase] == total
+		return score.counts[class] == total
 	}
 	switch phase {
-	case 3:
+	case p.delayPhase():
 		return score.delay == 0
 	case 4:
 		return score.used == int64(len(p.alreadyUsed))
@@ -238,7 +270,7 @@ func (p *routingProblem) searchPhase(ctx context.Context, phase int, bound planS
 		active := r.ActiveVar(index)
 		activeByClass[workClass(o)] = append(activeByClass[workClass(o)], active)
 		penalty := int64(0)
-		if phase < 3 && workClass(o) == phase {
+		if class, ok := p.countClassForPhase(phase); ok && workClass(o) == class {
 			penalty = 1
 		}
 		r.AddDisjunction([]int64{index}, penalty)
@@ -260,10 +292,10 @@ func (p *routingProblem) searchPhase(ctx context.Context, phase int, bound planS
 			td.CumulVar(index).SetRange(lower, upper)
 		}
 		if o.WorkType == contracts.WorkTypeEmergency {
-			if phase == 3 {
+			if phase == p.delayPhase() {
 				td.SetCumulVarSoftUpperBound(index, lower, 1)
 			}
-			if phase > 3 {
+			if phase > p.delayPhase() {
 				difference := s.MakeSum(expr(td.CumulVar(index)), -lower)
 				nonnegative := s.MakeMax(difference, int64(0))
 				delayVars = append(delayVars, s.MakeProd(nonnegative, expr(active)).Var())
@@ -309,10 +341,12 @@ func (p *routingProblem) searchPhase(ctx context.Context, phase int, bound planS
 		callback := r.RegisterUnaryTransitVector(demands)
 		r.AddDimensionWithVehicleCapacity(callback, 0, capacity, true, string(kind))
 	}
-	for previous := 0; previous < min(phase, 3); previous++ {
-		addSumEquality(s, activeByClass[previous], bound.counts[previous])
+	for previous := 0; previous < phase; previous++ {
+		if class, ok := p.countClassForPhase(previous); ok {
+			addSumEquality(s, activeByClass[class], bound.counts[class])
+		}
 	}
-	if phase > 3 {
+	if phase > p.delayPhase() {
 		addSumUpperBound(s, delayVars, bound.delay)
 	}
 	if phase > 4 {

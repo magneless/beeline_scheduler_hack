@@ -6,6 +6,7 @@ import {
     type Equipment,
     type Issue,
     type Order,
+    type OrderLateness,
     type UnassignedOrder,
     type Visit,
 } from 'shared/api';
@@ -40,6 +41,9 @@ type WorkspaceSidePanelProps = {
     selectedEngineerId: TypeOrNull<string>;
     engineerByOrder: Map<string, string>;
     unassigned: Map<string, UnassignedOrder>;
+    lateness?: OrderLateness[];
+    inTransitOrderIds?: Set<string>;
+    deferredOrderIds: Set<string>;
     visits: Map<string, Visit>;
     timezone: string;
     date: string;
@@ -81,6 +85,9 @@ export const WorkspaceSidePanel = ({
     selectedEngineerId,
     engineerByOrder,
     unassigned,
+    lateness,
+    inTransitOrderIds,
+    deferredOrderIds,
     visits,
     timezone,
     date,
@@ -200,7 +207,9 @@ export const WorkspaceSidePanel = ({
                             comparisonOrder={orders.find(
                                 (order) =>
                                     order.id === selectedOrderId &&
-                                    unassigned.has(order.id)
+                                    unassigned.has(order.id) &&
+                                    unassigned.get(order.id)?.reason_code !==
+                                        'ADDRESS_UNRESOLVED'
                             )}
                             comparisonAddress={
                                 selectedOrderId
@@ -243,6 +252,7 @@ export const WorkspaceSidePanel = ({
                             </h2>
                         ) : null}
                         <OrderPanel
+                            key={scenarioId}
                             orders={orders}
                             engineers={engineers}
                             selectedOrderId={selectedOrderId}
@@ -251,6 +261,9 @@ export const WorkspaceSidePanel = ({
                             }
                             engineerByOrder={engineerByOrder}
                             unassigned={unassigned}
+                            lateness={lateness}
+                            inTransitOrderIds={inTransitOrderIds}
+                            deferredOrderIds={deferredOrderIds}
                             visits={visits}
                             timezone={timezone}
                             addressByOrder={addressByOrder}

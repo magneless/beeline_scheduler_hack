@@ -6,9 +6,44 @@ import (
 	"time"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 )
 
 func (service *Service) Replan(ctx context.Context, input contracts.ReplanRequest) (contracts.PlanResult, error) {
+	policy := dispatchPolicy{key: input.OptionKey}
+	if policy.key == "" {
+		policy.key = "strict"
+	}
+	switch policy.key {
+	case "strict", "original":
+	case "reserve":
+		policy.reserve = true
+	case "late_emergency":
+		if input.Event.Type != contracts.EventUrgentOrderAdded {
+			return contracts.PlanResult{}, contracts.InvalidInput("late emergency option requires an emergency event", nil)
+		}
+		strictInput := input
+		strictInput.OptionKey = "strict"
+		strict, err := service.Replan(ctx, strictInput)
+		if err != nil {
+			return contracts.PlanResult{}, err
+		}
+		policy.lateIDs = lateEligible(strict, nil)
+		if len(policy.lateIDs) == 0 {
+			strict.Draft.OptionKey = "late_emergency"
+			return strict, nil
+		}
+	default:
+		return contracts.PlanResult{}, contracts.InvalidInput("unsupported plan option", nil)
+	}
+	if policy.key == "original" && input.Event.Type == contracts.EventUrgentOrderAdded {
+		return contracts.PlanResult{}, contracts.InvalidInput("original option is unavailable for emergency", nil)
+	}
+	return service.replanWithPolicy(ctx, input, policy)
+}
+
+func (service *Service) replanWithPolicy(ctx context.Context, input contracts.ReplanRequest, policy dispatchPolicy) (contracts.PlanResult, error) {
+	progress.Report(ctx, "preparing", "Читаем план и события")
 	if err := ctx.Err(); err != nil {
 		return contracts.PlanResult{}, err
 	}
@@ -33,7 +68,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if base.ID != input.BasePlanID || base.ScenarioID != input.ScenarioID || base.SnapshotRevision != input.SnapshotRevision {
 		return contracts.PlanResult{}, contracts.InvalidInput("base plan does not match requested scenario and revision", map[string]any{"base_plan_id": input.BasePlanID})
 	}
-	if err := validateFinalPlan(snapshot, base.Routes, base.Unassigned, base.CancelledOrderIDs); err != nil {
+	if err := validateFinalPlan(snapshot, base.Routes, base.Unassigned, base.CancelledOrderIDs, base.Lateness); err != nil {
 		return contracts.PlanResult{}, err
 	}
 	dayStart, dayEnd, err := localDayBounds(snapshot)
@@ -43,8 +78,15 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if input.Event.OccurredAt.Before(dayStart) || !input.Event.OccurredAt.Before(dayEnd) || input.Event.OccurredAt.Before(base.AsOf) {
 		return contracts.PlanResult{}, contracts.InvalidInput("event time is outside the plan day or precedes base plan as_of", map[string]any{"event_id": input.Event.ID})
 	}
+	if result, handled, err := service.recordUnassignedCancellation(ctx, snapshot, base, input.Event); handled {
+		return result, err
+	}
+	if result, handled, err := service.recordWorkStatus(ctx, snapshot, base, input.Event, mode); handled {
+		return result, err
+	}
 
 	target := cloneSnapshot(snapshot)
+	progress.Report(ctx, "preparing", "Восстанавливаем состояние на момент события")
 	replay, err := service.replayAt(ctx, &target, base, input.Event)
 	if err != nil {
 		return contracts.PlanResult{}, err
@@ -57,19 +99,116 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	if err := refreshExecution(&target, &replay, input.Event); err != nil {
 		return contracts.PlanResult{}, err
 	}
+	if input.Event.Type == contracts.EventUrgentOrderAdded {
+		for _, orderID := range replay.enrouteOrders {
+			delete(replay.lockedOrders, orderID)
+		}
+	} else if err := service.protectEnRoute(ctx, target, base, &replay, input.Event); err != nil {
+		return contracts.PlanResult{}, err
+	}
+	if policy.reserve {
+		policy.wasAvailable = map[string]bool{}
+		for _, engineer := range target.Engineers {
+			policy.wasAvailable[engineer.ID] = engineer.Available
+		}
+		unavailableID := ""
+		if input.Event.Type == contracts.EventEngineerUnavailable {
+			unavailableID = contracts.DecodePayload(input.Event.Payload).EngineerID
+		}
+		for i := range target.Engineers {
+			if target.Engineers[i].Reserve && target.Engineers[i].ID != unavailableID && !target.Engineers[i].Available {
+				target.Engineers[i].Available = true
+			}
+		}
+	}
 	if err := validateSnapshot(target, input.ScenarioID, target.Revision); err != nil {
 		return contracts.PlanResult{}, err
 	}
 
+	if policy.key == "original" {
+		return service.replanOriginal(ctx, target, base, replay, appliedEvent, newlyCancelled, mode)
+	}
 	if input.Event.Type == contracts.EventOrdinaryOrderAdded {
-		return service.replanOrdinary(ctx, target, base, replay, appliedEvent, mode)
+		result, err := service.replanOrdinary(ctx, target, base, replay, appliedEvent, mode, policy)
+		if err == nil && input.OptionKey == "" {
+			result.Draft.OptionKey = ""
+			result.Draft.DeferredOrderIDs = nil
+		}
+		return result, err
+	}
+	lateCompletionEngineer := ""
+	if input.Event.Type == contracts.EventOrderStatusChanged {
+		payload := contracts.DecodePayload(input.Event.Payload)
+		if payload.Status == contracts.OrderStatusCompleted && input.Event.OccurredAt.After(plannedEnd(base.Routes, payload.OrderID)) {
+			lateCompletionEngineer = payload.EngineerID
+			for _, saved := range base.Routes {
+				if saved.EngineerID == lateCompletionEngineer {
+					continue
+				}
+				for _, visit := range saved.Visits {
+					replay.lockedOrders[visit.OrderID] = struct{}{}
+				}
+				index := -1
+				for i := range replay.routes {
+					if replay.routes[i].EngineerID == saved.EngineerID {
+						index = i
+						break
+					}
+				}
+				// Only this event's crew is replanned. Copy the other crew's
+				// accepted route as a whole: elapsed travel may already have
+				// been replayed without a corresponding confirmed work start.
+				preserved := clonePlanRoutes([]contracts.Route{saved})[0]
+				if index < 0 {
+					replay.routes = append(replay.routes, preserved)
+				} else {
+					replay.routes[index] = preserved
+				}
+			}
+		}
 	}
 
-	remaining, expired := prepareRemainingOrders(target, replay.lockedOrders, input.Event.OccurredAt)
+	prepareSnapshot := cloneSnapshot(target)
+	lateAllowed := map[string]bool{}
+	for id := range policy.lateIDs {
+		lateAllowed[id] = true
+	}
+	for _, item := range base.Lateness {
+		lateAllowed[item.OrderID] = true
+	}
+	prepareSnapshot.Orders = widenEmergencyWindows(prepareSnapshot.Orders, lateAllowed, target.Engineers)
+	remaining, expired := prepareRemainingOrders(prepareSnapshot, replay.lockedOrders, input.Event.OccurredAt)
+	previouslyUnassigned := map[string]bool{}
+	for _, item := range base.Unassigned {
+		previouslyUnassigned[item.OrderID] = true
+	}
+	filtered := remaining[:0]
+	for _, order := range remaining {
+		if !previouslyUnassigned[order.ID] {
+			filtered = append(filtered, order)
+		}
+	}
+	remaining = filtered
+	if len(previouslyUnassigned) > 0 {
+		keptExpired := expired[:0]
+		for _, item := range expired {
+			if !previouslyUnassigned[item.OrderID] {
+				keptExpired = append(keptExpired, item)
+			}
+		}
+		expired = keptExpired
+	}
+	retainedUnassigned := []contracts.UnassignedOrder{}
+	for _, item := range base.Unassigned {
+		order := orderMap(target.Orders)[item.OrderID]
+		if order.ID != "" && order.Status != contracts.OrderStatusCancelled {
+			retainedUnassigned = append(retainedUnassigned, item)
+		}
+	}
 	engineers := availableEngineers(target)
 	eligible := make([]contracts.Engineer, 0, len(engineers))
 	for _, eng := range engineers {
-		if !replay.blocked[eng.ID] {
+		if !replay.blocked[eng.ID] && (lateCompletionEngineer == "" || eng.ID == lateCompletionEngineer) {
 			eligible = append(eligible, eng)
 		}
 	}
@@ -94,6 +233,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			return contracts.PlanResult{}, err
 		}
 		profiles := profilesFor(engineers)
+		progress.Report(ctx, "matrix", "Получаем время в пути")
 		matrix, err := service.geo.BuildMatrix(ctx, contracts.MatrixRequest{Locations: locations, Profiles: profiles, GeoContextID: replay.geoContextID})
 		if err != nil {
 			return contracts.PlanResult{}, dependencyError("build replanning travel matrix", err)
@@ -102,6 +242,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			return contracts.PlanResult{}, err
 		}
 		solveRequest := contracts.SolveRequest{
+			EmergencyFirst:         policy.key == "late_emergency",
 			Mode:                   mode,
 			Orders:                 remaining,
 			Engineers:              engineers,
@@ -110,6 +251,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			TravelMatrix:           matrix,
 			TimeLimitMS:            service.timeLimitMS,
 		}
+		progress.Report(ctx, "solving", "Рассчитываем маршрут")
 		solveResult, err = service.planner.Solve(ctx, cloneSolveRequest(solveRequest))
 		if err != nil {
 			return contracts.PlanResult{}, dependencyError("solve replanned future", err)
@@ -118,6 +260,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 			return contracts.PlanResult{}, err
 		}
 		future := renameCollidingFutureLegs(solveResult.Routes, replay.routes, input.Event.ID)
+		progress.Report(ctx, "geometry", "Загружаем маршруты на карту")
 		future, err = service.addGeometry(ctx, future, engineers, locations, matrix.GeoContextID)
 		if err != nil {
 			return contracts.PlanResult{}, err
@@ -125,12 +268,33 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		solveResult.Routes = future
 	}
 
-	unassigned := append(expired, solveResult.Unassigned...)
+	unassigned := append(append(retainedUnassigned, expired...), solveResult.Unassigned...)
 	unassigned = nonNil(unassigned)
 	routes := mergeRoutes(replay.routes, solveResult.Routes)
+	var recruited []string
+	for i := range target.Engineers {
+		eng := &target.Engineers[i]
+		if !policy.reserve || !eng.Reserve || snapshot.Engineers[i].Available {
+			continue
+		}
+		used := false
+		for _, route := range routes {
+			if route.EngineerID == eng.ID && len(route.Visits) > 0 {
+				used = true
+				break
+			}
+		}
+		if !used {
+			eng.Available = false
+		} else {
+			recruited = append(recruited, eng.ID)
+			eng.Reserve = false
+		}
+	}
 	resetReassigned(&target, routes)
 	cancelledIDs := mergeCancelled(base.CancelledOrderIDs, newlyCancelled)
-	if err := validateFinalPlan(target, routes, unassigned, cancelledIDs); err != nil {
+	lateness := carryAcceptedLateness(target, routes, base.Lateness)
+	if err := validateFinalPlan(target, routes, unassigned, cancelledIDs, lateness); err != nil {
 		return contracts.PlanResult{}, err
 	}
 	cancelledSet := make(map[string]struct{}, len(newlyCancelled))
@@ -139,6 +303,8 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	}
 	basePlanID := input.BasePlanID
 	draft := contracts.PlanDraft{
+		OptionKey:         input.OptionKey,
+		Lateness:          lateness,
 		SolveMode:         mode,
 		ScenarioID:        target.ScenarioID,
 		SnapshotRevision:  target.Revision,
@@ -154,6 +320,11 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		Termination:       solveResult.Termination,
 		CompletedOrderIDs: []string{},
 	}
+	if input.OptionKey != "" {
+		draft.DeferredOrderIDs = deferredOrderIDs(unassigned)
+	}
+	draft.ReserveEngineerIDs = recruited
+	sort.Strings(draft.ReserveEngineerIDs)
 	draft.EquipmentRemaining, err = equipmentRemaining(target)
 	draft.Issues = append(draft.Issues, service.issues...)
 	if err != nil {
@@ -165,7 +336,7 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		}
 		if o.Status == contracts.OrderStatusInProgress && replay.blocked[o.Execution.EngineerID] {
 			id := o.ID
-			draft.Issues = append(draft.Issues, contracts.Issue{EntityID: &id, Code: "EXECUTION_STATE_REQUIRED", Message: "Уточните ожидаемое время окончания работы"})
+			draft.Issues = append(draft.Issues, contracts.Issue{EntityID: &id, Code: "EXECUTION_STATE_REQUIRED", Message: "Плановое время истекло. Подтвердите фактическое завершение, когда работа закончится."})
 		}
 	}
 	draft.Metrics.CompletedCount = len(draft.CompletedOrderIDs)

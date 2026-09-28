@@ -6,9 +6,10 @@ import { type TypeOrNull } from 'shared/lib/types';
 export type { PlanEventInput as WorkspaceEventInput } from 'features/applyPlanEvent';
 export type { CrewPatchInput as EngineerPatchInput } from 'features/updateCrew';
 
-export type WorkspaceFilter = 'all' | 'unassigned' | 'closed';
+export type WorkspaceFilter =
+    'all' | 'assigned' | 'unassigned' | 'deferred' | 'closed';
 
-export type CrewLoadFilter = 'all' | 'busy' | 'free';
+export type CrewLoadFilter = 'all' | 'busy' | 'free' | 'reserve';
 
 export type ScheduleBlock = {
     id: string;

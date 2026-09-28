@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
 )
 
 //go:embed migrations/*.sql
@@ -140,12 +141,15 @@ func (s *Store) GetSnapshot(ctx context.Context, id string, rev int64) (v c.Snap
 	return
 }
 func (s *Store) GetScenario(ctx context.Context, id string, rev int64) (v c.ScenarioView, e error) {
-	var b []byte
-	e = s.db.QueryRowContext(ctx, "SELECT p.body,s.current_plan_id FROM scenarios s JOIN snapshots p ON p.scenario_id=s.id AND p.revision=CASE WHEN $2::bigint=0 THEN s.revision ELSE $2 END WHERE s.id=$1", id, rev).Scan(&b, &v.CurrentPlanID)
+	var b, metadata []byte
+	e = s.db.QueryRowContext(ctx, "SELECT p.body,s.current_plan_id,COALESCE(i.metadata,'{}'::jsonb) FROM scenarios s JOIN snapshots p ON p.scenario_id=s.id AND p.revision=CASE WHEN $2::bigint=0 THEN s.revision ELSE $2 END LEFT JOIN imports i ON i.scenario_id=s.id WHERE s.id=$1", id, rev).Scan(&b, &v.CurrentPlanID, &metadata)
 	if e != nil {
 		return v, missing(e)
 	}
 	e = json.Unmarshal(b, &v.Snapshot)
+	if e == nil {
+		data.RestoreUnlocated(&v.Snapshot, metadata)
+	}
 	return
 }
 func (s *Store) GetPlan(ctx context.Context, id string) (p c.Plan, e error) {
@@ -416,6 +420,16 @@ func (s *Store) CommitPlan(ctx context.Context, in c.PlanCommit) (c.Plan, error)
 		}
 		if _, e = tx.ExecContext(ctx, "INSERT INTO snapshots VALUES($1,$2,$3)", sid, target.Revision, encode(target)); e != nil {
 			return p, e
+		}
+	}
+	if cmd.Kind == "build" && cur == nil {
+		var changed bool
+		target, changed = initialReserve(target, draft.Routes)
+		if changed {
+			draft.SnapshotRevision = target.Revision
+			if _, e = tx.ExecContext(ctx, "INSERT INTO snapshots VALUES($1,$2,$3)", sid, target.Revision, encode(target)); e != nil {
+				return p, e
+			}
 		}
 	}
 	p = c.Plan{ID: ID("plan"), PlanDraft: draft}

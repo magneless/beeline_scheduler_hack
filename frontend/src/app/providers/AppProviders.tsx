@@ -27,7 +27,19 @@ export const AppProviders = ({ children }: AppProvidersProps) => {
             <QueryClientProvider client={queryClient}>
                 <BrowserRouter>
                     {children}
-                    <Toaster theme="light" position="top-right" />
+                    <Toaster
+                        theme="light"
+                        position="bottom-right"
+                        closeButton
+                        toastOptions={{
+                            style: { pointerEvents: 'none' },
+                            classNames: {
+                                closeButton: 'pointer-events-auto',
+                                actionButton: 'pointer-events-auto',
+                                cancelButton: 'pointer-events-auto',
+                            },
+                        }}
+                    />
                 </BrowserRouter>
             </QueryClientProvider>
         </ErrorBoundary>

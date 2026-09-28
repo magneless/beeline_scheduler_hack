@@ -10,6 +10,8 @@ export type PlanEventInput =
           orderType: 'urgent' | 'ordinary';
           locationId?: string;
           address?: string;
+          restoreOrderId?: string;
+          point?: import('shared/api/types/contracts').Point;
           workType: import('shared/api/types/contracts').WorkType;
           requiredSkills: string[];
           transport: import('shared/api/types/contracts').Transport | null;
@@ -21,6 +23,12 @@ export type PlanEventInput =
           >;
       }
     | { kind: 'cancel'; occurredAt: string; reason: CancelReason }
+    | {
+          kind: 'cancel_many';
+          orderIds: string[];
+          occurredAt: string;
+          reason: CancelReason;
+      }
     | {
           kind: 'status';
           occurredAt: string;

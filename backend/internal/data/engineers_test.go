@@ -37,3 +37,30 @@ func TestParseEngineersRejectsDuplicateEmptyAndOversize(t *testing.T) {
 		t.Fatal("oversize roster accepted")
 	}
 }
+
+func TestParseEngineersReserveIsDerivedNotImported(t *testing.T) {
+	header := strings.TrimSpace(engineerHeader) + ";reserve\n"
+	raw := header + "working;repair;car;08:00;17:00;true;1;0;false\n" +
+		"idle;emergency;car;08:00;17:00;true;2;0;false\n" +
+		"unavailable;repair;walk;08:00;17:00;false;0;0;false\n"
+	got, err := data.ParseEngineers(strings.NewReader(raw), "2026-08-17", "Europe/Moscow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got[0].Available || got[0].Reserve || !got[1].Available || got[1].Reserve || got[2].Available || got[2].Reserve {
+		t.Fatalf("working, reserve and unavailable must stay distinct: %+v", got)
+	}
+	for _, row := range []string{
+		"e1;repair;car;08:00;17:00;true;1;0;true\n",
+		"e1;repair;car;08:00;17:00;false;1;0;true\n",
+		"e1;repair;car;08:00;17:00;false;1;0;yes\n",
+	} {
+		if _, err := data.ParseEngineers(strings.NewReader(header+row), "2026-08-17", "Europe/Moscow"); err == nil {
+			t.Fatalf("invalid reserve row accepted: %s", row)
+		}
+	}
+	legacy, err := data.ParseEngineers(strings.NewReader(engineerHeader+"e1;repair;car;08:00;17:00;false;1;0\n"), "2026-08-17", "Europe/Moscow")
+	if err != nil || legacy[0].Reserve {
+		t.Fatalf("legacy unavailable engineer must not become reserve: %+v, %v", legacy, err)
+	}
+}

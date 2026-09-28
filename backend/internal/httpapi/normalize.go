@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"sort"
 )
 
 // Called after validation; normalize timestamps before persisting or comparing commands.
@@ -27,6 +28,7 @@ func normalizeEvent(e c.Event) c.Event {
 	case "order_cancelled":
 		var p c.OrderCancelled
 		json.Unmarshal(e.Payload, &p)
+		sort.Strings(p.OrderIDs)
 		value = p
 	case "engineer_unavailable":
 		var p c.EngineerUnavailable
