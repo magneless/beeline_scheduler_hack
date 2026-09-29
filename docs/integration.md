@@ -4,13 +4,15 @@
 
 ## Запуск
 
-В корне скопируйте `.env.example` в `.env` и задайте `POSTGRES_PASSWORD`. Затем:
+Из корня репозитория выполните:
 
 ```sh
 docker compose up --build -d --wait
 ```
 
 UI: http://localhost:3000. API: http://localhost:8080/api/v1. PostgreSQL: localhost:5432. Данные сохраняются в Docker volume `postgres_data`. Остановка с сохранением данных: `docker compose down`.
+
+Файл `.env` необязателен. Compose использует локальные настройки по умолчанию, включая пароль PostgreSQL `change-me-local`; все опубликованные порты привязаны к `127.0.0.1`. Для изменения настроек скопируйте `.env.example` в `.env` и задайте нужные значения. Для уже созданной базы сохраните прежний пароль: изменение `.env` само по себе не меняет пароль в PostgreSQL.
 
 Режим по умолчанию — `DEPENDENCY_MODE=integrated`, `GEO_PROVIDER=osm`, `SOLVER_MODE=optimized`. Для запуска без VROOM задайте `SOLVER_MODE=baseline`. Сервер соединяет storage/HTTP/worker, GeoService, PlanService и planner. Миграции применяются автоматически. UI обращается к backend через nginx; браузеру не нужен отдельный CORS.
 
@@ -41,7 +43,7 @@ pnpm lint:styles
 pnpm build
 ```
 
-Для PostgreSQL-тестов используйте `docker compose --profile test run --rm --build backend-test`; compose передаёт `TEST_DATABASE_URL`, пароль PostgreSQL берётся из `.env`. Каждый тест использует отдельную схему. Сквозные тесты проверяют реальные модули, импорт, пять видов событий, историю и списание оборудования. На Windows race-проверка требует C-компилятор; её можно выполнить в Linux-контейнере Go.
+Для PostgreSQL-тестов используйте `docker compose --profile test run --rm --build backend-test`; Compose передаёт `TEST_DATABASE_URL` с тем же паролем, что и для backend и PostgreSQL. Каждый тест использует отдельную схему. Сквозные тесты проверяют реальные модули, импорт, пять видов событий, историю и списание оборудования. На Windows race-проверка требует C-компилятор; её можно выполнить в Linux-контейнере Go.
 
 ## Реальный состав бригад
 
