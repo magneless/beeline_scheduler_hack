@@ -19,3 +19,16 @@ Thumbs.db
 /backend/cmd/solverdecision/
 /backend/internal/planner/experiment/
 /backend/internal/planner/optimized/experiment.go
+/backend/cmd/benchenhancement/
+/backend/cmd/benchgeo/
+
+# Host-specific Compose settings and local research outputs.
+/compose.override.yaml
+/docs/benchmarks/
+/docs/four-algorithms-research-2026-09-29.md
+/docs/planner-comparison.html
+/docs/planner-comparison.pdf
+/docs/presentation/four-algorithms-2026-09-29/
+/docs/vroom-enhancment-experiments.md
+/docs/vroom-enhancment-regression-check.md
+/docs/vroom-integration-benchmark.md

@@ -26,5 +26,7 @@
 # Research adapters remain local; the runtime uses the production VROOM adapter.
 backend/cmd/benchsolver/
 backend/cmd/solverdecision/
+backend/cmd/benchenhancement/
+backend/cmd/benchgeo/
 backend/internal/planner/experiment/
 backend/internal/planner/optimized/experiment.go
