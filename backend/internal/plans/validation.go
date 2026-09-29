@@ -186,6 +186,9 @@ func validateSolveResult(request contracts.SolveRequest, result contracts.SolveR
 				return contracts.InvalidPlan("engineer transport does not match order", map[string]any{"order_id": order.ID, "engineer_id": engineer.ID})
 			}
 			leg := route.Legs[index]
+			if leg.StartAt.Before(engineer.Shift.Start) || leg.EndAt.After(engineer.Shift.End) {
+				return contracts.InvalidPlan("planned travel is outside engineer shift", map[string]any{"leg_id": leg.ID, "engineer_id": engineer.ID})
+			}
 			for kind, amount := range order.EquipmentRequired {
 				stock[kind] -= amount
 				if stock[kind] < 0 {

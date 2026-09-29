@@ -83,6 +83,22 @@ export const buildWorkspaceView = ({
     const unassigned = new Map(
         activePlan?.unassigned.map((item) => [item.order_id, item]) ?? []
     );
+    if (activePlan) {
+        snapshot?.orders.forEach((order) => {
+            if (
+                !engineerByOrder.has(order.id) &&
+                !unassigned.has(order.id) &&
+                order.status !== 'cancelled' &&
+                order.status !== 'completed'
+            ) {
+                unassigned.set(order.id, {
+                    order_id: order.id,
+                    reason_code: 'PENDING_CALCULATION',
+                    message: 'Ожидает пересчёта маршрутов',
+                });
+            }
+        });
+    }
     unlocated.forEach((item) =>
         unassigned.set(item.order.id, {
             order_id: item.order.id,

@@ -22,6 +22,7 @@ import {
 import { Button } from 'shared/ui/button';
 import { MapView } from 'shared/ui/map';
 
+import { MapScheduleSplit } from './MapScheduleSplit';
 import { WorkspaceScheduleDock } from './WorkspaceScheduleDock';
 import { WorkTypeBadge } from './WorkTypeBadge';
 import { routeColor } from '../lib/routeColors';
@@ -177,7 +178,6 @@ export const PlanProposalDialog = ({
         snapshot?.locations.map((item) => [item.id, item.address]) ?? []
     );
     const reserve = new Set(option?.reserve_engineer_ids ?? []);
-    const deferred = new Set(plan?.deferred_order_ids ?? []);
     const strictOption = proposal.options.find((item) => item.key === 'strict');
     const strictAssignments = assignmentMap(
         strictOption?.result.draft.routes ?? []
@@ -216,12 +216,12 @@ export const PlanProposalDialog = ({
         setSelectedOrderId(orderId);
         setEngineerId(assignments.get(orderId)?.engineerId ?? null);
     };
-    const originalHint =
-        proposal.event?.type === 'ordinary_order_added'
-            ? 'Новая заявка останется без бригады'
-            : proposal.event?.type === 'order_cancelled'
-              ? 'Отменённая заявка будет убрана из плана'
-              : 'Незавершённые задания недоступной бригады останутся без исполнителя';
+    const originalMetrics = proposal.options.find(
+        (item) => item.key === 'original'
+    )?.result.draft.metrics;
+    const originalHint = originalMetrics
+        ? `${originalMetrics.assigned_count} в плане · ${originalMetrics.unassigned_count} без бригады`
+        : '';
 
     useEffect(() => {
         const onEscape = (event: KeyboardEvent) => {
@@ -246,7 +246,7 @@ export const PlanProposalDialog = ({
                 aria-modal="true"
                 aria-label="Выбор рабочего плана"
                 className={[
-                    'flex h-[min(96vh,1040px)] w-full max-w-[1500px] flex-col overflow-hidden',
+                    'flex h-full w-full max-w-[1500px] flex-col overflow-hidden',
                     'rounded-[16px] border border-border bg-white shadow-2xl',
                 ].join(' ')}
             >
@@ -329,44 +329,47 @@ export const PlanProposalDialog = ({
                         </button>
                     </div>
                 ) : null}
-                <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-                    <div className="flex min-h-[300px] min-w-0 flex-1 flex-col">
-                        <div className="relative min-h-[220px] flex-1">
-                            <MapView
-                                markers={mapModel.markers}
-                                polylines={mapModel.polylines}
-                                selectedId={selectedOrderId}
-                                fitToken={`${proposal.id}:${option.key}:${engineerId ?? 'all'}`}
-                                onMarkerClick={(id) =>
-                                    setSelectedOrderId(
-                                        id === 'office' ? null : id
-                                    )
-                                }
-                            />
-                        </div>
-                        <div className="h-[250px] min-h-0 border-t border-border">
-                            <WorkspaceScheduleDock
-                                key={`${proposal.id}-${option.key}`}
-                                fillHeight
-                                highlightOrderIds={emergencyHighlightIds}
-                                lanes={view.lanes}
-                                focusAt={
-                                    focusAt.isValid ? focusAt : view.focusAt
-                                }
-                                selectedOrderId={selectedOrderId}
-                                selectedEngineerId={engineerId}
-                                onSelectOrder={setSelectedOrderId}
-                                onSelectEngineer={setEngineerId}
-                            />
-                        </div>
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+                    <div className="flex min-h-[360px] min-w-0 flex-1 lg:min-h-0">
+                        <MapScheduleSplit
+                            map={
+                                <MapView
+                                    markers={mapModel.markers}
+                                    polylines={mapModel.polylines}
+                                    selectedId={selectedOrderId}
+                                    fitToken={`${proposal.id}:${option.key}:${engineerId ?? 'all'}`}
+                                    onMarkerClick={(id) =>
+                                        setSelectedOrderId(
+                                            id === 'office' ? null : id
+                                        )
+                                    }
+                                />
+                            }
+                            schedule={
+                                <WorkspaceScheduleDock
+                                    key={`${proposal.id}-${option.key}`}
+                                    fillHeight
+                                    highlightOrderIds={emergencyHighlightIds}
+                                    lanes={view.lanes}
+                                    focusAt={
+                                        focusAt.isValid ? focusAt : view.focusAt
+                                    }
+                                    selectedOrderId={selectedOrderId}
+                                    selectedEngineerId={engineerId}
+                                    onSelectOrder={setSelectedOrderId}
+                                    onSelectEngineer={setEngineerId}
+                                />
+                            }
+                        />
                     </div>
                     <aside
                         className={[
-                            'max-h-[34vh] w-full shrink-0 overflow-y-auto border-t border-border bg-white',
+                            'flex max-h-[34vh] w-full shrink-0 flex-col overflow-hidden',
+                            'border-t border-border bg-white',
                             'lg:max-h-none lg:w-[350px] lg:border-t-0 lg:border-l',
                         ].join(' ')}
                     >
-                        <div className="space-y-4 p-4 text-xs">
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 text-xs">
                             {currentOrder ? (
                                 <div className="rounded-[8px] border border-primary bg-accent p-3">
                                     <WorkTypeBadge
@@ -534,20 +537,6 @@ export const PlanProposalDialog = ({
                                     Бригады · {plan.metrics.used_engineer_count}
                                 </h3>
                                 <div className="space-y-1">
-                                    <details className="mb-2 text-xs text-muted-foreground">
-                                        <summary className="cursor-pointer py-1">
-                                            Почему нагрузка отличается
-                                        </summary>
-                                        <p className="mt-1 leading-relaxed">
-                                            Приоритеты: аварии, ремонты,
-                                            подключения. Затем — меньше
-                                            задействованных бригад и меньше
-                                            общий пробег. Учитываются навыки,
-                                            оборудование, окна и дорога. Равная
-                                            загрузка бригад в цель расчёта не
-                                            входит.
-                                        </p>
-                                    </details>
                                     {plan.routes.map((route) => (
                                         <button
                                             type="button"
@@ -696,123 +685,52 @@ export const PlanProposalDialog = ({
                                     ))}
                                 </section>
                             ) : null}
-                            {plan.unassigned.some(
-                                (item) => !deferred.has(item.order_id)
-                            ) ? (
+                            {plan.unassigned.length ? (
                                 <section>
                                     <h3 className="mb-2 text-sm font-semibold">
-                                        Без бригады ·{' '}
-                                        {
-                                            plan.unassigned.filter(
-                                                (item) =>
-                                                    !deferred.has(item.order_id)
-                                            ).length
-                                        }
+                                        Без бригады · {plan.unassigned.length}
                                     </h3>
-                                    {plan.unassigned
-                                        .filter(
-                                            (item) =>
-                                                !deferred.has(item.order_id)
-                                        )
-                                        .map((item) => (
-                                            <button
-                                                type="button"
-                                                key={item.order_id}
-                                                onClick={() =>
-                                                    selectOrder(item.order_id)
-                                                }
-                                                aria-pressed={
-                                                    selectedOrderId ===
-                                                    item.order_id
-                                                }
-                                                className={[
-                                                    'mb-1 block w-full rounded-[8px] border border-border',
-                                                    'p-2 text-left hover:border-primary',
-                                                ].join(' ')}
-                                            >
-                                                {orders.get(item.order_id) ? (
-                                                    <WorkTypeBadge
-                                                        type={
-                                                            orders.get(
-                                                                item.order_id
-                                                            )!.work_type
-                                                        }
-                                                    />
-                                                ) : null}
-                                                <strong className="mt-1 block">
-                                                    {locations.get(
+                                    {plan.unassigned.map((item) => (
+                                        <button
+                                            type="button"
+                                            key={item.order_id}
+                                            onClick={() =>
+                                                selectOrder(item.order_id)
+                                            }
+                                            aria-pressed={
+                                                selectedOrderId ===
+                                                item.order_id
+                                            }
+                                            className={[
+                                                'mb-1 block w-full rounded-[8px] border border-border',
+                                                'p-2 text-left hover:border-primary',
+                                            ].join(' ')}
+                                        >
+                                            {orders.get(item.order_id) ? (
+                                                <WorkTypeBadge
+                                                    type={
                                                         orders.get(
                                                             item.order_id
-                                                        )?.location_id ?? ''
-                                                    ) ?? item.order_id}
-                                                </strong>
-                                                <span className="mt-1 block text-muted-foreground">
-                                                    {reasonCodeLabel[
-                                                        item.reason_code
-                                                    ] ?? item.reason_code}
-                                                    {/[а-яё]/i.test(
-                                                        item.message
-                                                    )
-                                                        ? ` · ${item.message}`
-                                                        : ''}
-                                                </span>
-                                            </button>
-                                        ))}
-                                </section>
-                            ) : null}
-                            {deferred.size ? (
-                                <section>
-                                    <h3 className="mb-2 text-sm font-semibold">
-                                        На разбор и перенос · {deferred.size}
-                                    </h3>
-                                    {plan.unassigned
-                                        .filter((item) =>
-                                            deferred.has(item.order_id)
-                                        )
-                                        .map((item) => (
-                                            <button
-                                                type="button"
-                                                key={item.order_id}
-                                                onClick={() =>
-                                                    selectOrder(item.order_id)
-                                                }
-                                                aria-pressed={
-                                                    selectedOrderId ===
-                                                    item.order_id
-                                                }
-                                                className={[
-                                                    'mb-1 block w-full rounded-[8px] border border-border',
-                                                    'p-2 text-left hover:border-primary',
-                                                ].join(' ')}
-                                            >
-                                                {orders.get(item.order_id) ? (
-                                                    <WorkTypeBadge
-                                                        type={
-                                                            orders.get(
-                                                                item.order_id
-                                                            )!.work_type
-                                                        }
-                                                    />
-                                                ) : null}
-                                                <strong className="mt-1 block">
-                                                    {locations.get(
-                                                        orders.get(
-                                                            item.order_id
-                                                        )?.location_id ?? ''
-                                                    ) ?? item.order_id}
-                                                </strong>
-                                                <span className="mt-1 block text-muted-foreground">
-                                                    {reasonCodeLabel[
-                                                        item.reason_code
-                                                    ] ?? item.reason_code}
-                                                    {/[а-яё]/i.test(
-                                                        item.message
-                                                    )
-                                                        ? ` · ${item.message}`
-                                                        : ''}
-                                                </span>
-                                            </button>
-                                        ))}
+                                                        )!.work_type
+                                                    }
+                                                />
+                                            ) : null}
+                                            <strong className="mt-1 block">
+                                                {locations.get(
+                                                    orders.get(item.order_id)
+                                                        ?.location_id ?? ''
+                                                ) ?? item.order_id}
+                                            </strong>
+                                            <span className="mt-1 block text-muted-foreground">
+                                                {reasonCodeLabel[
+                                                    item.reason_code
+                                                ] ?? item.reason_code}
+                                                {/[а-яё]/i.test(item.message)
+                                                    ? ` · ${item.message}`
+                                                    : ''}
+                                            </span>
+                                        </button>
+                                    ))}
                                 </section>
                             ) : null}
                             {plan.changes.length ? (
@@ -877,30 +795,21 @@ export const PlanProposalDialog = ({
                                 </p>
                             )}
                         </div>
+                        <footer className="shrink-0 border-t border-border bg-white px-4 py-3">
+                            <Button
+                                className="w-full rounded-[8px]"
+                                disabled={accepting}
+                                onClick={() => onAccept(option.key)}
+                            >
+                                {accepting
+                                    ? 'Принимаем…'
+                                    : option.key === 'original'
+                                      ? 'Сохранить расписание'
+                                      : 'Принять этот план'}
+                            </Button>
+                        </footer>
                     </aside>
                 </div>
-                <footer
-                    className={[
-                        'flex shrink-0 items-center justify-between gap-3 border-t border-border',
-                        'bg-white px-4 py-3 sm:px-5',
-                    ].join(' ')}
-                >
-                    <span className="text-xs text-muted-foreground">
-                        {option.identical_to
-                            ? 'Маршрут совпадает с другим вариантом'
-                            : `${plan.metrics.assigned_count} назначено · ${formatKm(plan.metrics.total_distance_m)}`}
-                    </span>
-                    <Button
-                        disabled={accepting}
-                        onClick={() => onAccept(option.key)}
-                    >
-                        {accepting
-                            ? 'Принимаем…'
-                            : option.key === 'original'
-                              ? 'Сохранить расписание'
-                              : 'Принять этот план'}
-                    </Button>
-                </footer>
             </section>
         </div>
     );

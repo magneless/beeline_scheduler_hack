@@ -18,6 +18,7 @@ type ProposalInput struct {
 	SnapshotRevision      int64       `json:"snapshot_revision"`
 	ExpectedCurrentPlanID *string     `json:"expected_current_plan_id"`
 	SolveMode             c.SolveMode `json:"solve_mode,omitempty"`
+	PendingRevision       *int64      `json:"pending_revision,omitempty"`
 	Event                 *c.Event    `json:"event,omitempty"`
 }
 
@@ -54,6 +55,7 @@ func (s *Store) CurrentProposal(ctx context.Context, scenarioID string) (*Propos
 		JOIN scenarios s ON s.id=p.scenario_id
 		WHERE p.scenario_id=$1 AND p.status='pending' AND p.snapshot_revision=s.revision
 		AND p.expected_current_plan_id IS NOT DISTINCT FROM s.current_plan_id
+		AND COALESCE((p.body->>'pending_revision')::bigint,0) = COALESCE((SELECT CASE WHEN jsonb_array_length(q.body->'events') > 0 THEN q.revision ELSE 0 END FROM pending_changes q WHERE q.scenario_id=s.id),0)
 		ORDER BY p.created_at DESC,p.id DESC LIMIT 1`, scenarioID).Scan(&id, &body)
 	if errors.Is(e, sql.ErrNoRows) {
 		var exists bool
@@ -118,6 +120,9 @@ func (s *Store) SaveProposal(ctx context.Context, in ProposalInput, options []c.
 	}
 	if snap.Revision != in.SnapshotRevision || !ptrEqual(currentPlanID, in.ExpectedCurrentPlanID) {
 		return out, c.NewError("STALE_VERSION", "Исходные данные или текущий план изменились")
+	}
+	if e = checkPending(ctx, tx, in.ScenarioID, in.PendingRevision); e != nil {
+		return out, e
 	}
 	if in.Event == nil {
 		if e = blocked(ctx, tx, snap, currentPlanID); e != nil {
@@ -209,6 +214,9 @@ func (s *Store) AcceptProposal(ctx context.Context, proposalID, requestID, optio
 	if snap.Revision != proposal.SnapshotRevision || !ptrEqual(currentPlanID, proposal.ExpectedCurrentPlanID) {
 		return plan, c.NewError("STALE_VERSION", "Исходные данные или план изменились после расчёта")
 	}
+	if e = checkPending(ctx, tx, scenarioID, proposal.PendingRevision); e != nil {
+		return plan, e
+	}
 	var reused bool
 	if e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM proposals WHERE scenario_id=$1 AND accepted_request_id=$2)
 		OR EXISTS(SELECT 1 FROM runs WHERE scenario_id=$1 AND request_id=$2)`, scenarioID, requestID).Scan(&reused); e != nil {
@@ -227,11 +235,17 @@ func (s *Store) AcceptProposal(ctx context.Context, proposalID, requestID, optio
 	if selected == nil {
 		return plan, c.NewError("INVALID_INPUT", "Вариант не найден в предложении")
 	}
+	if optionKey == "original" && proposal.Event != nil && containsUnavailable(*proposal.Event) {
+		return plan, c.NewError("INVALID_INPUT", "Исходный маршрут недоступен: инженер не работает")
+	}
 	result := selected.Result
 	draft := result.Draft
 	target := result.TargetSnapshot
 	invalidPlan := func() (c.Plan, error) {
 		return plan, c.NewError("INVALID_PLAN", "Рассчитанный вариант не соответствует сценарию")
+	}
+	if c.ValidateEngineerShifts(target) != nil {
+		return invalidPlan()
 	}
 	if draft.ScenarioID != scenarioID || target.ScenarioID != scenarioID || target.RegionID != snap.RegionID || target.Date != snap.Date || target.Timezone != snap.Timezone || target.OfficeLocationID != snap.OfficeLocationID {
 		return invalidPlan()
@@ -253,7 +267,14 @@ func (s *Store) AcceptProposal(ctx context.Context, proposalID, requestID, optio
 		}
 	} else {
 		ev := proposal.Event
-		if currentPlanID == nil || draft.BasePlanID == nil || *draft.BasePlanID != *currentPlanID || draft.SnapshotRevision != snap.Revision+1 || target.Revision != snap.Revision+1 || !draft.AsOf.Equal(ev.OccurredAt) || result.AppliedEvent == nil {
+		if currentPlanID == nil || draft.BasePlanID == nil || *draft.BasePlanID != *currentPlanID || draft.SnapshotRevision != snap.Revision+1 || target.Revision != snap.Revision+1 || result.AppliedEvent == nil {
+			return invalidPlan()
+		}
+		expectedAsOf, err := eventPlanTime(ctx, tx, *currentPlanID, ev.OccurredAt)
+		if err != nil {
+			return plan, err
+		}
+		if !draft.AsOf.Equal(expectedAsOf) {
 			return invalidPlan()
 		}
 		if result.AppliedEvent.ID != ev.ID || result.AppliedEvent.Type != ev.Type || !result.AppliedEvent.OccurredAt.Equal(ev.OccurredAt) {
@@ -280,6 +301,22 @@ func (s *Store) AcceptProposal(ctx context.Context, proposalID, requestID, optio
 	if _, e = tx.ExecContext(ctx, "INSERT INTO plans VALUES($1,$2,$3,$4)", plan.ID, scenarioID, draft.SnapshotRevision, encode(plan)); e != nil {
 		return plan, e
 	}
+	if proposal.PendingRevision != nil {
+		q, err := readPending(ctx, tx, scenarioID)
+		if err != nil {
+			return plan, err
+		}
+		for _, ev := range q.Events {
+			if _, e = tx.ExecContext(ctx, "INSERT INTO events VALUES($1,$2,$3,$4)", scenarioID, ev.ID, plan.ID, encode(ev)); e != nil {
+				return plan, e
+			}
+		}
+		q.Revision++
+		q.Events, q.Snapshot = []c.Event{}, nil
+		if _, e = tx.ExecContext(ctx, "UPDATE pending_changes SET revision=$2,body=$3 WHERE scenario_id=$1", scenarioID, q.Revision, encode(q)); e != nil {
+			return plan, e
+		}
+	}
 	if result.AppliedEvent != nil {
 		if _, e = tx.ExecContext(ctx, "INSERT INTO events VALUES($1,$2,$3,$4)", scenarioID, result.AppliedEvent.ID, plan.ID, encode(result.AppliedEvent)); e != nil {
 			return plan, e
@@ -293,4 +330,23 @@ func (s *Store) AcceptProposal(ctx context.Context, proposalID, requestID, optio
 		return plan, e
 	}
 	return plan, tx.Commit()
+}
+
+func containsUnavailable(ev c.Event) bool {
+	if ev.Type == "engineer_unavailable" {
+		return true
+	}
+	if ev.Type != "pending_changes" {
+		return false
+	}
+	var payload struct {
+		Events []c.Event `json:"events"`
+	}
+	_ = json.Unmarshal(ev.Payload, &payload)
+	for _, item := range payload.Events {
+		if item.Type == "engineer_unavailable" {
+			return true
+		}
+	}
+	return false
 }

@@ -77,6 +77,10 @@ func (service *Service) replayAt(ctx context.Context, snapshot *contracts.Snapsh
 						priorComplete = false
 						break
 					}
+					if prior.Execution != nil && prior.Execution.FinishedAt != nil && prior.Execution.FinishedAt.After(leg.StartAt) {
+						priorComplete = false
+						break
+					}
 				}
 				// The plan clock can advance because another crew reported an
 				// event. Elapsed schedule timestamps do not confirm a departure
@@ -206,6 +210,16 @@ func refreshExecution(snapshot *contracts.Snapshot, replay *replayResult, event 
 		return err
 	}
 	payload := contracts.DecodePayload(event.Payload)
+	latestWork := map[string]contracts.Order{}
+	for _, o := range snapshot.Orders {
+		ex := o.Execution
+		if ex != nil && ex.StartedAt != nil {
+			latest := latestWork[ex.EngineerID].Execution
+			if latest == nil || latest.StartedAt.Before(*ex.StartedAt) {
+				latestWork[ex.EngineerID] = o
+			}
+		}
+	}
 	for _, o := range snapshot.Orders {
 		ex := o.Execution
 		if ex == nil || ex.StartedAt == nil {
@@ -241,7 +255,7 @@ func refreshExecution(snapshot *contracts.Snapshot, replay *replayResult, event 
 			r.Visits = append(r.Visits, factualVisit(o, previous, event.OccurredAt))
 		}
 		sort.SliceStable(r.Visits, func(i, j int) bool { return r.Visits[i].StartAt.Before(r.Visits[j].StartAt) })
-		if o.ID == payload.OrderID || o.Status == contracts.OrderStatusInProgress {
+		if latestWork[ex.EngineerID].ID == o.ID && (o.ID == payload.OrderID || payload.EngineerID == ex.EngineerID || o.Status == contracts.OrderStatusInProgress) {
 			state := replay.states[ex.EngineerID]
 			state.StartLocationID = o.LocationID
 			state.AvailableFrom = event.OccurredAt

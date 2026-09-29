@@ -38,7 +38,7 @@ export const ScheduleBlockButton = ({
     highlighted = false,
     onSelectOrder,
 }: ScheduleBlockButtonProps) => {
-    if (block.kind === 'wait') {
+    if (block.end <= block.start) {
         return null;
     }
 
@@ -50,15 +50,25 @@ export const ScheduleBlockButton = ({
     const label =
         block.kind === 'work' && block.workType
             ? `${workTypeLabel[block.workType]} ${stamp}`
-            : workspaceCopy.scheduleTravel;
+            : block.kind === 'wait'
+              ? workspaceCopy.scheduleWait
+              : workspaceCopy.scheduleTravel;
 
     const displayLabel =
         stop && block.kind === 'work' ? `${stop.sequence} · ${label}` : label;
-    const description = stop
+    const seconds = Math.round(block.end.diff(block.start, 'seconds').seconds);
+    const duration =
+        seconds < 60
+            ? `${seconds} с`
+            : `${Math.floor(seconds / 60)} мин${seconds % 60 ? ` ${seconds % 60} с` : ''}`;
+    const timing = `${block.start.toFormat('HH:mm:ss')}–${block.end.toFormat('HH:mm:ss')} · ${duration}`;
+    const summary = stop
         ? block.kind === 'work'
             ? stop.description
             : `${label} · ${stop.description}`
         : label;
+    const description = `${summary} · ${timing}`;
+    const Tag = block.orderId ? 'button' : 'span';
 
     const handleClick = () => {
         if (block.orderId) {
@@ -67,28 +77,37 @@ export const ScheduleBlockButton = ({
     };
 
     return (
-        <button
-            type="button"
+        <Tag
+            type={block.orderId ? 'button' : undefined}
             title={description}
             aria-label={description}
-            aria-pressed={block.orderId === selectedOrderId}
+            aria-pressed={
+                block.orderId ? block.orderId === selectedOrderId : undefined
+            }
             data-stop-order={
                 stop && block.kind === 'work' ? block.orderId : undefined
             }
             data-block-kind={block.kind}
+            data-order-id={block.orderId}
+            data-start-at={block.start.toISO()}
+            data-end-at={block.end.toISO()}
             data-sequence={stop?.sequence}
             className={cn(
                 styles.block,
                 block.kind === 'travel' ? styles.travel : '',
+                block.kind === 'wait' ? styles.wait : '',
+                !block.orderId ? styles.unlinked : '',
                 workClass,
                 block.end <= focusAt ? styles.past : '',
                 highlighted ? styles.highlighted : '',
                 block.orderId === selectedOrderId ? styles.selected : ''
             )}
             style={blockOffset(lane, block)}
-            onClick={handleClick}
+            onClick={block.orderId ? handleClick : undefined}
         >
-            {block.kind === 'work' ? displayLabel : ''}
-        </button>
+            {block.kind !== 'travel' ? (
+                <span className={styles.blockLabel}>{displayLabel}</span>
+            ) : null}
+        </Tag>
     );
 };

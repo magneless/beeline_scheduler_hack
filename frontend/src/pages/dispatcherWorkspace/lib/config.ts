@@ -75,9 +75,10 @@ export const workspaceCopy = {
         { tone: 'repair', label: 'ремонт' },
         { tone: 'additional', label: 'дозаказ' },
     ] as const,
-    scheduleLive: 'На линии',
+    scheduleLive: 'В работе',
     scheduleTravel: 'дорога',
-    scheduleOnLine: (count: number) => ` · ${count} на линии`,
+    scheduleWait: 'Ожидание',
+    scheduleOnLine: (count: number) => ` · ${count} в работе`,
     scheduleEmptyFilter: 'Нет бригад по этому фильтру',
     scheduleEmpty: 'После расчёта здесь появятся слоты каждой бригады',
 } as const;

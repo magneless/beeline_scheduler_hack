@@ -7,7 +7,9 @@ import { Button } from 'shared/ui/button';
 import { CalculationProgressBar } from 'shared/ui/calculationProgress';
 import { MapView } from 'shared/ui/map';
 
-import { BuildPlanPrompt } from './BuildPlanPrompt';
+import { AddressPreflight } from './AddressPreflight';
+import { MapScheduleSplit } from './MapScheduleSplit';
+import { PendingChangesBar } from './PendingChangesBar';
 import { PlanComparison } from './PlanComparison';
 import { PlanProposalDialog } from './PlanProposalDialog';
 import { RouteItinerary } from './RouteItinerary';
@@ -63,6 +65,16 @@ export const DispatcherWorkspacePage = () => {
                 onToggleSchedule={workspace.toggleSchedule}
                 onTogglePanel={workspace.togglePanel}
             />
+            {workspace.pendingChanges ? (
+                <PendingChangesBar
+                    queue={workspace.pendingChanges}
+                    timezone={workspace.timezone}
+                    addresses={workspace.addressByOrder}
+                    pending={workspace.eventPending}
+                    onCalculate={workspace.handleBuildPlan}
+                    onUndo={workspace.undoPendingChange}
+                />
+            ) : null}
             {workspace.proposalCalculation || workspace.runCalculation ? (
                 <CalculationProgressBar
                     state={
@@ -97,9 +109,6 @@ export const DispatcherWorkspacePage = () => {
                         unassigned={workspace.unassigned}
                         lateness={workspace.plan?.lateness}
                         inTransitOrderIds={workspace.inTransitOrderIds}
-                        deferredOrderIds={
-                            new Set(workspace.plan?.deferred_order_ids ?? [])
-                        }
                         visits={workspace.visitByOrder}
                         timezone={workspace.timezone}
                         date={workspace.snapshot?.date ?? ''}
@@ -113,13 +122,8 @@ export const DispatcherWorkspacePage = () => {
                         assignedCounts={workspace.assignedCounts}
                         canEditEngineers={workspace.canEditEngineers}
                         canEvent={Boolean(workspace.plan)}
-                        pending={
-                            workspace.crewPending || Boolean(workspace.proposal)
-                        }
-                        statusPending={
-                            workspace.eventPending ||
-                            Boolean(workspace.proposal)
-                        }
+                        pending={workspace.crewPending}
+                        statusPending={workspace.eventPending}
                         onPanelTab={workspace.setPanelTab}
                         onFilter={workspace.setFilter}
                         onSelectOrder={workspace.selectOrder}
@@ -145,122 +149,150 @@ export const DispatcherWorkspacePage = () => {
                         />
                     </WorkspaceSidePanel>
                 ) : null}
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:min-h-[440px] max-lg:shrink-0">
-                    <div
-                        className={[
-                            'flex shrink-0 items-center justify-between gap-3 border-b',
-                            'border-border bg-white px-5 py-3',
-                        ].join(' ')}
-                    >
-                        <div className="min-w-0">
-                            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                {focused ? (
-                                    <span
-                                        className="size-2.5 shrink-0 rounded-full"
-                                        style={{
-                                            background: routeColor(focused),
-                                        }}
-                                    />
-                                ) : (
-                                    <MapPin className="size-4 text-muted-foreground" />
-                                )}
-                                {focused
-                                    ? `Маршрут · ${displayEngineer(focused)}`
-                                    : unassignedOnly
-                                      ? 'Заявки без бригады'
-                                      : 'Обзор района'}
-                            </h2>
-                            {workspace.plan ? (
-                                <p className="mt-0.5 pl-6 text-xs text-muted-foreground">
-                                    Все маршруты ·{' '}
-                                    {formatKm(
-                                        workspace.plan.metrics.total_distance_m
-                                    )}
-                                </p>
-                            ) : null}
-                        </div>
-                        {focused || unassignedOnly ? (
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="shrink-0 rounded-[8px] text-muted-foreground"
-                                onClick={workspace.handleClearCrew}
-                            >
-                                <ArrowLeft className="size-3.5" />
-                                Обзор района
-                            </Button>
-                        ) : (
-                            <div
-                                className={[
-                                    'hidden shrink-0 items-center gap-3 text-[11px]',
-                                    'text-muted-foreground lg:flex',
-                                ].join(' ')}
-                            >
-                                <span className="flex items-center gap-1.5">
-                                    <i className="size-2 rounded-full bg-slate-400" />
-                                    В плане
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                    <i className="size-2 rounded-full bg-amber-500" />
-                                    Без бригады
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                    {focused ? (
-                        <div
-                            aria-label="Типы работ на карте"
-                            className="flex shrink-0 flex-wrap gap-2 border-b border-border bg-white px-5 py-2"
-                        >
-                            <WorkTypeBadge type="connection" />
-                            <WorkTypeBadge type="repair" />
-                            <WorkTypeBadge type="emergency" />
-                            <WorkTypeBadge type="additional" />
-                        </div>
-                    ) : null}
-                    <div
-                        className="relative min-h-[240px] min-w-0 flex-1"
-                        data-map-mode={focused ? 'route' : 'overview'}
-                    >
-                        <MapView
-                            markers={workspace.mapModel.markers}
-                            polylines={workspace.mapModel.polylines}
-                            selectedId={workspace.selectedOrderId}
-                            fitToken={workspace.mapFitToken}
-                            onMarkerClick={workspace.onMarkerClick}
-                        />
-                        {workspace.plan ||
-                        workspace.eventPending ||
-                        workspace.buildPending ||
-                        workspace.proposal ? null : (
-                            <BuildPlanPrompt
-                                pending={workspace.buildPending}
-                                statusLabel={workspace.runStatusLabel}
-                                errorMessage={workspace.buildErrorMessage}
-                                onBuild={workspace.handleBuildPlan}
-                            />
-                        )}
-                    </div>
-                    {workspace.scheduleOpen && workspace.plan ? (
-                        <WorkspaceScheduleDock
-                            lanes={workspace.lanes}
-                            focusAt={workspace.focusAt}
-                            selectedOrderId={workspace.selectedOrderId}
-                            selectedEngineerId={workspace.selectedEngineerId}
-                            onSelectOrder={workspace.selectOrder}
-                            onSelectEngineer={workspace.toggleEngineer}
-                        />
-                    ) : focused && workspace.snapshot && workspace.plan ? (
-                        <RouteItinerary
+                {!workspace.plan ? (
+                    workspace.snapshot && !workspace.isLoading ? (
+                        <AddressPreflight
                             snapshot={workspace.snapshot}
-                            plan={workspace.plan}
-                            engineerId={focused}
-                            selectedOrderId={workspace.selectedOrderId}
-                            timezone={workspace.timezone}
-                            onSelect={workspace.selectOrder}
+                            pending={workspace.buildPending}
+                            error={workspace.buildErrorMessage}
+                            onBuild={workspace.handleBuildPlan}
                         />
-                    ) : null}
-                </div>
+                    ) : (
+                        <div
+                            role="status"
+                            className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+                        >
+                            Загружаем заявки…
+                        </div>
+                    )
+                ) : (
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:min-h-[440px] max-lg:shrink-0">
+                        <div
+                            className={[
+                                'flex shrink-0 items-center justify-between gap-3 border-b',
+                                'border-border bg-white px-5 py-3',
+                            ].join(' ')}
+                        >
+                            <div className="min-w-0">
+                                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                    {focused ? (
+                                        <span
+                                            className="size-2.5 shrink-0 rounded-full"
+                                            style={{
+                                                background: routeColor(focused),
+                                            }}
+                                        />
+                                    ) : (
+                                        <MapPin className="size-4 text-muted-foreground" />
+                                    )}
+                                    {focused
+                                        ? `Маршрут · ${displayEngineer(focused)}`
+                                        : unassignedOnly
+                                          ? 'Заявки без бригады'
+                                          : 'Обзор района'}
+                                </h2>
+                                {workspace.plan ? (
+                                    <p className="mt-0.5 pl-6 text-xs text-muted-foreground">
+                                        Все маршруты ·{' '}
+                                        {formatKm(
+                                            workspace.plan.metrics
+                                                .total_distance_m
+                                        )}
+                                    </p>
+                                ) : null}
+                            </div>
+                            {focused || unassignedOnly ? (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="shrink-0 rounded-[8px] text-muted-foreground"
+                                    onClick={workspace.handleClearCrew}
+                                >
+                                    <ArrowLeft className="size-3.5" />
+                                    Обзор района
+                                </Button>
+                            ) : (
+                                <div
+                                    className={[
+                                        'hidden shrink-0 items-center gap-3 text-[11px]',
+                                        'text-muted-foreground lg:flex',
+                                    ].join(' ')}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <i className="size-2 rounded-full bg-slate-400" />
+                                        В плане
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <i className="size-2 rounded-full bg-amber-500" />
+                                        Без бригады
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        {focused ? (
+                            <div
+                                aria-label="Типы работ на карте"
+                                className="flex shrink-0 flex-wrap gap-2 border-b border-border bg-white px-5 py-2"
+                            >
+                                <WorkTypeBadge type="connection" />
+                                <WorkTypeBadge type="repair" />
+                                <WorkTypeBadge type="emergency" />
+                                <WorkTypeBadge type="additional" />
+                            </div>
+                        ) : null}
+                        <MapScheduleSplit
+                            defaultRatio={0.4}
+                            map={
+                                <div
+                                    className="h-full"
+                                    data-map-mode={
+                                        focused ? 'route' : 'overview'
+                                    }
+                                >
+                                    <MapView
+                                        markers={workspace.mapModel.markers}
+                                        polylines={workspace.mapModel.polylines}
+                                        selectedId={workspace.selectedOrderId}
+                                        fitToken={workspace.mapFitToken}
+                                        onMarkerClick={workspace.onMarkerClick}
+                                    />
+                                </div>
+                            }
+                            schedule={
+                                workspace.scheduleOpen && workspace.plan ? (
+                                    <WorkspaceScheduleDock
+                                        fillHeight
+                                        lanes={workspace.lanes}
+                                        focusAt={workspace.focusAt}
+                                        selectedOrderId={
+                                            workspace.selectedOrderId
+                                        }
+                                        selectedEngineerId={
+                                            workspace.selectedEngineerId
+                                        }
+                                        onSelectOrder={workspace.selectOrder}
+                                        onSelectEngineer={
+                                            workspace.toggleEngineer
+                                        }
+                                    />
+                                ) : undefined
+                            }
+                        />
+                        {!workspace.scheduleOpen &&
+                        focused &&
+                        workspace.snapshot &&
+                        workspace.plan ? (
+                            <RouteItinerary
+                                snapshot={workspace.snapshot}
+                                plan={workspace.plan}
+                                engineerId={focused}
+                                selectedOrderId={workspace.selectedOrderId}
+                                timezone={workspace.timezone}
+                                onSelect={workspace.selectOrder}
+                            />
+                        ) : null}
+                    </div>
+                )}
             </div>
             {comparisonOpen && workspace.plan ? (
                 <PlanComparison

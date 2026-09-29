@@ -168,7 +168,7 @@ func (service *Service) ReplanOptions(ctx context.Context, input contracts.Repla
 	}
 	options := []contracts.PlanOption{option("strict", "С работающими инженерами", strict, nil)}
 	progress.Report(progress.WithState(ctx, progress.State{Completed: 1, Total: 3, Label: "С соблюдением окон"}), "variant_complete", "С соблюдением окон готов")
-	if input.Event.Type == contracts.EventUrgentOrderAdded {
+	if eventIncludes(input.Event, contracts.EventUrgentOrderAdded) {
 		lateCtx := progress.WithState(ctx, progress.State{Completed: 1, Total: 3, Label: "Маршрут с опозданием на аварию"})
 		progress.Report(lateCtx, "variant", "Рассчитываем допуск опоздания на аварию")
 		input.OptionKey = "late_emergency"
@@ -181,14 +181,18 @@ func (service *Service) ReplanOptions(ctx context.Context, input contracts.Repla
 		}
 		options = append(options, option("late_emergency", "С допуском опоздания на аварию", late, options))
 	} else {
-		originalCtx := progress.WithState(ctx, progress.State{Completed: 1, Total: 3, Label: "Исходный маршрут"})
-		progress.Report(originalCtx, "variant", "Проверяем сохранение расписания")
-		input.OptionKey = "original"
+		key, label := "original", "Сохранить расписание"
+		if eventIncludes(input.Event, contracts.EventEngineerUnavailable) {
+			key, label = "remove_unavailable", "Снять оставшиеся заявки недоступных бригад"
+		}
+		originalCtx := progress.WithState(ctx, progress.State{Completed: 1, Total: 3, Label: label})
+		progress.Report(originalCtx, "variant", label)
+		input.OptionKey = key
 		original, err := service.Replan(originalCtx, input)
 		if err != nil {
 			return nil, err
 		}
-		options = append(options, option("original", "Сохранить расписание", original, options))
+		options = append(options, option(key, label, original, options))
 	}
 	progress.Report(progress.WithState(ctx, progress.State{Completed: 2, Total: 3}), "variant_complete", "Второй вариант готов")
 	reserveCtx := progress.WithState(ctx, progress.State{Completed: 2, Total: 3, Label: "Маршрут с резервом"})

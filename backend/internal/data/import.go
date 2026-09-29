@@ -10,12 +10,12 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -34,6 +34,12 @@ var Catalog = []Dataset{
 	{"east", "Восток", "east", "2026-08-17", "Europe/Moscow", "Восток Синтетические данные.csv"},
 	{"southeast", "Юго-восток", "southeast", "2026-08-17", "Europe/Moscow", "Юго-восток Синтетические данные.csv"},
 	{"southcentral", "Югоцентр", "southcentral", "2026-08-17", "Europe/Moscow", "Югоцентр Синтетические данные.csv"},
+	{"east-2026-09-28", "Восток", "east", "2026-09-28", "Europe/Moscow", "../additional_days/восток день 2.csv"},
+	{"southeast-2026-09-28", "Юго-восток", "southeast", "2026-09-28", "Europe/Moscow", "../additional_days/юго восок день 3.csv"},
+	{"southcentral-2026-09-28", "Югоцентр", "southcentral", "2026-09-28", "Europe/Moscow", "../additional_days/юго-центр день 3.csv"},
+	{"east-2026-09-29", "Восток", "east", "2026-09-29", "Europe/Moscow", "../additional_days/восток день 3.csv"},
+	{"southeast-2026-09-29", "Юго-восток", "southeast", "2026-09-29", "Europe/Moscow", "../additional_days/юго-восток день 2.csv"},
+	{"southcentral-2026-09-29", "Югоцентр", "southcentral", "2026-09-29", "Europe/Moscow", "../additional_days/юго-центр день 2.csv"},
 }
 
 type Importer struct {
@@ -43,17 +49,7 @@ type Importer struct {
 }
 
 func (i *Importer) Catalog() []Dataset {
-	out := append([]Dataset{}, Catalog...)
-	keys := make([]string, 0, len(i.Prepared))
-	for id := range i.Prepared {
-		keys = append(keys, id)
-	}
-	sort.Strings(keys)
-	for _, id := range keys {
-		s := i.Prepared[id]
-		out = append(out, Dataset{ID: id, Name: "Пример контрактов (заглушка)", RegionID: s.RegionID, Date: s.Date, Timezone: s.Timezone})
-	}
-	return out
+	return append([]Dataset{}, Catalog...)
 }
 
 func Lookup(id string) (Dataset, bool) {
@@ -67,6 +63,13 @@ func Lookup(id string) (Dataset, bool) {
 func (i *Importer) Demo(ctx context.Context, id string) (c.Snapshot, any, error) {
 	if prepared, ok := i.Prepared[id]; ok {
 		snap := Clone(prepared)
+		shift, err := c.WorkingShift(snap.Date, snap.Timezone)
+		if err != nil {
+			return c.Snapshot{}, nil, err
+		}
+		for j := range snap.Engineers {
+			snap.Engineers[j].Shift = shift
+		}
 		snap.ScenarioID = ""
 		snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_ENGINEERS", Message: "Используется демонстрационный состав инженеров"})
 		return snap, map[string]any{"source": "contract fixture", "development_stub": true}, nil
@@ -81,7 +84,7 @@ func (i *Importer) Demo(ctx context.Context, id string) (c.Snapshot, any, error)
 	}
 	defer f.Close()
 	officeOverride := demoOffices[d.RegionID]
-	snap, meta, err := i.importWithOffice(ctx, f, d.RegionID, d.Date, &officeOverride)
+	snap, meta, err := i.importWithOffice(ctx, f, d.RegionID, d.Date, &officeOverride, nil)
 	if err != nil {
 		return snap, meta, err
 	}
@@ -110,6 +113,7 @@ type ImportMetadata struct {
 	Assumptions    []string                 `json:"assumptions"`
 	Mappings       map[string]Normalization `json:"mappings"`
 	OfficeOverride *OfficeOverride          `json:"office_override,omitempty"`
+	OfficeInput    *c.LocationInput         `json:"office_input,omitempty"`
 }
 
 type OfficeOverride struct {
@@ -134,15 +138,35 @@ type Normalization struct {
 }
 
 func (i *Importer) Import(ctx context.Context, r io.Reader, region, date string) (c.Snapshot, any, error) {
-	return i.importWithOffice(ctx, r, region, date, nil)
+	return i.importWithOffice(ctx, r, region, date, nil, nil)
 }
 
-func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, date string, override *OfficeOverride) (c.Snapshot, any, error) {
-	d, ok := Lookup(region)
-	if !ok {
-		return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Неизвестный region_id")
+func (i *Importer) ImportDay(ctx context.Context, r io.Reader, region, date string, office *c.LocationInput) (c.Snapshot, any, error) {
+	return i.importWithOffice(ctx, r, region, date, nil, office)
+}
+
+func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, date string, override *OfficeOverride, selectedOffice *c.LocationInput) (c.Snapshot, any, error) {
+	progress.Report(ctx, "reading", "Читаем и проверяем заявки")
+	if region == "" {
+		region = "custom"
 	}
-	zone, e := time.LoadLocation(d.Timezone)
+	timezone := "Europe/Moscow"
+	if region != "custom" {
+		d, ok := Lookup(region)
+		if !ok || d.ID != d.RegionID {
+			return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Неизвестный region_id")
+		}
+		timezone = d.Timezone
+	}
+	if selectedOffice != nil {
+		if strings.TrimSpace(selectedOffice.Address) == "" || len(selectedOffice.Address) > 1000 {
+			return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Укажите адрес офиса длиной до 1000 символов")
+		}
+		if p := selectedOffice.Point; p != nil && (math.IsNaN(p.Lat) || math.IsNaN(p.Lon) || math.IsInf(p.Lat, 0) || math.IsInf(p.Lon, 0) || p.Lat < -90 || p.Lat > 90 || p.Lon < -180 || p.Lon > 180) {
+			return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Координаты офиса вне допустимого диапазона")
+		}
+	}
+	zone, e := time.LoadLocation(timezone)
 	if e != nil {
 		return c.Snapshot{}, nil, e
 	}
@@ -150,7 +174,7 @@ func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, da
 	if e != nil {
 		return c.Snapshot{}, nil, c.NewError("INVALID_INPUT", "Некорректная дата")
 	}
-	snap := c.Snapshot{Revision: 1, RegionID: region, Date: date, Timezone: d.Timezone, OfficeLocationID: region + "-office", Locations: []c.Location{}, Orders: []c.Order{}, Engineers: []c.Engineer{}, Issues: []c.Issue{{Code: "ENGINEERS_REQUIRED", Message: "Загрузите состав инженеров перед планированием"}}}
+	snap := c.Snapshot{Revision: 1, RegionID: region, Date: date, Timezone: timezone, OfficeLocationID: region + "-office", Locations: []c.Location{}, Orders: []c.Order{}, Engineers: []c.Engineer{}, Issues: []c.Issue{{Code: "ENGINEERS_REQUIRED", Message: "Загрузите состав инженеров перед планированием"}}}
 	raw, e := io.ReadAll(io.LimitReader(r, 10*1024*1024+1))
 	if e != nil {
 		return snap, nil, e
@@ -189,6 +213,9 @@ func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, da
 	meta.Mappings = map[string]Normalization{}
 	if override != nil {
 		meta.OfficeOverride = override
+		if _, hasStatuses := columns["Статус BK"]; hasStatuses {
+			meta.Assumptions = append(meta.Assumptions, "Демонстрационный день начинается с нуля: статусы исходной выгрузки не переносятся")
+		}
 	}
 	locations := []c.LocationInput{}
 	seen := map[string]bool{}
@@ -263,21 +290,34 @@ func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, da
 		locations = append(locations, c.LocationInput{ID: lid, Address: get("Адрес")})
 		snap.Orders = append(snap.Orders, c.Order{ID: id, LocationID: lid, WorkType: work, RequiredSkills: []string{skill}, Window: c.Window{Start: start.UTC(), End: end.UTC()}, ReceivedAt: day.UTC(), ServiceSec: sec, Priority: priority, EquipmentRequired: eq, SourceOrder: int64(line), Status: c.OrderStatusActive})
 	}
+	if selectedOffice != nil {
+		office = strings.TrimSpace(selectedOffice.Address)
+		meta.OfficeInput = selectedOffice
+		meta.Assumptions = append(meta.Assumptions, "Офис выбран при подготовке дня; исходная строка офиса сохранена в source_rows")
+	}
+	if office == "" && override == nil {
+		return snap, nil, c.NewError("INVALID_INPUT", "Укажите адрес офиса в форме или добавьте строку «Адрес офиса» в CSV")
+	}
 	if office == "" {
-		return snap, nil, c.NewError("INVALID_INPUT", "Отсутствует адрес офиса")
+		snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_OFFICE_OVERRIDE", Message: fmt.Sprintf("В CSV нет адреса офиса. Для демо используется офис района: %s (%s)", override.Resolved, override.Source)})
+		meta.Assumptions = append(meta.Assumptions, "Адрес офиса отсутствует в CSV; используется настроенный демонстрационный офис района")
 	}
 	// Resolve the office before requesting any order addresses. This makes a
 	// bad office fail fast and avoids spending time on a request that cannot
 	// produce a usable scenario.
 	officeInput := c.LocationInput{ID: snap.OfficeLocationID, Address: office}
 	resolved := map[string]c.Location{}
-	if override != nil {
+	if selectedOffice != nil && selectedOffice.Point != nil {
+		officeInput.Point = selectedOffice.Point
+		resolved[officeInput.ID] = c.Location{ID: officeInput.ID, Address: office, Point: *selectedOffice.Point}
+	} else if override != nil {
 		override.Original = office
 		officeInput.Address = override.Resolved
 		officeInput.Point = &override.Point
 		resolved[officeInput.ID] = c.Location{ID: officeInput.ID, Address: officeInput.Address, Point: *officeInput.Point}
 	} else {
-		officeResult, geocodeErr := i.Geo.Geocode(ctx, c.GeocodeRequest{RegionID: region, Locations: []c.LocationInput{officeInput}})
+		progress.Report(ctx, "office", "Определяем координаты офиса")
+		officeResult, geocodeErr := i.Geo.Geocode(progress.WithReporter(ctx, nil), c.GeocodeRequest{RegionID: region, Locations: []c.LocationInput{officeInput}})
 		if geocodeErr != nil {
 			return snap, nil, geocodeErr
 		}
@@ -334,7 +374,7 @@ func (i *Importer) importWithOffice(ctx context.Context, r io.Reader, region, da
 	if _, ok := resolved[snap.OfficeLocationID]; !ok {
 		return snap, nil, c.NewError("INVALID_INPUT", fmt.Sprintf("Не удалось определить офис %q. Проверьте адрес офиса и укажите полный город, улицу и дом", office))
 	}
-	if override != nil && region != "southcentral" {
+	if override != nil && office != "" && region != "southcentral" {
 		snap.Issues = append(snap.Issues, c.Issue{Code: "DEMO_OFFICE_OVERRIDE", Message: fmt.Sprintf("Адрес офиса из CSV %q не подтверждён. Для демо выбран офис %q (%s)", office, override.Resolved, override.Source)})
 	}
 	for _, l := range locations {
@@ -385,7 +425,7 @@ func engineers(region string, day time.Time) []c.Engineer {
 		if n%4 == 3 {
 			transport = c.TransportWalk
 		}
-		result = append(result, c.Engineer{ID: fmt.Sprintf("%s-eng-%02d", region, n+1), Skills: skills, Transport: transport, Shift: c.Window{Start: day.Add(8 * time.Hour).UTC(), End: day.Add(23 * time.Hour).UTC()}, Available: true, EquipmentStock: map[c.Equipment]int64{c.EquipmentRouter: 4, c.EquipmentTVBox: 2}, SourceOrder: int64(n + 1)})
+		result = append(result, c.Engineer{ID: fmt.Sprintf("%s-eng-%02d", region, n+1), Skills: skills, Transport: transport, Shift: c.WorkingShiftOn(day), Available: true, EquipmentStock: map[c.Equipment]int64{c.EquipmentRouter: 4, c.EquipmentTVBox: 2}, SourceOrder: int64(n + 1)})
 	}
 	return result
 }
@@ -408,12 +448,12 @@ func classify(bk, hd string) (c.WorkType, string, int64, map[c.Equipment]int64, 
 		}
 	case "Локальная заявка":
 		switch hd {
-		case "Мониторинг", "Нет линка", "Переключение на Гбит/с", "Работа с кабелем", "Разрывы", "Низкая скорость", "Рост ошибок на порту", "IP-адрес 169...", "TVE/ENT. Другие ошибки":
+		case "Мониторинг", "Нет линка", "Переключение на Гбит/с", "Работа с кабелем", "Разрывы", "Низкая скорость", "Рост ошибок на порту", "IP-адрес 169...", "TVE/ENT. Другие ошибки", "ТВ. Рассыпание/замирание картинки", "TVE/ENT. Проблема с качеством изображения/звука", "TVE/ENT. Замирание картинки/появляется круг загрузки", "Роутер. Не выходит ONLINE":
 			return c.WorkTypeRepair, "repair", 1800, eq, true
 		case "Роутер. Замена техническим специалистом":
 			eq[c.EquipmentRouter] = 1
 			return c.WorkTypeRepair, "repair", 1800, eq, true
-		case "TVE/ENT. Замена приставки техником", "ТВ. Замена приставки техником":
+		case "TVE/ENT. Замена приставки техником", "ТВ. Замена приставки техником", "TVE/ENT/Яндекс.ТВ. Замена приставки техником":
 			eq[c.EquipmentTVBox] = 1
 			return c.WorkTypeRepair, "repair", 1800, eq, true
 		}

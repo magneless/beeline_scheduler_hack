@@ -23,7 +23,7 @@ const eventMessages: Record<string, string> = {
     'invalid expected_end_at':
         'Ожидаемое окончание должно быть позже времени события.',
     'event time is outside the plan day or precedes base plan as_of':
-        'Время события должно относиться к дню сценария и быть не раньше последнего принятого события.',
+        'Проверьте дату события. Факты работ можно вносить задним числом в пределах дня сценария.',
     'use Replan after execution starts':
         'Работы уже начались. Изменяйте рабочий план через события; для сравнения используйте «Собрать с нуля».',
     'use Replan after events':
@@ -34,18 +34,6 @@ export const commandErrorMessage = (error: unknown) => {
     const message = error instanceof Error ? error.message : '';
     if (error instanceof HttpError) {
         if (error.body.code === 'EVENT_CONFLICT') {
-            if (
-                message ===
-                'previous work must be completed before starting next'
-            ) {
-                const address = error.body.details.previous_address;
-                const id = error.body.details.previous_order_id;
-                return `Сначала завершите предыдущую заявку: ${
-                    typeof address === 'string' && address
-                        ? address
-                        : `№ ${String(id ?? '')}`
-                }.`;
-            }
             return (
                 eventMessages[message] ??
                 (/\p{Script=Cyrillic}/u.test(message)

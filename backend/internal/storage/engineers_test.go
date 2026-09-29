@@ -9,7 +9,7 @@ import (
 func TestReplaceEngineersStaleAndSuccessful(t *testing.T) {
 	s := testStore(t)
 	v, _ := seed(t, s)
-	roster := []c.Engineer{{ID: "replacement", Skills: []string{}, Transport: c.TransportWalk, Available: true, Shift: c.Window{Start: v.Snapshot.Orders[0].Window.Start, End: v.Snapshot.Orders[0].Window.End}, EquipmentStock: map[c.Equipment]int64{}}}
+	roster := []c.Engineer{{ID: "replacement", Skills: []string{}, Transport: c.TransportWalk, Available: true, Shift: v.Snapshot.Engineers[0].Shift, EquipmentStock: map[c.Equipment]int64{}}}
 	got, err := s.ReplaceEngineers(context.Background(), v.Snapshot.ScenarioID, v.Snapshot.Revision, roster)
 	if err != nil {
 		t.Fatal(err)

@@ -57,7 +57,6 @@ export const CrewRow = ({
     baseline,
     stock,
     timezone,
-    date,
     editing,
     canEdit,
     canEvent,
@@ -193,7 +192,6 @@ export const CrewRow = ({
                         <EngineerForm
                             key={engineer.id}
                             engineer={engineer}
-                            date={date}
                             timezone={timezone}
                             pending={pending}
                             onCancel={onEdit}

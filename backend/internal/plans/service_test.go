@@ -235,16 +235,16 @@ func TestReplanUnavailableEngineerSplitsActiveLeg(t *testing.T) {
 	if geo.positionCalls != 1 || len(planner.modes) != 0 {
 		t.Fatalf("unexpected dependency calls: position=%d planner=%v", geo.positionCalls, planner.modes)
 	}
-	if len(result.Draft.Routes) != 1 || len(result.Draft.Routes[0].Legs) != 2 || result.Draft.Routes[0].Legs[0].DistanceM != 600 || len(result.Draft.Routes[0].Visits) != 1 {
+	if len(result.Draft.Routes) != 1 || len(result.Draft.Routes[0].Legs) != 1 || result.Draft.Routes[0].Legs[0].DistanceM != 600 || len(result.Draft.Routes[0].Visits) != 0 {
 		t.Fatalf("active leg was not preserved correctly: %+v", result.Draft.Routes)
 	}
-	if result.Draft.Metrics.TotalDistanceM != 1200 || result.Draft.Metrics.UnassignedCount != 0 {
+	if result.Draft.Metrics.TotalDistanceM != 600 || result.Draft.Metrics.UnassignedCount != 1 {
 		t.Fatalf("unexpected full-day metrics: %+v", result.Draft.Metrics)
 	}
 	if len(result.TargetSnapshot.Locations) != 3 || result.TargetSnapshot.Engineers[0].Available {
 		t.Fatalf("target snapshot was not updated: %+v", result.TargetSnapshot)
 	}
-	if len(result.Draft.Changes) != 0 {
+	if len(result.Draft.Changes) != 1 || result.Draft.Changes[0].Reason != contracts.PlanChangeUnassigned {
 		t.Fatalf("unexpected changes: %+v", result.Draft.Changes)
 	}
 }

@@ -15,11 +15,11 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 		policy.key = "strict"
 	}
 	switch policy.key {
-	case "strict", "original":
+	case "strict", "original", "remove_unavailable":
 	case "reserve":
 		policy.reserve = true
 	case "late_emergency":
-		if input.Event.Type != contracts.EventUrgentOrderAdded {
+		if !eventIncludes(input.Event, contracts.EventUrgentOrderAdded) {
 			return contracts.PlanResult{}, contracts.InvalidInput("late emergency option requires an emergency event", nil)
 		}
 		strictInput := input
@@ -36,8 +36,8 @@ func (service *Service) Replan(ctx context.Context, input contracts.ReplanReques
 	default:
 		return contracts.PlanResult{}, contracts.InvalidInput("unsupported plan option", nil)
 	}
-	if policy.key == "original" && input.Event.Type == contracts.EventUrgentOrderAdded {
-		return contracts.PlanResult{}, contracts.InvalidInput("original option is unavailable for emergency", nil)
+	if policy.key == "original" && (eventIncludes(input.Event, contracts.EventUrgentOrderAdded) || eventIncludes(input.Event, contracts.EventEngineerUnavailable)) {
+		return contracts.PlanResult{}, contracts.InvalidInput("Исходный маршрут недоступен при аварии или недоступности инженера", nil)
 	}
 	return service.replanWithPolicy(ctx, input, policy)
 }
@@ -75,7 +75,7 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
-	if input.Event.OccurredAt.Before(dayStart) || !input.Event.OccurredAt.Before(dayEnd) || input.Event.OccurredAt.Before(base.AsOf) {
+	if input.Event.OccurredAt.Before(dayStart) || !input.Event.OccurredAt.Before(dayEnd) || (input.Event.OccurredAt.Before(base.AsOf) && !workFactsOnly(input.Event)) {
 		return contracts.PlanResult{}, contracts.InvalidInput("event time is outside the plan day or precedes base plan as_of", map[string]any{"event_id": input.Event.ID})
 	}
 	if result, handled, err := service.recordUnassignedCancellation(ctx, snapshot, base, input.Event); handled {
@@ -84,22 +84,27 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 	if result, handled, err := service.recordWorkStatus(ctx, snapshot, base, input.Event, mode); handled {
 		return result, err
 	}
+	if result, handled, err := service.recordPendingFacts(ctx, snapshot, base, input.Event, mode); handled {
+		return result, err
+	}
 
-	target := cloneSnapshot(snapshot)
-	progress.Report(ctx, "preparing", "Восстанавливаем состояние на момент события")
-	replay, err := service.replayAt(ctx, &target, base, input.Event)
+	target, replay, appliedEvent, newlyCancelled, err := service.prepareEvents(ctx, snapshot, base, input.Event)
 	if err != nil {
 		return contracts.PlanResult{}, err
 	}
-	appliedEvent, newlyCancelled, err := service.applyEvent(ctx, &target, base, input.Event, replay)
-	if err != nil {
+	if err := requireHistoricalCompletions(target); err != nil {
 		return contracts.PlanResult{}, err
 	}
+	input.Event.OccurredAt = laterTime(base.AsOf, input.Event.OccurredAt)
 	target.Revision = input.SnapshotRevision + 1
-	if err := refreshExecution(&target, &replay, input.Event); err != nil {
-		return contracts.PlanResult{}, err
+	// A disabled engineer cannot retain a future visit, even while travelling.
+	for _, eng := range target.Engineers {
+		if !eng.Available {
+			delete(replay.lockedOrders, replay.enrouteOrders[eng.ID])
+			delete(replay.enrouteOrders, eng.ID)
+		}
 	}
-	if input.Event.Type == contracts.EventUrgentOrderAdded {
+	if eventIncludes(input.Event, contracts.EventUrgentOrderAdded) {
 		for _, orderID := range replay.enrouteOrders {
 			delete(replay.lockedOrders, orderID)
 		}
@@ -111,12 +116,8 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 		for _, engineer := range target.Engineers {
 			policy.wasAvailable[engineer.ID] = engineer.Available
 		}
-		unavailableID := ""
-		if input.Event.Type == contracts.EventEngineerUnavailable {
-			unavailableID = contracts.DecodePayload(input.Event.Payload).EngineerID
-		}
 		for i := range target.Engineers {
-			if target.Engineers[i].Reserve && target.Engineers[i].ID != unavailableID && !target.Engineers[i].Available {
+			if target.Engineers[i].Reserve && !target.Engineers[i].Available {
 				target.Engineers[i].Available = true
 			}
 		}
@@ -125,10 +126,24 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 		return contracts.PlanResult{}, err
 	}
 
-	if policy.key == "original" {
-		return service.replanOriginal(ctx, target, base, replay, appliedEvent, newlyCancelled, mode)
+	if policy.key == "original" || policy.key == "remove_unavailable" {
+		onlyUnavailable := true
+		for _, event := range eventList(input.Event) {
+			if event.Type != contracts.EventEngineerUnavailable {
+				onlyUnavailable = false
+			}
+		}
+		if policy.key == "remove_unavailable" && onlyUnavailable {
+			return removeUnavailable(target, base, replay, appliedEvent, mode)
+		}
+		calculationEvent := appliedEvent
+		calculationEvent.OccurredAt = input.Event.OccurredAt
+		result, err := service.replanOriginal(ctx, target, base, replay, calculationEvent, newlyCancelled, mode)
+		result.AppliedEvent = &appliedEvent
+		result.Draft.OptionKey = policy.key
+		return result, err
 	}
-	if input.Event.Type == contracts.EventOrdinaryOrderAdded {
+	if ordinaryOnly(input.Event) {
 		result, err := service.replanOrdinary(ctx, target, base, replay, appliedEvent, mode, policy)
 		if err == nil && input.OptionKey == "" {
 			result.Draft.OptionKey = ""
@@ -136,34 +151,35 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 		}
 		return result, err
 	}
-	lateCompletionEngineer := ""
-	if input.Event.Type == contracts.EventOrderStatusChanged {
-		payload := contracts.DecodePayload(input.Event.Payload)
-		if payload.Status == contracts.OrderStatusCompleted && input.Event.OccurredAt.After(plannedEnd(base.Routes, payload.OrderID)) {
-			lateCompletionEngineer = payload.EngineerID
-			for _, saved := range base.Routes {
-				if saved.EngineerID == lateCompletionEngineer {
-					continue
+	statusOnly := true
+	changedEngineers := map[string]bool{}
+	for _, ev := range eventList(input.Event) {
+		if ev.Type != contracts.EventOrderStatusChanged {
+			statusOnly = false
+			break
+		}
+		changedEngineers[contracts.DecodePayload(ev.Payload).EngineerID] = true
+	}
+	if statusOnly {
+		for _, saved := range base.Routes {
+			if changedEngineers[saved.EngineerID] {
+				continue
+			}
+			for _, visit := range saved.Visits {
+				replay.lockedOrders[visit.OrderID] = struct{}{}
+			}
+			index := -1
+			for i := range replay.routes {
+				if replay.routes[i].EngineerID == saved.EngineerID {
+					index = i
+					break
 				}
-				for _, visit := range saved.Visits {
-					replay.lockedOrders[visit.OrderID] = struct{}{}
-				}
-				index := -1
-				for i := range replay.routes {
-					if replay.routes[i].EngineerID == saved.EngineerID {
-						index = i
-						break
-					}
-				}
-				// Only this event's crew is replanned. Copy the other crew's
-				// accepted route as a whole: elapsed travel may already have
-				// been replayed without a corresponding confirmed work start.
-				preserved := clonePlanRoutes([]contracts.Route{saved})[0]
-				if index < 0 {
-					replay.routes = append(replay.routes, preserved)
-				} else {
-					replay.routes[index] = preserved
-				}
+			}
+			preserved := clonePlanRoutes([]contracts.Route{saved})[0]
+			if index < 0 {
+				replay.routes = append(replay.routes, preserved)
+			} else {
+				replay.routes[index] = preserved
 			}
 		}
 	}
@@ -208,7 +224,7 @@ func (service *Service) replanWithPolicy(ctx context.Context, input contracts.Re
 	engineers := availableEngineers(target)
 	eligible := make([]contracts.Engineer, 0, len(engineers))
 	for _, eng := range engineers {
-		if !replay.blocked[eng.ID] && (lateCompletionEngineer == "" || eng.ID == lateCompletionEngineer) {
+		if !replay.blocked[eng.ID] && (!statusOnly || changedEngineers[eng.ID]) {
 			eligible = append(eligible, eng)
 		}
 	}

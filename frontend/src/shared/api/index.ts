@@ -2,6 +2,7 @@ export { getDemoDatasets } from './endpoints/demoDatasets/endpoints/getDemoDatas
 export {
     createScenario,
     getScenario,
+    getScenarios,
     importScenario,
     importEngineers,
     patchEngineer,
@@ -46,6 +47,7 @@ export type {
     PlanEvent,
     Run,
     ScenarioView,
+    ScenarioSummary,
     Snapshot,
     Transport,
     UnassignedOrder,

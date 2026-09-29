@@ -5,6 +5,7 @@ import {
     type Order,
     type UnassignedOrder,
     type Visit,
+    type WorkType,
 } from 'shared/api/types/contracts';
 import { statusLabel, workTypeLabel } from 'shared/lib/config';
 import { type TypeOrNull } from 'shared/lib/types';
@@ -21,7 +22,6 @@ type UseOrderPanelParams = {
     orders: Order[];
     engineerByOrder: Map<string, string>;
     unassigned: Map<string, UnassignedOrder>;
-    deferredOrderIds: Set<string>;
     addressByOrder?: Record<string, string>;
     selectedEngineerId: TypeOrNull<string>;
     filter: WorkspaceFilter;
@@ -33,29 +33,31 @@ export const useOrderPanel = ({
     orders,
     engineerByOrder,
     unassigned,
-    deferredOrderIds,
     addressByOrder,
     selectedEngineerId,
     filter,
     engineers,
-    visits,
 }: UseOrderPanelParams) => {
     const [query, setQuery] = useState('');
+    const [workType, setWorkType] = useState<WorkType | 'all'>('all');
     const [checkedIds, setCheckedIds] = useState<string[]>([]);
     useEffect(() => {
         setCheckedIds([]);
-    }, [query, filter, selectedEngineerId]);
+    }, [query, filter, selectedEngineerId, workType]);
 
-    const assignedCount = orders.filter(
+    const scopedOrders = orders.filter(
+        (order) =>
+            (workType === 'all' || order.work_type === workType) &&
+            (!selectedEngineerId ||
+                engineerByOrder.get(order.id) === selectedEngineerId)
+    );
+    const assignedCount = scopedOrders.filter(
         (order) => engineerByOrder.has(order.id) && !isClosed(order)
     ).length;
-    const openCount = orders.filter(
-        (order) => unassigned.has(order.id) && !deferredOrderIds.has(order.id)
+    const openCount = scopedOrders.filter(
+        (order) => !isClosed(order) && unassigned.has(order.id)
     ).length;
-    const deferredCount = orders.filter((order) =>
-        deferredOrderIds.has(order.id)
-    ).length;
-    const closedCount = orders.filter(isClosed).length;
+    const closedCount = scopedOrders.filter(isClosed).length;
     const crewName = selectedEngineerId
         ? displayEngineer(selectedEngineerId)
         : undefined;
@@ -63,31 +65,12 @@ export const useOrderPanel = ({
         () => new Map(engineers.map((engineer) => [engineer.id, engineer])),
         [engineers]
     );
-    const previousUnfinished = useMemo(() => {
-        const byId = new Map(orders.map((order) => [order.id, order]));
-        const firstOpen = new Map<string, Order>();
-        const result = new Map<string, Order>();
-        // Visit map follows the accepted route sequence, including work
-        // hidden by the current search or filter.
-        for (const visit of visits.values()) {
-            const engineerId = engineerByOrder.get(visit.order_id);
-            const order = byId.get(visit.order_id);
-            if (!engineerId || !order) {
-                continue;
-            }
-            const previous = firstOpen.get(engineerId);
-            if (previous) {
-                result.set(order.id, previous);
-            } else if (!isClosed(order)) {
-                firstOpen.set(engineerId, order);
-            }
-        }
-        return result;
-    }, [orders, visits, engineerByOrder]);
-
     const visible = useMemo(() => {
         const needle = query.trim().toLowerCase();
         const filtered = orders.filter((order) => {
+            if (workType !== 'all' && order.work_type !== workType) {
+                return false;
+            }
             if (
                 selectedEngineerId &&
                 engineerByOrder.get(order.id) !== selectedEngineerId
@@ -102,11 +85,8 @@ export const useOrderPanel = ({
             }
             if (
                 filter === 'unassigned' &&
-                (!unassigned.has(order.id) || deferredOrderIds.has(order.id))
+                (isClosed(order) || !unassigned.has(order.id))
             ) {
-                return false;
-            }
-            if (filter === 'deferred' && !deferredOrderIds.has(order.id)) {
                 return false;
             }
 
@@ -177,7 +157,7 @@ export const useOrderPanel = ({
         query,
         selectedEngineerId,
         unassigned,
-        deferredOrderIds,
+        workType,
     ]);
 
     // Selection only covers cancellable orders in the currently visible list.
@@ -195,17 +175,18 @@ export const useOrderPanel = ({
     const allSelected =
         selectableIds.length > 0 && selectedIds.length === selectableIds.length;
 
-    const emptyMessage = query
-        ? workspaceCopy.orderEmptyQuery
-        : filter === 'assigned'
-          ? workspaceCopy.orderEmptyAssigned
-          : filter === 'unassigned'
-            ? workspaceCopy.orderEmptyOpen
-            : filter === 'deferred'
-              ? 'Нет заявок на разбор и перенос'
-              : filter === 'closed'
-                ? workspaceCopy.orderEmptyClosed
-                : workspaceCopy.orderEmpty;
+    const emptyMessage =
+        workType !== 'all' || selectedEngineerId
+            ? 'Нет заявок с выбранными фильтрами'
+            : query
+              ? workspaceCopy.orderEmptyQuery
+              : filter === 'assigned'
+                ? workspaceCopy.orderEmptyAssigned
+                : filter === 'unassigned'
+                  ? workspaceCopy.orderEmptyOpen
+                  : filter === 'closed'
+                    ? workspaceCopy.orderEmptyClosed
+                    : workspaceCopy.orderEmpty;
 
     const handleQueryChange = (event: ChangeEvent<HTMLInputElement>) => {
         setQuery(event.target.value);
@@ -213,9 +194,11 @@ export const useOrderPanel = ({
 
     return {
         query,
+        workType,
+        setWorkType,
         assignedCount,
+        totalCount: scopedOrders.length,
         openCount,
-        deferredCount,
         closedCount,
         crewName,
         engineerById,
@@ -234,7 +217,6 @@ export const useOrderPanel = ({
         },
         toggleAll: () => setCheckedIds(allSelected ? [] : selectableIds),
         clearSelection: () => setCheckedIds([]),
-        previousUnfinished,
         clearQuery: () => setQuery(''),
         emptyMessage,
         handleQueryChange,

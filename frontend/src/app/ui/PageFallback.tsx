@@ -12,6 +12,15 @@ export const PageFallback = ({ label = 'Загрузка…' }: PageFallbackProp
         )}
         style={{ boxShadow: 'var(--shadow-soft)' }}
     >
-        {label}
+        <div className="w-48" role="status">
+            <p className="text-center">{label}</p>
+            <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label={label}
+            >
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+            </div>
+        </div>
     </section>
 );

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { importScenario } from 'shared/api';
+import { useRequestProgress } from 'shared/lib/useRequestProgress';
 import { formatCount } from 'shared/lib/utils';
 
 type UseImportOrdersParams = {
@@ -16,12 +17,30 @@ export const useImportOrders = ({
 }: UseImportOrdersParams = {}) => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const progress = useRequestProgress();
 
     const mutation = useMutation({
-        mutationFn: importScenario,
+        mutationFn: (input: Parameters<typeof importScenario>[0]) =>
+            importScenario(input, progress.callbacks),
+        onMutate: progress.start,
+        onSettled: progress.finish,
         onSuccess: (scenario) => {
             const scenarioId = scenario.snapshot.scenario_id;
-            const issueCount = scenario.snapshot.issues.length;
+            queryClient.invalidateQueries({ queryKey: ['scenarios', 'list'] });
+            const unlocated = new Set(
+                scenario.snapshot.unlocated_orders?.map(
+                    (item) => item.order.location_id
+                )
+            );
+            const issueCount = new Set(
+                scenario.snapshot.issues
+                    .filter(
+                        (issue) =>
+                            issue.source_row &&
+                            !unlocated.has(issue.entity_id ?? '')
+                    )
+                    .map((issue) => issue.source_row)
+            ).size;
 
             if (issueCount) {
                 toast.message(
@@ -47,8 +66,11 @@ export const useImportOrders = ({
     });
 
     return {
-        importFile: (input: { file: File; regionId: string; date: string }) =>
+        importFile: (input: Parameters<typeof importScenario>[0]) =>
             mutation.mutate(input),
+        error: mutation.error,
+        resetError: mutation.reset,
         pending: mutation.isPending,
+        progress: progress.state,
     };
 };

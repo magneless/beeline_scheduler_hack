@@ -128,7 +128,7 @@ func TestHTTPScenarioBuildEventsAndHistory(t *testing.T) {
 	h, _, f := integrationServer(t)
 	var catalog struct{ Items []data.Dataset }
 	call(t, h, "GET", "/demo-datasets", nil, 200, &catalog)
-	if len(catalog.Items) != 4 {
+	if len(catalog.Items) != len(data.Catalog) {
 		t.Fatal(catalog)
 	}
 	var v c.ScenarioView
@@ -215,7 +215,7 @@ func TestHTTPImportPatchAndErrors(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	io.WriteString(part, "id;skills;transport;shift_start;shift_end;available;router;tv_box\ncrew-1;repair;car;08:00;18:00;true;2;1\n")
+	io.WriteString(part, "id;skills;transport;shift_start;shift_end;available;router;tv_box\ncrew-1;repair;car;10:00;22:00;true;2;1\n")
 	mw.WriteField("expected_revision", "1")
 	mw.Close()
 	r = httptest.NewRequest("POST", "/api/v1/scenarios/"+v.Snapshot.ScenarioID+"/engineers/import", &body)

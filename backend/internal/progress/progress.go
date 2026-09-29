@@ -2,8 +2,8 @@ package progress
 
 import "context"
 
-// Update describes completed route variants and the current calculation phase.
-// Completed/Total count variants, not elapsed time or an estimated percentage.
+// Update describes completed work units and the current operation phase.
+// Completed/Total count addresses or route variants, never estimated elapsed time.
 type Update struct {
 	Stage        string `json:"stage"`
 	Message      string `json:"message"`

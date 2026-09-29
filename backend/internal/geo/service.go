@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 )
 
 // --- ID generation ---
@@ -53,12 +54,16 @@ func providerError(ctx context.Context, operation string, err error, message str
 // Geocode
 // --------------------------------------------------------------------------
 
+// Exactly two matching address points within this distance resolve to the
+// first candidate in provider order. Fuzzy suggestions are never considered.
+const nearbyAddressDistanceM = 100
+
 // Geocode processes a batch of LocationInputs. For each:
 //   - If point is already provided → success, use it directly.
 //   - If point is nil → geocode the address via provider.
-//   - 1 candidate → success.
+//   - 1 candidate, or exactly 2 within 100 m → success with the first candidate.
 //   - 0 candidates → Issue with code GEO_UNAVAILABLE.
-//   - >1 candidates → Issue with code INVALID_INPUT (no silent pick).
+//   - Other multiple candidates → Issue with code INVALID_INPUT.
 func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeRequest) (contracts.GeocodeResult, error) {
 	if len(input.Locations) == 0 {
 		return contracts.GeocodeResult{}, &contracts.ContractError{
@@ -76,6 +81,10 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 	searched := map[string]cachedSearch{}
 	var searchUnavailable error
 	for i, loc := range input.Locations {
+		if err := ctx.Err(); err != nil {
+			return contracts.GeocodeResult{}, err
+		}
+		progress.Report(progress.WithState(ctx, progress.State{Completed: i, Total: len(input.Locations)}), "geocoding", "Определяем координаты адресов")
 		item := contracts.GeocodeResultItem{LocationID: loc.ID}
 
 		if loc.Point != nil {
@@ -148,14 +157,14 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 		}
 
 		entityID := loc.ID
-		switch len(candidates) {
-		case 0:
+		switch {
+		case len(candidates) == 0:
 			item.Issue = &contracts.Issue{
 				EntityID: &entityID,
 				Code:     "GEO_UNAVAILABLE",
 				Message:  fmt.Sprintf("Не найден точный дом по адресу %q. Уточните адрес или укажите координаты", loc.Address),
 			}
-		case 1:
+		case len(candidates) == 1 || twoNearbyCandidates(candidates):
 			resolved := candidates[0]
 			resolved.ID = loc.ID
 			resolved.Address = loc.Address
@@ -170,7 +179,17 @@ func (s *geoServiceImpl) Geocode(ctx context.Context, input contracts.GeocodeReq
 		items[i] = item
 	}
 
+	progress.Report(progress.WithState(ctx, progress.State{Completed: len(items), Total: len(items)}), "geocoding_complete", "Адреса обработаны")
 	return contracts.GeocodeResult{Items: items}, nil
+}
+
+func twoNearbyCandidates(candidates []contracts.Location) bool {
+	if len(candidates) != 2 {
+		return false
+	}
+	a, b := candidates[0].Point, candidates[1].Point
+	return validPoint(a.Lat, a.Lon) && validPoint(b.Lat, b.Lon) &&
+		haversineDistance(a, b) <= nearbyAddressDistanceM
 }
 
 // --------------------------------------------------------------------------

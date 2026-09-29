@@ -90,6 +90,16 @@ export type ScenarioView = {
     current_plan_id: TypeOrNull<string>;
 };
 
+export type ScenarioSummary = {
+    scenario_id: string;
+    revision: number;
+    region_id: string;
+    date: string;
+    order_count: number;
+    unlocated_count: number;
+    current_plan_id: TypeOrNull<string>;
+};
+
 export type Visit = {
     order_id: string;
     arrival_at: string;
@@ -188,7 +198,12 @@ export type OrderLateness = {
 };
 
 export type PlanOption = {
-    key: 'strict' | 'late_emergency' | 'reserve' | 'original';
+    key:
+        | 'strict'
+        | 'late_emergency'
+        | 'reserve'
+        | 'original'
+        | 'remove_unavailable';
     label: string;
     result: {
         draft: PlanDraft;
@@ -206,6 +221,7 @@ export type PlanProposal = {
     snapshot_revision: number;
     expected_current_plan_id: TypeOrNull<string>;
     event?: PlanEvent | null;
+    pending_revision?: number;
     options: PlanOption[];
 };
 
@@ -236,7 +252,17 @@ export type EventType =
     | 'ordinary_order_added'
     | 'order_cancelled'
     | 'engineer_unavailable'
+    | 'pending_changes'
     | 'order_status_changed';
+
+export type PendingChanges = {
+    scenario_id: string;
+    revision: number;
+    snapshot_revision: number;
+    base_plan_id: string | null;
+    events: PlanEvent[];
+    snapshot?: Snapshot;
+};
 
 export type CancelReason = 'client_refusal' | 'cannot_perform';
 

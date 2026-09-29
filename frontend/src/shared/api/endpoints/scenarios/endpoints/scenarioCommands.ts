@@ -1,5 +1,16 @@
-import { apiGet, apiPatch, apiPost } from 'shared/api/instance/httpClient';
-import { type Engineer, type ScenarioView } from 'shared/api/types/contracts';
+import {
+    apiGet,
+    apiPatch,
+    apiPost,
+    apiPostWithProgress,
+    type CalculationCallbacks,
+} from 'shared/api/instance/httpClient';
+import {
+    type Engineer,
+    type Point,
+    type ScenarioSummary,
+    type ScenarioView,
+} from 'shared/api/types/contracts';
 
 import {
     getEngineerImportUrl,
@@ -9,23 +20,54 @@ import {
     getScenarioUrl,
 } from '../../getUrl';
 
-export const createScenario = (demoDatasetId: string) =>
-    apiPost<ScenarioView>(getScenariosUrl(), {
-        demo_dataset_id: demoDatasetId,
-    });
+export const getScenarios = () =>
+    apiGet<{ items: ScenarioSummary[] }>(getScenariosUrl());
 
-export const importScenario = (input: {
-    file: File;
-    regionId: string;
-    date: string;
-}) => {
+export const createScenario = (
+    demoDatasetId: string,
+    callbacks?: CalculationCallbacks
+) =>
+    apiPostWithProgress<ScenarioView>(
+        getScenariosUrl(),
+        {
+            demo_dataset_id: demoDatasetId,
+        },
+        callbacks
+    );
+
+export const importScenario = (
+    input: {
+        file: File;
+        regionId?: string;
+        date: string;
+        engineersFile?: File;
+        officeAddress?: string;
+        officePoint?: Point;
+    },
+    callbacks?: CalculationCallbacks
+) => {
     const body = new FormData();
 
     body.append('file', input.file);
-    body.append('region_id', input.regionId);
+    if (input.regionId) {
+        body.append('region_id', input.regionId);
+    }
     body.append('date', input.date);
+    if (input.engineersFile) {
+        body.append('engineers_file', input.engineersFile);
+    }
+    if (input.officeAddress) {
+        body.append('office_address', input.officeAddress);
+    }
+    if (input.officePoint) {
+        body.append('office_point', JSON.stringify(input.officePoint));
+    }
 
-    return apiPost<ScenarioView>(getScenarioImportUrl(), body);
+    return apiPostWithProgress<ScenarioView>(
+        getScenarioImportUrl(),
+        body,
+        callbacks
+    );
 };
 
 export const getScenario = (scenarioId: string, revision?: number) =>

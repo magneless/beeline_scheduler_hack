@@ -2,7 +2,6 @@ package plans
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -10,7 +9,7 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
 )
 
-func TestWorkStartChecksPreviousAppointmentEvenAtSameAddress(t *testing.T) {
+func TestWorkStartDoesNotRequirePreviousReportEvenAtSameAddress(t *testing.T) {
 	for _, status := range []contracts.OrderStatus{contracts.OrderStatusActive, contracts.OrderStatusSent, contracts.OrderStatusInProgress} {
 		t.Run(string(status), func(t *testing.T) {
 			snapshot, base := workStatusFixture()
@@ -22,14 +21,17 @@ func TestWorkStartChecksPreviousAppointmentEvenAtSameAddress(t *testing.T) {
 				}
 			}
 			service := mustService(t, &fakeData{snapshot: snapshot, plan: base}, &fakeGeo{}, &fakePlanner{})
-			_, err := service.Replan(context.Background(), contracts.ReplanRequest{
+			result, err := service.Replan(context.Background(), contracts.ReplanRequest{
 				RequestID: "next-unfinished", ScenarioID: snapshot.ScenarioID, SnapshotRevision: snapshot.Revision, BasePlanID: base.ID,
 				Event: contracts.Event{ID: "next-unfinished", OccurredAt: base.Routes[0].Visits[1].StartAt, Type: contracts.EventOrderStatusChanged, Payload: contracts.EncodePayload(contracts.EventPayload{OrderID: "next", EngineerID: "eng-1", Status: contracts.OrderStatusInProgress})},
 			})
-			var conflict *contracts.ContractError
-			if !errors.As(err, &conflict) || conflict.Message != "previous work must be completed before starting next" || conflict.Details["previous_order_id"] != "order-1" {
-				t.Fatalf("expected actionable preceding-work conflict, got %v", err)
+			if err != nil {
+				t.Fatal(err)
 			}
+			if orderMap(result.TargetSnapshot.Orders)["next"].Status != contracts.OrderStatusInProgress || !reflect.DeepEqual(result.TargetSnapshot.Orders[0], snapshot.Orders[0]) {
+				t.Fatal("start was not saved or fabricated an earlier completion")
+			}
+
 		})
 	}
 }

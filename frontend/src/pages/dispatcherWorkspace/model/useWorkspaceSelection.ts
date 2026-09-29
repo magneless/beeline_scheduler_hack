@@ -33,6 +33,10 @@ export const useWorkspaceSelection = () => {
     );
 
     const toggleEngineer = (id: TypeOrNull<string>) => {
+        // Crew selection opens its tasks even when the previous tab showed
+        // unassigned work. Clearing the selection restores the complete list.
+        setFilter('all');
+        selectOrder(null);
         selectEngineer(selectedEngineerId === id ? null : id);
     };
 

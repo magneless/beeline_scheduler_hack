@@ -2,10 +2,39 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
-	"testing"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/geo"
 )
+
+func TestSearchAddressSelectsFirstNearbyCorpusMatch(t *testing.T) {
+	photon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"type":"FeatureCollection","features":[
+{"geometry":{"type":"Point","coordinates":[37.6105,55.76]},"properties":{"city":"Москва","street":"улица Мира","housenumber":"5 к1"}},
+{"geometry":{"type":"Point","coordinates":[37.6101,55.76]},"properties":{"city":"Москва","street":"улица Мира","housenumber":"5/1"}}]}`))
+	}))
+	defer photon.Close()
+	p, err := geo.NewOSMProvider(geo.OSMOptions{PhotonURL: photon.URL, MinInterval: time.Nanosecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{Importer: &data.Importer{Geo: geo.NewGeoService(p)}}
+	address := "Москва, ул. Мира, 5/1"
+	var item c.GeocodeResultItem
+	call(t, server.Handler(), "POST", "/geocode", map[string]any{"address": address, "region_id": "region-1"}, 200, &item)
+	if item.Issue != nil || item.Location == nil || len(item.Candidates) != 2 {
+		t.Fatalf("address search did not resolve nearby matches: %+v", item)
+	}
+	if item.Location.Point != (c.Point{Lat: 55.76, Lon: 37.6105}) || item.Location.Address != address {
+		t.Fatalf("first point or original address lost: %+v", item.Location)
+	}
+}
 
 func TestResolveImportedAddressPreservesWorkAndHistory(t *testing.T) {
 	h, store, fixture := integrationServer(t, true)

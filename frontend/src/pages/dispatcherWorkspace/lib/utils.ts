@@ -144,8 +144,35 @@ export const buildSchedule = (
         }).setZone(timezone);
         const blocks: ScheduleBlock[] = [];
 
-        route?.visits.forEach((visit, index) => {
-            const leg = route.legs[index];
+        // Replanning preserves travelled legs even when their visits disappear.
+        // Render every leg, associating only an actual arrival with its visit.
+        route?.legs.forEach((leg) => {
+            const departure = DateTime.fromISO(leg.start_at, {
+                setZone: true,
+            }).setZone(timezone);
+            const arrival = DateTime.fromISO(leg.end_at, {
+                setZone: true,
+            }).setZone(timezone);
+            if (arrival <= departure) {
+                return;
+            }
+            const visit = route.visits.find(
+                (item) =>
+                    orders.get(item.order_id)?.location_id ===
+                        leg.to_location_id &&
+                    DateTime.fromISO(item.arrival_at).toMillis() ===
+                        arrival.toMillis()
+            );
+            blocks.push({
+                id: `${leg.id}-travel`,
+                kind: 'travel',
+                start: departure,
+                end: arrival,
+                orderId: visit?.order_id,
+            });
+        });
+
+        route?.visits.forEach((visit) => {
             const order = orders.get(visit.order_id);
             const arrival = DateTime.fromISO(visit.arrival_at, {
                 setZone: true,
@@ -156,20 +183,6 @@ export const buildSchedule = (
             const workEnd = DateTime.fromISO(visit.end_at, {
                 setZone: true,
             }).setZone(timezone);
-
-            if (leg) {
-                blocks.push({
-                    id: `${leg.id}-travel`,
-                    kind: 'travel',
-                    start: DateTime.fromISO(leg.start_at, {
-                        setZone: true,
-                    }).setZone(timezone),
-                    end: DateTime.fromISO(leg.end_at, {
-                        setZone: true,
-                    }).setZone(timezone),
-                    orderId: visit.order_id,
-                });
-            }
 
             if (workStart > arrival) {
                 blocks.push({
@@ -191,6 +204,11 @@ export const buildSchedule = (
             });
         });
 
+        blocks.sort(
+            (a, b) =>
+                a.start.toMillis() - b.start.toMillis() ||
+                a.end.toMillis() - b.end.toMillis()
+        );
         return { engineerId: engineer.id, start, end, blocks };
     });
 };
@@ -229,12 +247,15 @@ export const stretchScheduleLanes = (lanes: ScheduleLane[], count: number) => {
 
 export const blockOffset = (lane: ScheduleLane, block: ScheduleBlock) => {
     const total = lane.end.toMillis() - lane.start.toMillis();
+    if (total <= 0) {
+        return { left: '0%', width: '0%' };
+    }
     const left =
         ((block.start.toMillis() - lane.start.toMillis()) / total) * 100;
     const width =
         ((block.end.toMillis() - block.start.toMillis()) / total) * 100;
 
-    return { left: `${left}%`, width: `${Math.max(width, 0.8)}%` };
+    return { left: `${left}%`, width: `${Math.max(width, 0)}%` };
 };
 
 export const ZOOM_DEFAULT = 240;

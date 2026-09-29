@@ -423,7 +423,7 @@ func TestDispatchReserveOptionActivatesOnlyUsedReserve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(options) != 3 || options[0].Key != "strict" || options[1].Key != "original" || options[2].Key != "reserve" {
+	if len(options) != 3 || options[0].Key != "strict" || options[1].Key != "remove_unavailable" || options[2].Key != "reserve" {
 		t.Fatalf("unexpected nonurgent choices: %+v", options)
 	}
 	reserve := options[2]

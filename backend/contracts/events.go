@@ -7,6 +7,7 @@ import (
 
 // EventPayload is a typed helper for Go-4. Event itself uses the canonical wire representation.
 type EventPayload struct {
+	Events        []Event        `json:"events,omitempty"`
 	Order         *Order         `json:"order,omitempty"`
 	Location      *LocationInput `json:"location,omitempty"`
 	OrderID       string         `json:"order_id,omitempty"`

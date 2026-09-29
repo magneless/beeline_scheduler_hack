@@ -120,7 +120,7 @@ func TestHTTPRosterReplacementInvalidatesPlanAndBlocksAfterExecution(t *testing.
 	}
 	oldPlan := *run.PlanID
 	var roster c.ScenarioView
-	postRoster(t, h, sid, 1, "crew-replacement;repair;car;08:00;18:00;true;2;1\n", http.StatusOK, &roster)
+	postRoster(t, h, sid, 1, "crew-replacement;repair;car;10:00;22:00;true;2;1\n", http.StatusOK, &roster)
 	if roster.Snapshot.Revision != 2 || len(roster.Snapshot.Engineers) != 1 || roster.CurrentPlanID != nil {
 		t.Fatalf("roster replacement did not invalidate plan: %+v", roster)
 	}
@@ -143,7 +143,7 @@ func TestHTTPRosterReplacementInvalidatesPlanAndBlocksAfterExecution(t *testing.
 	if run.Status != "succeeded" {
 		t.Fatalf("execution event: %+v", run)
 	}
-	postRoster(t, h, sid, 3, "crew-late;repair;car;08:00;18:00;true;1;0\n", http.StatusConflict, nil)
+	postRoster(t, h, sid, 3, "crew-late;repair;car;10:00;22:00;true;1;0\n", http.StatusConflict, nil)
 }
 
 func postRoster(t *testing.T, h http.Handler, sid string, revision int64, csv string, wantStatus int, out *c.ScenarioView) {

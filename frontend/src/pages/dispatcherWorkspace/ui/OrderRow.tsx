@@ -8,6 +8,7 @@ import {
 } from 'shared/api/types/contracts';
 import {
     cancelReasonLabel,
+    equipmentLabel,
     priorityLabel,
     reasonCodeLabel,
     statusLabel,
@@ -35,7 +36,6 @@ type OrderRowProps = {
     open?: UnassignedOrder;
     lateness?: OrderLateness;
     inTransit?: boolean;
-    deferred?: boolean;
     address?: string;
     remaining?: Partial<Record<Equipment, number>>;
     needsEnd?: boolean;
@@ -44,8 +44,6 @@ type OrderRowProps = {
     statusPending?: boolean;
     checked?: boolean;
     onToggleSelection?: () => void;
-    previousOrder?: { id: string; address?: string };
-    onOpenPrevious: () => void;
     onSelect: (id: TypeOrNull<string>) => void;
     onEvent?: (input: WorkspaceEventInput) => void;
 };
@@ -59,7 +57,6 @@ export const OrderRow = ({
     open,
     lateness,
     inTransit,
-    deferred,
     address,
     remaining,
     needsEnd,
@@ -68,8 +65,6 @@ export const OrderRow = ({
     statusPending,
     checked,
     onToggleSelection,
-    previousOrder,
-    onOpenPrevious,
     onSelect,
     onEvent,
 }: OrderRowProps) => {
@@ -167,7 +162,6 @@ export const OrderRow = ({
             </div>
             {open && !active ? (
                 <p className="mt-1 ml-4.5 text-[11px] text-destructive">
-                    {deferred ? 'На разбор и перенос · ' : ''}
                     {open.message}
                 </p>
             ) : null}
@@ -201,10 +195,8 @@ export const OrderRow = ({
                     {open ? (
                         <p className="rounded-[16px] bg-card px-3 py-2 text-xs">
                             <strong className="block font-semibold">
-                                {deferred
-                                    ? 'На разбор и перенос'
-                                    : (reasonCodeLabel[open.reason_code] ??
-                                      'Требуется проверка назначения')}
+                                {reasonCodeLabel[open.reason_code] ??
+                                    'Требуется проверка назначения'}
                             </strong>
                             <span className="mt-1 block text-muted-foreground">
                                 {/[а-яё]/i.test(open.message)
@@ -223,14 +215,28 @@ export const OrderRow = ({
                             onEvent={onEvent}
                         />
                     ) : null}
-                    {row.factors.length ? (
-                        <details className="text-xs">
-                            <summary className="cursor-pointer py-1 text-muted-foreground">
-                                Условия назначения
-                            </summary>
+                    <details className="text-xs">
+                        <summary className="cursor-pointer py-1 text-muted-foreground">
+                            Условия назначения
+                        </summary>
+                        <dl className="rounded-lg border border-border bg-card px-3 py-2 text-xs">
+                            <dt className="font-semibold">
+                                Требуется из инвентаря
+                            </dt>
+                            <dd className="mt-1 text-muted-foreground">
+                                {Object.entries(order.equipment_required ?? {})
+                                    .filter(([, count]) => count && count > 0)
+                                    .map(
+                                        ([equipment, count]) =>
+                                            `${equipmentLabel[equipment as Equipment] ?? equipment} — ${count} шт.`
+                                    )
+                                    .join(', ') || 'Оборудование не требуется'}
+                            </dd>
+                        </dl>
+                        {row.factors.length ? (
                             <AssignmentFactors factors={row.factors} />
-                        </details>
-                    ) : null}
+                        ) : null}
+                    </details>
                     {needsEnd ? (
                         <p
                             className={cn(
@@ -259,23 +265,6 @@ export const OrderRow = ({
                                     {row.error}
                                 </p>
                             ) : null}
-                            {previousOrder && order.status !== 'in_progress' ? (
-                                <div className="space-y-1 text-xs">
-                                    <p className="text-destructive">
-                                        Сначала завершите предыдущую заявку:{' '}
-                                        {previousOrder.address ??
-                                            `№ ${previousOrder.id}`}
-                                        .
-                                    </p>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={onOpenPrevious}
-                                    >
-                                        Открыть предыдущую заявку
-                                    </Button>
-                                </div>
-                            ) : null}
                             <div className="flex flex-wrap gap-2">
                                 {['active', 'sent', 'en_route'].includes(
                                     order.status
@@ -283,8 +272,7 @@ export const OrderRow = ({
                                     <Button
                                         size="sm"
                                         disabled={
-                                            statusPending ||
-                                            Boolean(previousOrder)
+                                            statusPending || !engineer.available
                                         }
                                         onClick={row.handleInProgress}
                                     >

@@ -123,13 +123,21 @@ func TestOptimizedDispatcherDayAudit(t *testing.T) {
 					at = visit.EndAt.Add(finishOffset)
 				}
 				previous := plan
-				var accepted map[string]string
-				call(t, h, "POST", "/plans/"+plan.ID+"/events", map[string]any{"request_id": "audit-" + status, "snapshot_revision": plan.SnapshotRevision, "event": map[string]any{"id": "audit-" + status, "type": "order_status_changed", "occurred_at": at, "payload": map[string]any{"order_id": visit.OrderID, "engineer_id": route.EngineerID, "status": status}}}, 202, &accepted)
-				run := awaitRun(t, h, accepted["run_id"])
-				if run.Status != "succeeded" {
-					t.Fatalf("%s failed: %+v", status, run)
+				event := eventBody("audit-"+status, "order_status_changed", at, map[string]any{"order_id": visit.OrderID, "engineer_id": route.EngineerID, "status": status})
+				if status == "completed" && finishOffset > 0 {
+					call(t, h, "POST", "/plans/"+plan.ID+"/events", map[string]any{"request_id": "automatic-late", "snapshot_revision": plan.SnapshotRevision, "event": event}, 409, nil)
+					queue := queueEvent(t, h, plan, 0, event, 200)
+					call(t, h, "POST", "/scenarios/"+plan.ScenarioID+"/proposals", map[string]any{"request_id": "manual-late", "snapshot_revision": plan.SnapshotRevision, "expected_current_plan_id": plan.ID, "pending_revision": queue.Revision}, 201, &proposal)
+					call(t, h, "POST", "/proposals/"+proposal.ID+"/accept", map[string]any{"request_id": "accept-late", "option_key": "strict"}, 200, &plan)
+				} else {
+					var accepted map[string]string
+					call(t, h, "POST", "/plans/"+plan.ID+"/events", map[string]any{"request_id": "audit-" + status, "snapshot_revision": plan.SnapshotRevision, "event": event}, 202, &accepted)
+					run := awaitRun(t, h, accepted["run_id"])
+					if run.Status != "succeeded" {
+						t.Fatalf("%s failed: %+v", status, run)
+					}
+					call(t, h, "GET", "/plans/"+*run.PlanID, nil, 200, &plan)
 				}
-				call(t, h, "GET", "/plans/"+*run.PlanID, nil, 200, &plan)
 				if status == "in_progress" && !reflect.DeepEqual(previous.Routes, plan.Routes) {
 					t.Fatal("work start changed routes")
 				}

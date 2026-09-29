@@ -79,7 +79,10 @@ func validateFinalPlan(snapshot contracts.Snapshot, routes []contracts.Route, un
 				return contracts.InvalidPlan("final plan has duplicate leg id", map[string]any{"leg_id": leg.ID})
 			}
 			seenLegs[leg.ID] = struct{}{}
-			intervals = append(intervals, interval{start: leg.StartAt, end: leg.EndAt, kind: "leg", id: leg.ID})
+			// A zero-distance transition at the same address occupies no time.
+			if !leg.StartAt.Equal(leg.EndAt) || leg.DistanceM != 0 {
+				intervals = append(intervals, interval{start: leg.StartAt, end: leg.EndAt, kind: "leg", id: leg.ID})
+			}
 		}
 		sort.SliceStable(intervals, func(i, j int) bool {
 			if intervals[i].start.Equal(intervals[j].start) {

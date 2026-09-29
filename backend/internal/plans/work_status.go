@@ -36,23 +36,7 @@ func (service *Service) recordWorkStatus(ctx context.Context, snapshot contracts
 
 	progress.Report(ctx, "saving", "Сохраняем состояние работы")
 	target := cloneSnapshot(snapshot)
-	replay := replayResult{}
-	order := orderMap(target.Orders)[payload.OrderID]
-	if payload.Status == contracts.OrderStatusInProgress && order.Status != contracts.OrderStatusInProgress {
-		// Arrival and preceding work still have to be checked when starting a
-		// visit. Other crews do not need replay or travel interpolation.
-		if event.OccurredAt.Before(previous.ArrivalAt) {
-			return contracts.PlanResult{}, true, contracts.EventConflict("work cannot start before arrival or window", nil)
-		}
-		crewPlan := base
-		crewPlan.Routes = base.Routes[routeIndex : routeIndex+1]
-		var err error
-		replay, err = service.replayAt(ctx, &target, crewPlan, event)
-		if err != nil {
-			return contracts.PlanResult{}, true, err
-		}
-	}
-	applied, _, err := service.applyEvent(ctx, &target, base, event, replay)
+	applied, _, err := service.applyEvent(ctx, &target, base, event, replayResult{})
 	if err != nil {
 		return contracts.PlanResult{}, true, err
 	}
@@ -95,7 +79,7 @@ func (service *Service) recordWorkStatus(ctx context.Context, snapshot contracts
 	draft.SolveMode = mode
 	draft.SnapshotRevision = target.Revision
 	draft.BasePlanID = &base.ID
-	draft.AsOf = event.OccurredAt
+	draft.AsOf = laterTime(base.AsOf, event.OccurredAt)
 	draft.Routes = routes
 	draft.Lateness = lateness
 	draft.CompletedOrderIDs = completed

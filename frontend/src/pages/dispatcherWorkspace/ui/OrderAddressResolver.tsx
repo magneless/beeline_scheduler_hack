@@ -353,7 +353,7 @@ export const OrderAddressResolver = ({
                             {saving
                                 ? 'Сохраняем…'
                                 : data?.current_plan_id
-                                  ? 'Рассчитать с этой заявкой'
+                                  ? 'Сохранить в очередь'
                                   : 'Подтвердить адрес'}
                         </Button>
                     </div>

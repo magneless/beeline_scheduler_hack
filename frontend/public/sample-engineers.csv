@@ -1,4 +1,4 @@
 id;skills;transport;shift_start;shift_end;available;router;tv_box
-eng-001;router,tv_box;car;08:00;20:00;true;4;2
-eng-002;router;walk;09:00;18:00;true;2;1
-eng-003;router,tv_box;car;08:00;20:00;true;4;2
+eng-001;connection,repair,emergency;car;10:00;22:00;true;4;2
+eng-002;repair,emergency;walk;10:00;22:00;true;2;1
+eng-003;connection;car;10:00;22:00;true;4;2

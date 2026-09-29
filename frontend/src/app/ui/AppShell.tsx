@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Map } from 'lucide-react';
+import { CalendarDays, MapPinned } from 'lucide-react';
 
 import { cn } from 'shared/lib/utils';
 
@@ -10,7 +10,8 @@ type AppShellProps = {
 
 const railButtonClass = (active: boolean) =>
     cn(
-        'flex size-11 items-center justify-center rounded-[16px] transition-colors',
+        'grid size-11 shrink-0 place-items-center rounded-[12px] transition-colors',
+        'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         active
             ? 'bg-primary text-foreground'
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -45,44 +46,62 @@ export const AppShell = ({ children }: AppShellProps) => {
     }, [onMap, pathname]);
 
     return (
-        <div className="flex h-screen gap-2 bg-muted p-2 max-sm:gap-1 max-sm:p-1">
+        <div className="flex h-dvh gap-2 bg-muted p-2 max-sm:gap-1 max-sm:p-1">
             <aside
                 className={[
-                    'flex w-14 shrink-0 flex-col items-center gap-3 rounded-[16px]',
-                    'border border-border bg-white py-3 max-sm:w-11',
+                    'flex w-16 shrink-0 flex-col items-center rounded-[16px]',
+                    'border border-border bg-white py-3 max-sm:w-14',
                 ].join(' ')}
                 style={{ boxShadow: 'var(--shadow-soft)' }}
             >
                 <Link
                     to="/"
-                    className="mb-2 flex size-11 items-center justify-center"
+                    className={cn(
+                        'grid size-11 shrink-0 place-items-center rounded-[12px]',
+                        'outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                    )}
                     aria-label="Билайн"
+                    title="Подготовка рабочего дня"
                 >
                     <img
                         src="/beeline.png"
-                        alt="Билайн"
-                        className="size-9 object-contain"
+                        alt=""
+                        className="size-8 object-contain"
                     />
                 </Link>
-                <Link
-                    to="/"
-                    className={railButtonClass(!onMap)}
-                    aria-label="Районы"
-                    aria-current={!onMap ? 'page' : undefined}
+                <nav
+                    className="mt-4 flex flex-col items-center gap-2"
+                    aria-label="Основная навигация"
                 >
-                    <LayoutGrid className="size-5" />
-                </Link>
-                {mapPath ? (
                     <Link
-                        to={mapPath}
-                        className={railButtonClass(onMap)}
-                        aria-label="Карта смены"
-                        aria-current={onMap ? 'page' : undefined}
-                        title="Вернуться к карте смены"
+                        to="/"
+                        className={railButtonClass(!onMap)}
+                        aria-label="Подготовка рабочего дня"
+                        aria-current={!onMap ? 'page' : undefined}
+                        title="Подготовка рабочего дня"
                     >
-                        <Map className="size-5" />
+                        <CalendarDays
+                            className="size-6"
+                            strokeWidth={2}
+                            aria-hidden="true"
+                        />
                     </Link>
-                ) : null}
+                    {mapPath ? (
+                        <Link
+                            to={mapPath}
+                            className={railButtonClass(onMap)}
+                            aria-label="Карта смены"
+                            aria-current={onMap ? 'page' : undefined}
+                            title="Карта смены"
+                        >
+                            <MapPinned
+                                className="size-6"
+                                strokeWidth={2}
+                                aria-hidden="true"
+                            />
+                        </Link>
+                    ) : null}
+                </nav>
             </aside>
             {children}
         </div>

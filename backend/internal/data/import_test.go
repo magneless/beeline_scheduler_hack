@@ -50,16 +50,27 @@ func TestImportNormsRowsAndReorderedGeocoding(t *testing.T) {
 		t.Fatal("source row lost")
 	}
 }
-func TestOriginalSyntheticDatasets(t *testing.T) {
+func TestCatalogDatasets(t *testing.T) {
 	imp := data.Importer{Geo: testkit.Geocoder{}, Root: "../../../datasets/original"}
+	seen := map[string]bool{}
 	for _, d := range data.Catalog {
 		t.Run(d.ID, func(t *testing.T) {
+			if seen[d.ID] {
+				t.Fatalf("duplicate dataset ID: %s", d.ID)
+			}
+			seen[d.ID] = true
 			s, _, e := imp.Demo(context.Background(), d.ID)
 			if e != nil {
 				t.Fatal(e)
 			}
 			if len(s.Orders) == 0 || len(s.Engineers) != 8 || s.OfficeLocationID == "" {
 				t.Fatal("empty dataset")
+			}
+			if err := c.ValidateEngineerShifts(s); err != nil {
+				t.Fatal(err)
+			}
+			if s.RegionID != d.RegionID || s.Date != d.Date || s.Timezone != d.Timezone {
+				t.Fatalf("catalog and imported day differ: %+v", s)
 			}
 			t.Logf("orders=%d issues=%d", len(s.Orders), len(s.Issues))
 		})

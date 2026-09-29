@@ -34,8 +34,8 @@
           ],
           "required_transport": "car",
           "window": {
-            "start": "2026-09-17T07:00:00Z",
-            "end": "2026-09-17T09:00:00Z"
+            "start": "2026-09-17T08:00:00Z",
+            "end": "2026-09-17T10:00:00Z"
           },
           "service_sec": 1800,
           "priority": "normal",
@@ -58,8 +58,8 @@
           ],
           "transport": "car",
           "shift": {
-            "start": "2026-09-17T06:00:00Z",
-            "end": "2026-09-17T15:00:00Z"
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T19:00:00Z"
           },
           "available": true,
           "source_order": 1,
@@ -89,13 +89,13 @@
       {
         "engineer_id": "eng-1",
         "start_location_id": "office-1",
-        "start_at": "2026-09-17T06:00:00Z",
+        "start_at": "2026-09-17T07:00:00Z",
         "visits": [
           {
             "order_id": "order-1",
-            "arrival_at": "2026-09-17T06:15:00Z",
-            "start_at": "2026-09-17T07:00:00Z",
-            "end_at": "2026-09-17T07:30:00Z"
+            "arrival_at": "2026-09-17T07:15:00Z",
+            "start_at": "2026-09-17T08:00:00Z",
+            "end_at": "2026-09-17T08:30:00Z"
           }
         ],
         "legs": [
@@ -103,8 +103,8 @@
             "id": "leg-1",
             "from_location_id": "office-1",
             "to_location_id": "loc-1",
-            "start_at": "2026-09-17T06:00:00Z",
-            "end_at": "2026-09-17T06:15:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
+            "end_at": "2026-09-17T07:15:00Z",
             "distance_m": 1200,
             "geo_context_id": "geo-1",
             "geometry": [
@@ -199,8 +199,8 @@
           ],
           "required_transport": "car",
           "window": {
-            "start": "2026-09-17T07:00:00Z",
-            "end": "2026-09-17T09:00:00Z"
+            "start": "2026-09-17T08:00:00Z",
+            "end": "2026-09-17T10:00:00Z"
           },
           "service_sec": 1800,
           "priority": "normal",
@@ -223,8 +223,8 @@
           ],
           "transport": "car",
           "shift": {
-            "start": "2026-09-17T06:00:00Z",
-            "end": "2026-09-17T15:00:00Z"
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T19:00:00Z"
           },
           "available": true,
           "source_order": 1,
@@ -268,7 +268,7 @@
     "snapshot_revision": 1,
     "event": {
       "id": "event-1",
-      "occurred_at": "2026-09-17T05:00:00Z",
+      "occurred_at": "2026-09-17T06:00:00Z",
       "type": "order_cancelled",
       "payload": {
         "order_id": "order-1",
@@ -281,7 +281,7 @@
     "scenario_id": "scenario-1",
     "snapshot_revision": 2,
     "base_plan_id": "plan-1",
-    "as_of": "2026-09-17T05:00:00Z",
+    "as_of": "2026-09-17T06:00:00Z",
     "routes": [],
     "unassigned": [],
     "cancelled_order_ids": [
@@ -303,9 +303,9 @@
         "before": {
           "engineer_id": "eng-1",
           "sequence": 0,
-          "arrival_at": "2026-09-17T06:15:00Z",
-          "start_at": "2026-09-17T07:00:00Z",
-          "end_at": "2026-09-17T07:30:00Z"
+          "arrival_at": "2026-09-17T07:15:00Z",
+          "start_at": "2026-09-17T08:00:00Z",
+          "end_at": "2026-09-17T08:30:00Z"
         },
         "after": null,
         "reason": "cancelled"
@@ -361,8 +361,8 @@
           ],
           "required_transport": "car",
           "window": {
-            "start": "2026-09-17T07:00:00Z",
-            "end": "2026-09-17T09:00:00Z"
+            "start": "2026-09-17T08:00:00Z",
+            "end": "2026-09-17T10:00:00Z"
           },
           "service_sec": 1800,
           "priority": "normal",
@@ -385,8 +385,8 @@
           ],
           "transport": "car",
           "shift": {
-            "start": "2026-09-17T06:00:00Z",
-            "end": "2026-09-17T15:00:00Z"
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T19:00:00Z"
           },
           "available": true,
           "source_order": 1,
@@ -434,8 +434,8 @@
           ],
           "required_transport": "car",
           "window": {
-            "start": "2026-09-17T07:00:00Z",
-            "end": "2026-09-17T09:00:00Z"
+            "start": "2026-09-17T08:00:00Z",
+            "end": "2026-09-17T10:00:00Z"
           },
           "service_sec": 1800,
           "priority": "normal",
@@ -458,8 +458,8 @@
           ],
           "transport": "car",
           "shift": {
-            "start": "2026-09-17T06:00:00Z",
-            "end": "2026-09-17T15:00:00Z"
+            "start": "2026-09-17T07:00:00Z",
+            "end": "2026-09-17T19:00:00Z"
           },
           "available": true,
           "source_order": 1,
@@ -486,7 +486,7 @@
       "snapshot_revision": 1,
       "event": {
         "id": "event-emergency-1",
-        "occurred_at": "2026-09-17T05:30:00Z",
+        "occurred_at": "2026-09-17T06:30:00Z",
         "type": "urgent_order_added",
         "payload": {
           "order": {
@@ -498,10 +498,10 @@
             ],
             "required_transport": "car",
             "window": {
-              "start": "2026-09-17T05:30:00Z",
-              "end": "2026-09-17T15:00:00Z"
+              "start": "2026-09-17T06:30:00Z",
+              "end": "2026-09-17T16:00:00Z"
             },
-            "received_at": "2026-09-17T05:30:00Z",
+            "received_at": "2026-09-17T06:30:00Z",
             "service_sec": 4800,
             "priority": "urgent",
             "equipment_required": {
@@ -524,10 +524,10 @@
       ],
       "required_transport": "car",
       "window": {
-        "start": "2026-09-17T05:30:00Z",
-        "end": "2026-09-17T15:00:00Z"
+        "start": "2026-09-17T06:30:00Z",
+        "end": "2026-09-17T16:00:00Z"
       },
-      "received_at": "2026-09-17T05:30:00Z",
+      "received_at": "2026-09-17T06:30:00Z",
       "service_sec": 4800,
       "priority": "urgent",
       "equipment_required": {
@@ -574,7 +574,7 @@
           "snapshot_revision": 1,
           "event": {
             "id": "event-sent",
-            "occurred_at": "2026-09-17T05:50:00Z",
+            "occurred_at": "2026-09-17T06:50:00Z",
             "type": "order_status_changed",
             "payload": {
               "order_id": "order-1",
@@ -598,18 +598,18 @@
           "scenario_id": "scenario-1",
           "snapshot_revision": 2,
           "base_plan_id": "plan-1",
-          "as_of": "2026-09-17T05:50:00Z",
+          "as_of": "2026-09-17T06:50:00Z",
           "routes": [
             {
               "engineer_id": "eng-1",
               "start_location_id": "office-1",
-              "start_at": "2026-09-17T06:00:00Z",
+              "start_at": "2026-09-17T07:00:00Z",
               "visits": [
                 {
                   "order_id": "order-1",
-                  "arrival_at": "2026-09-17T06:15:00Z",
-                  "start_at": "2026-09-17T07:00:00Z",
-                  "end_at": "2026-09-17T07:30:00Z"
+                  "arrival_at": "2026-09-17T07:15:00Z",
+                  "start_at": "2026-09-17T08:00:00Z",
+                  "end_at": "2026-09-17T08:30:00Z"
                 }
               ],
               "legs": [
@@ -617,8 +617,8 @@
                   "id": "leg-1",
                   "from_location_id": "office-1",
                   "to_location_id": "loc-1",
-                  "start_at": "2026-09-17T06:00:00Z",
-                  "end_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:15:00Z",
                   "distance_m": 1200,
                   "geo_context_id": "geo-1",
                   "geometry": [
@@ -658,16 +658,16 @@
               "before": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "after": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "reason": "status_changed"
             }
@@ -716,8 +716,8 @@
                 ],
                 "required_transport": "car",
                 "window": {
-                  "start": "2026-09-17T07:00:00Z",
-                  "end": "2026-09-17T09:00:00Z"
+                  "start": "2026-09-17T08:00:00Z",
+                  "end": "2026-09-17T10:00:00Z"
                 },
                 "service_sec": 1800,
                 "priority": "normal",
@@ -746,8 +746,8 @@
                 ],
                 "transport": "car",
                 "shift": {
-                  "start": "2026-09-17T06:00:00Z",
-                  "end": "2026-09-17T15:00:00Z"
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T19:00:00Z"
                 },
                 "available": true,
                 "source_order": 1,
@@ -763,7 +763,7 @@
         "engineer_state_after_event": {
           "engineer_id": "eng-1",
           "start_location_id": "office-1",
-          "available_from": "2026-09-17T06:00:00Z",
+          "available_from": "2026-09-17T07:00:00Z",
           "equipment_available": {
             "router": 1
           }
@@ -776,7 +776,7 @@
           "snapshot_revision": 2,
           "event": {
             "id": "event-en_route",
-            "occurred_at": "2026-09-17T06:00:00Z",
+            "occurred_at": "2026-09-17T07:00:00Z",
             "type": "order_status_changed",
             "payload": {
               "order_id": "order-1",
@@ -800,18 +800,18 @@
           "scenario_id": "scenario-1",
           "snapshot_revision": 3,
           "base_plan_id": "plan-status-sent",
-          "as_of": "2026-09-17T06:00:00Z",
+          "as_of": "2026-09-17T07:00:00Z",
           "routes": [
             {
               "engineer_id": "eng-1",
               "start_location_id": "office-1",
-              "start_at": "2026-09-17T06:00:00Z",
+              "start_at": "2026-09-17T07:00:00Z",
               "visits": [
                 {
                   "order_id": "order-1",
-                  "arrival_at": "2026-09-17T06:15:00Z",
-                  "start_at": "2026-09-17T07:00:00Z",
-                  "end_at": "2026-09-17T07:30:00Z"
+                  "arrival_at": "2026-09-17T07:15:00Z",
+                  "start_at": "2026-09-17T08:00:00Z",
+                  "end_at": "2026-09-17T08:30:00Z"
                 }
               ],
               "legs": [
@@ -819,8 +819,8 @@
                   "id": "leg-1",
                   "from_location_id": "office-1",
                   "to_location_id": "loc-1",
-                  "start_at": "2026-09-17T06:00:00Z",
-                  "end_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:15:00Z",
                   "distance_m": 1200,
                   "geo_context_id": "geo-1",
                   "geometry": [
@@ -860,16 +860,16 @@
               "before": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "after": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "reason": "status_changed"
             }
@@ -918,8 +918,8 @@
                 ],
                 "required_transport": "car",
                 "window": {
-                  "start": "2026-09-17T07:00:00Z",
-                  "end": "2026-09-17T09:00:00Z"
+                  "start": "2026-09-17T08:00:00Z",
+                  "end": "2026-09-17T10:00:00Z"
                 },
                 "service_sec": 1800,
                 "priority": "normal",
@@ -932,7 +932,7 @@
                 },
                 "execution": {
                   "engineer_id": "eng-1",
-                  "departed_at": "2026-09-17T06:00:00Z",
+                  "departed_at": "2026-09-17T07:00:00Z",
                   "started_at": null,
                   "finished_at": null,
                   "expected_end_at": null
@@ -948,8 +948,8 @@
                 ],
                 "transport": "car",
                 "shift": {
-                  "start": "2026-09-17T06:00:00Z",
-                  "end": "2026-09-17T15:00:00Z"
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T19:00:00Z"
                 },
                 "available": true,
                 "source_order": 1,
@@ -965,7 +965,7 @@
         "engineer_state_after_event": {
           "engineer_id": "eng-1",
           "start_location_id": "office-1",
-          "available_from": "2026-09-17T06:00:00Z",
+          "available_from": "2026-09-17T07:00:00Z",
           "equipment_available": {
             "router": 1
           }
@@ -978,13 +978,13 @@
           "snapshot_revision": 3,
           "event": {
             "id": "event-in_progress",
-            "occurred_at": "2026-09-17T07:00:00Z",
+            "occurred_at": "2026-09-17T08:00:00Z",
             "type": "order_status_changed",
             "payload": {
               "order_id": "order-1",
               "status": "in_progress",
               "engineer_id": "eng-1",
-              "expected_end_at": "2026-09-17T07:30:00Z"
+              "expected_end_at": "2026-09-17T08:30:00Z"
             }
           }
         },
@@ -1002,18 +1002,18 @@
           "scenario_id": "scenario-1",
           "snapshot_revision": 4,
           "base_plan_id": "plan-status-en-route",
-          "as_of": "2026-09-17T07:00:00Z",
+          "as_of": "2026-09-17T08:00:00Z",
           "routes": [
             {
               "engineer_id": "eng-1",
               "start_location_id": "office-1",
-              "start_at": "2026-09-17T06:00:00Z",
+              "start_at": "2026-09-17T07:00:00Z",
               "visits": [
                 {
                   "order_id": "order-1",
-                  "arrival_at": "2026-09-17T06:15:00Z",
-                  "start_at": "2026-09-17T07:00:00Z",
-                  "end_at": "2026-09-17T07:30:00Z"
+                  "arrival_at": "2026-09-17T07:15:00Z",
+                  "start_at": "2026-09-17T08:00:00Z",
+                  "end_at": "2026-09-17T08:30:00Z"
                 }
               ],
               "legs": [
@@ -1021,8 +1021,8 @@
                   "id": "leg-1",
                   "from_location_id": "office-1",
                   "to_location_id": "loc-1",
-                  "start_at": "2026-09-17T06:00:00Z",
-                  "end_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:15:00Z",
                   "distance_m": 1200,
                   "geo_context_id": "geo-1",
                   "geometry": [
@@ -1062,16 +1062,16 @@
               "before": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "after": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "reason": "status_changed"
             }
@@ -1120,8 +1120,8 @@
                 ],
                 "required_transport": "car",
                 "window": {
-                  "start": "2026-09-17T07:00:00Z",
-                  "end": "2026-09-17T09:00:00Z"
+                  "start": "2026-09-17T08:00:00Z",
+                  "end": "2026-09-17T10:00:00Z"
                 },
                 "service_sec": 1800,
                 "priority": "normal",
@@ -1134,10 +1134,10 @@
                 },
                 "execution": {
                   "engineer_id": "eng-1",
-                  "departed_at": "2026-09-17T06:00:00Z",
-                  "started_at": "2026-09-17T07:00:00Z",
+                  "departed_at": "2026-09-17T07:00:00Z",
+                  "started_at": "2026-09-17T08:00:00Z",
                   "finished_at": null,
-                  "expected_end_at": "2026-09-17T07:30:00Z"
+                  "expected_end_at": "2026-09-17T08:30:00Z"
                 }
               }
             ],
@@ -1150,8 +1150,8 @@
                 ],
                 "transport": "car",
                 "shift": {
-                  "start": "2026-09-17T06:00:00Z",
-                  "end": "2026-09-17T15:00:00Z"
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T19:00:00Z"
                 },
                 "available": true,
                 "source_order": 1,
@@ -1167,7 +1167,7 @@
         "engineer_state_after_event": {
           "engineer_id": "eng-1",
           "start_location_id": "loc-1",
-          "available_from": "2026-09-17T07:30:00Z",
+          "available_from": "2026-09-17T08:30:00Z",
           "equipment_available": {
             "router": 0
           }
@@ -1180,7 +1180,7 @@
           "snapshot_revision": 4,
           "event": {
             "id": "event-completed",
-            "occurred_at": "2026-09-17T07:30:00Z",
+            "occurred_at": "2026-09-17T08:30:00Z",
             "type": "order_status_changed",
             "payload": {
               "order_id": "order-1",
@@ -1204,18 +1204,18 @@
           "scenario_id": "scenario-1",
           "snapshot_revision": 5,
           "base_plan_id": "plan-status-in-progress",
-          "as_of": "2026-09-17T07:30:00Z",
+          "as_of": "2026-09-17T08:30:00Z",
           "routes": [
             {
               "engineer_id": "eng-1",
               "start_location_id": "office-1",
-              "start_at": "2026-09-17T06:00:00Z",
+              "start_at": "2026-09-17T07:00:00Z",
               "visits": [
                 {
                   "order_id": "order-1",
-                  "arrival_at": "2026-09-17T06:15:00Z",
-                  "start_at": "2026-09-17T07:00:00Z",
-                  "end_at": "2026-09-17T07:30:00Z"
+                  "arrival_at": "2026-09-17T07:15:00Z",
+                  "start_at": "2026-09-17T08:00:00Z",
+                  "end_at": "2026-09-17T08:30:00Z"
                 }
               ],
               "legs": [
@@ -1223,8 +1223,8 @@
                   "id": "leg-1",
                   "from_location_id": "office-1",
                   "to_location_id": "loc-1",
-                  "start_at": "2026-09-17T06:00:00Z",
-                  "end_at": "2026-09-17T06:15:00Z",
+                  "start_at": "2026-09-17T07:00:00Z",
+                  "end_at": "2026-09-17T07:15:00Z",
                   "distance_m": 1200,
                   "geo_context_id": "geo-1",
                   "geometry": [
@@ -1264,16 +1264,16 @@
               "before": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "after": {
                 "engineer_id": "eng-1",
                 "sequence": 0,
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               "reason": "status_changed"
             }
@@ -1324,8 +1324,8 @@
                 ],
                 "required_transport": "car",
                 "window": {
-                  "start": "2026-09-17T07:00:00Z",
-                  "end": "2026-09-17T09:00:00Z"
+                  "start": "2026-09-17T08:00:00Z",
+                  "end": "2026-09-17T10:00:00Z"
                 },
                 "service_sec": 1800,
                 "priority": "normal",
@@ -1338,9 +1338,9 @@
                 },
                 "execution": {
                   "engineer_id": "eng-1",
-                  "departed_at": "2026-09-17T06:00:00Z",
-                  "started_at": "2026-09-17T07:00:00Z",
-                  "finished_at": "2026-09-17T07:30:00Z",
+                  "departed_at": "2026-09-17T07:00:00Z",
+                  "started_at": "2026-09-17T08:00:00Z",
+                  "finished_at": "2026-09-17T08:30:00Z",
                   "expected_end_at": null
                 }
               }
@@ -1354,8 +1354,8 @@
                 ],
                 "transport": "car",
                 "shift": {
-                  "start": "2026-09-17T06:00:00Z",
-                  "end": "2026-09-17T15:00:00Z"
+                  "start": "2026-09-17T07:00:00Z",
+                  "end": "2026-09-17T19:00:00Z"
                 },
                 "available": true,
                 "source_order": 1,
@@ -1371,7 +1371,7 @@
         "engineer_state_after_event": {
           "engineer_id": "eng-1",
           "start_location_id": "loc-1",
-          "available_from": "2026-09-17T07:30:00Z",
+          "available_from": "2026-09-17T08:30:00Z",
           "equipment_available": {
             "router": 0
           }
@@ -1387,7 +1387,7 @@
         "snapshot_revision": 1,
         "event": {
           "id": "event-ordinary-fit",
-          "occurred_at": "2026-09-17T05:30:00Z",
+          "occurred_at": "2026-09-17T06:30:00Z",
           "type": "ordinary_order_added",
           "payload": {
             "order": {
@@ -1398,15 +1398,15 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T08:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T09:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
               "service_sec": 1800,
               "priority": "normal",
               "source_order": 0,
               "status": "active",
               "work_type": "repair",
-              "received_at": "2026-09-17T05:30:00Z",
+              "received_at": "2026-09-17T06:30:00Z",
               "equipment_required": {},
               "execution": null
             },
@@ -1429,24 +1429,24 @@
         "scenario_id": "scenario-1",
         "snapshot_revision": 2,
         "base_plan_id": "plan-1",
-        "as_of": "2026-09-17T05:30:00Z",
+        "as_of": "2026-09-17T06:30:00Z",
         "routes": [
           {
             "engineer_id": "eng-1",
             "start_location_id": "office-1",
-            "start_at": "2026-09-17T06:00:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
             "visits": [
               {
                 "order_id": "order-1",
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               },
               {
                 "order_id": "order-ordinary-fit",
-                "arrival_at": "2026-09-17T07:30:00Z",
-                "start_at": "2026-09-17T08:00:00Z",
-                "end_at": "2026-09-17T08:30:00Z"
+                "arrival_at": "2026-09-17T08:30:00Z",
+                "start_at": "2026-09-17T09:00:00Z",
+                "end_at": "2026-09-17T09:30:00Z"
               }
             ],
             "legs": [
@@ -1454,8 +1454,8 @@
                 "id": "leg-1",
                 "from_location_id": "office-1",
                 "to_location_id": "loc-1",
-                "start_at": "2026-09-17T06:00:00Z",
-                "end_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:15:00Z",
                 "distance_m": 1200,
                 "geo_context_id": "geo-1",
                 "geometry": [
@@ -1473,8 +1473,8 @@
                 "id": "leg-ordinary-fit",
                 "from_location_id": "loc-1",
                 "to_location_id": "loc-1",
-                "start_at": "2026-09-17T07:30:00Z",
-                "end_at": "2026-09-17T07:30:00Z",
+                "start_at": "2026-09-17T08:30:00Z",
+                "end_at": "2026-09-17T08:30:00Z",
                 "distance_m": 0,
                 "geo_context_id": "geo-1",
                 "geometry": [
@@ -1515,9 +1515,9 @@
             "after": {
               "engineer_id": "eng-1",
               "sequence": 1,
-              "arrival_at": "2026-09-17T07:30:00Z",
-              "start_at": "2026-09-17T08:00:00Z",
-              "end_at": "2026-09-17T08:30:00Z"
+              "arrival_at": "2026-09-17T08:30:00Z",
+              "start_at": "2026-09-17T09:00:00Z",
+              "end_at": "2026-09-17T09:30:00Z"
             },
             "reason": "assigned"
           }
@@ -1565,8 +1565,8 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T07:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T08:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
               "service_sec": 1800,
               "priority": "normal",
@@ -1587,15 +1587,15 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T08:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T09:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
               "service_sec": 1800,
               "priority": "normal",
               "source_order": 2,
               "status": "active",
               "work_type": "repair",
-              "received_at": "2026-09-17T05:30:00Z",
+              "received_at": "2026-09-17T06:30:00Z",
               "equipment_required": {},
               "execution": null
             }
@@ -1609,8 +1609,8 @@
               ],
               "transport": "car",
               "shift": {
-                "start": "2026-09-17T06:00:00Z",
-                "end": "2026-09-17T15:00:00Z"
+                "start": "2026-09-17T07:00:00Z",
+                "end": "2026-09-17T19:00:00Z"
               },
               "available": true,
               "source_order": 1,
@@ -1631,7 +1631,7 @@
         "snapshot_revision": 1,
         "event": {
           "id": "event-ordinary-no-fit",
-          "occurred_at": "2026-09-17T05:30:00Z",
+          "occurred_at": "2026-09-17T06:30:00Z",
           "type": "ordinary_order_added",
           "payload": {
             "order": {
@@ -1642,15 +1642,15 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T07:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T08:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
-              "service_sec": 28800,
+              "service_sec": 43200,
               "priority": "normal",
               "source_order": 0,
               "status": "active",
               "work_type": "repair",
-              "received_at": "2026-09-17T05:30:00Z",
+              "received_at": "2026-09-17T06:30:00Z",
               "equipment_required": {},
               "execution": null
             },
@@ -1673,18 +1673,18 @@
         "scenario_id": "scenario-1",
         "snapshot_revision": 2,
         "base_plan_id": "plan-1",
-        "as_of": "2026-09-17T05:30:00Z",
+        "as_of": "2026-09-17T06:30:00Z",
         "routes": [
           {
             "engineer_id": "eng-1",
             "start_location_id": "office-1",
-            "start_at": "2026-09-17T06:00:00Z",
+            "start_at": "2026-09-17T07:00:00Z",
             "visits": [
               {
                 "order_id": "order-1",
-                "arrival_at": "2026-09-17T06:15:00Z",
-                "start_at": "2026-09-17T07:00:00Z",
-                "end_at": "2026-09-17T07:30:00Z"
+                "arrival_at": "2026-09-17T07:15:00Z",
+                "start_at": "2026-09-17T08:00:00Z",
+                "end_at": "2026-09-17T08:30:00Z"
               }
             ],
             "legs": [
@@ -1692,8 +1692,8 @@
                 "id": "leg-1",
                 "from_location_id": "office-1",
                 "to_location_id": "loc-1",
-                "start_at": "2026-09-17T06:00:00Z",
-                "end_at": "2026-09-17T06:15:00Z",
+                "start_at": "2026-09-17T07:00:00Z",
+                "end_at": "2026-09-17T07:15:00Z",
                 "distance_m": 1200,
                 "geo_context_id": "geo-1",
                 "geometry": [
@@ -1784,8 +1784,8 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T07:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T08:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
               "service_sec": 1800,
               "priority": "normal",
@@ -1806,15 +1806,15 @@
               ],
               "required_transport": "car",
               "window": {
-                "start": "2026-09-17T07:00:00Z",
-                "end": "2026-09-17T09:00:00Z"
+                "start": "2026-09-17T08:00:00Z",
+                "end": "2026-09-17T10:00:00Z"
               },
-              "service_sec": 28800,
+              "service_sec": 43200,
               "priority": "normal",
               "source_order": 2,
               "status": "active",
               "work_type": "repair",
-              "received_at": "2026-09-17T05:30:00Z",
+              "received_at": "2026-09-17T06:30:00Z",
               "equipment_required": {},
               "execution": null
             }
@@ -1828,8 +1828,8 @@
               ],
               "transport": "car",
               "shift": {
-                "start": "2026-09-17T06:00:00Z",
-                "end": "2026-09-17T15:00:00Z"
+                "start": "2026-09-17T07:00:00Z",
+                "end": "2026-09-17T19:00:00Z"
               },
               "available": true,
               "source_order": 1,

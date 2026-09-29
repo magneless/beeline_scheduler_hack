@@ -8,6 +8,7 @@ const plan = {
     routes: [{ visits: [{ order_id: 'assigned' }] }],
     unassigned: [{ order_id: 'a' }, { order_id: 'b' }],
 };
+const snapshot = { orders: ['a', 'b', 'assigned'].map((id) => ({ id, status: 'active' })) };
 const batch = {
     kind: 'cancel_many',
     orderIds: ['b', 'a'],
@@ -17,7 +18,7 @@ const batch = {
 
 test('a batch carries all selected IDs in a single event without an active card', () => {
     assert.equal(isUnassignedCancellation(batch, plan, null), true);
-    const event = createEvent(batch, {}, plan, null);
+    const event = createEvent(batch, snapshot, plan, null);
     assert.equal(event.type, 'order_cancelled');
     assert.equal(event.occurred_at, batch.occurredAt);
     assert.deepEqual(event.payload, {
@@ -34,7 +35,7 @@ test('stale, duplicate, missing or empty selections cannot be submitted as a bat
         ['a', 'a'],
     ]) {
         assert.throws(() =>
-            createEvent({ ...batch, orderIds }, {}, plan, null)
+            createEvent({ ...batch, orderIds }, snapshot, plan, null)
         );
     }
     assert.equal(
@@ -56,4 +57,10 @@ test('individual cancellation still uses its original payload and routing rule',
         order_id: 'a',
         reason: 'client_refusal',
     });
+});
+
+test('pending additions can be cancelled together, closed orders cannot', () => {
+    const withPending = { orders: [...snapshot.orders, {id: 'pending', status: 'active'}, {id: 'closed', status: 'cancelled'}] };
+    assert.deepEqual(createEvent({...batch, orderIds: ['a', 'pending']}, withPending, plan, null).payload.order_ids, ['a', 'pending']);
+    assert.throws(() => createEvent({...batch, orderIds: ['closed']}, withPending, plan, null));
 });
