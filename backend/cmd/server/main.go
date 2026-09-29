@@ -6,9 +6,11 @@ import (
 	"fmt"
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -47,6 +49,10 @@ func run() error {
 		return fmt.Errorf("DEPENDENCY_MODE must be integrated or stub")
 	}
 	solverMode := env("SOLVER_MODE", "optimized")
+	solverTimeLimitMS, err := strconv.ParseInt(env("SOLVER_TIME_LIMIT_MS", "10000"), 10, 64)
+	if err != nil || solverTimeLimitMS <= 0 || solverTimeLimitMS > math.MaxInt64/int64(time.Millisecond) {
+		return fmt.Errorf("SOLVER_TIME_LIMIT_MS must be a positive millisecond duration")
+	}
 	var solveMode c.SolveMode
 	switch solverMode {
 	case string(c.SolveModeBaseline):
@@ -87,7 +93,7 @@ func run() error {
 			return err
 		}
 		importer.Geo = geodata
-		service, err := plans.New(store, geodata, planner.New(), plans.Options{TimeLimitMS: 1000, Mode: solveMode, Issues: issues})
+		service, err := plans.New(store, geodata, planner.New(), plans.Options{TimeLimitMS: solverTimeLimitMS, Mode: solveMode, Issues: issues})
 		if err != nil {
 			return err
 		}

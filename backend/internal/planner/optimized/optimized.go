@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -12,16 +13,32 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/internal/shared"
 )
 
-// Optimized uses OR-Tools Routing when compiled with the ortools build tag.
-// Every call owns a native model; input slices and maps are never modified.
-type Optimized struct{}
+// Optimized constructs routes with VROOM and refines them using the dispatcher's
+// lexicographic objective. Every call owns its process and search state.
+type Optimized struct {
+	binary string
+	search SearchOptions
+}
 
 var _ contracts.Planner = (*Optimized)(nil)
 
-// New returns an OR-Tools planner.
-func New() *Optimized { return &Optimized{} }
+// New uses VROOM_BIN when set, otherwise the vroom executable on PATH.
+// The hybrid search keeps the constructor and the public objective unchanged.
+func New() *Optimized {
+	return &Optimized{
+		binary: os.Getenv("VROOM_BIN"),
+		search: SearchOptions{
+			FastEstimate: true, CrewElimination: true, Segments: true,
+			Adaptive: true, RefineAfterRepair: true,
+		},
+	}
+}
 
-func (*Optimized) Solve(ctx context.Context, input contracts.SolveRequest) (contracts.SolveResult, error) {
+func (o *Optimized) Solve(ctx context.Context, input contracts.SolveRequest) (contracts.SolveResult, error) {
+	return o.solveMeasured(ctx, input, nil)
+}
+
+func (o *Optimized) solveMeasured(ctx context.Context, input contracts.SolveRequest, diagnostics *SearchDiagnostics) (contracts.SolveResult, error) {
 	started := time.Now()
 	if err := ctx.Err(); err != nil {
 		return contracts.SolveResult{}, err
@@ -32,7 +49,7 @@ func (*Optimized) Solve(ctx context.Context, input contracts.SolveRequest) (cont
 	if err := shared.ValidateInput(ctx, input); err != nil {
 		return contracts.SolveResult{}, err
 	}
-	return solveRouting(ctx, input, started.Add(time.Duration(input.TimeLimitMS)*time.Millisecond))
+	return o.solveRoutingMeasured(ctx, input, started.Add(time.Duration(input.TimeLimitMS)*time.Millisecond), diagnostics)
 }
 
 func computationError(message string) error {
@@ -49,6 +66,9 @@ type routingProblem struct {
 	alreadyUsed map[string]bool
 	origin      int64
 	horizon     int64
+	search      SearchOptions
+	diagnostics *SearchDiagnostics
+	fast        *fastProblem
 }
 
 func prepareRouting(input contracts.SolveRequest) (*routingProblem, error) {
@@ -102,16 +122,16 @@ func prepareRouting(input contracts.SolveRequest) (*routingProblem, error) {
 		p.origin = 0
 		return p, nil
 	}
-	// Include releases/windows in the epoch to keep every Element value >= 0.
+	// Relative timestamps keep VROOM's unsigned time values independent of date.
 	for _, o := range p.orders {
 		p.origin = min(p.origin, o.ReceivedAt.Unix(), o.Window.Start.Unix())
 	}
 	p.horizon = maxEnd - p.origin
 	limit := int64(math.MaxInt64 / 8)
-	// Each objective has its own solve stage. Bounds guard native arithmetic,
-	// rather than encoding lexicographic priorities in enormous weights.
+	// Guard score arithmetic as well as the native representation checked by
+	// vroomRequest. The objective itself is compared lexicographically in Go.
 	if len(p.orders) > 0 && p.horizon > limit/int64(len(p.orders)) {
-		return nil, computationError("Сумма временных диапазонов превышает безопасный диапазон int64 OR-Tools")
+		return nil, computationError("Сумма временных диапазонов превышает безопасный диапазон планировщика")
 	}
 	var maxDistance int64
 	for _, profile := range input.TravelMatrix.Profiles {
@@ -124,14 +144,14 @@ func prepareRouting(input contracts.SolveRequest) (*routingProblem, error) {
 		}
 	}
 	if len(p.orders) > 0 && maxDistance > limit/int64(len(p.orders)) {
-		return nil, computationError("Верхняя граница суммарного пробега превышает безопасный диапазон int64 OR-Tools")
+		return nil, computationError("Верхняя граница суммарного пробега превышает безопасный диапазон планировщика")
 	}
 	for _, kind := range []contracts.Equipment{contracts.EquipmentRouter, contracts.EquipmentTVBox} {
 		var total int64
 		for _, o := range p.orders {
 			n := o.EquipmentRequired[kind]
 			if n > limit-total {
-				return nil, computationError("Суммарное оборудование превышает безопасный диапазон int64 OR-Tools")
+				return nil, computationError("Суммарное оборудование превышает безопасный диапазон планировщика")
 			}
 			total += n
 		}
@@ -247,7 +267,7 @@ func (p *routingProblem) materialize(routes [][]int) (contracts.SolveResult, err
 	seen := make([]bool, len(p.orders))
 	legNumber := 0
 	if len(routes) != len(p.workers) {
-		return result, computationError("OR-Tools вернул неверное количество маршрутов")
+		return result, computationError("Планировщик вернул неверное количество маршрутов")
 	}
 	for vehicle, sequence := range routes {
 		w := p.workers[vehicle]
@@ -259,18 +279,18 @@ func (p *routingProblem) materialize(routes [][]int) (contracts.SolveResult, err
 		w.Route.Legs = []contracts.Leg{}
 		for _, idx := range sequence {
 			if idx < 0 || idx >= len(p.orders) || seen[idx] {
-				return result, computationError("OR-Tools вернул неизвестную или повторную заявку")
+				return result, computationError("Планировщик вернул неизвестную или повторную заявку")
 			}
 			seen[idx] = true
 			o := p.orders[idx]
 			if !w.MatchesSkills(o) || !w.MatchesTransport(o) || !w.HasEquipment(o) {
-				return result, computationError("OR-Tools нарушил навыки, транспорт или оборудование")
+				return result, computationError("Планировщик нарушил навыки, транспорт или оборудование")
 			}
 			target := p.locations[o.LocationID]
 			cell := p.input.TravelMatrix.Profiles[w.Engineer.Transport][w.Location][target]
 			visit, leg, ok := w.AppendCandidate(o, cell)
 			if !ok {
-				return result, computationError("OR-Tools вернул недопустимое время или недостижимое плечо")
+				return result, computationError("Планировщик вернул недопустимое время или недостижимое плечо")
 			}
 			legNumber++
 			leg.ID = fmt.Sprintf("leg-%d", legNumber)

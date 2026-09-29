@@ -32,7 +32,7 @@ func (*Planner) Solve(ctx context.Context, input contracts.SolveRequest) (contra
 // Baseline is the source-order planner implemented by package baseline.
 type Baseline = baseline.Baseline
 
-// Optimized is the OR-Tools planner implemented by package optimized.
+// Optimized is the VROOM planner implemented by package optimized.
 type Optimized = optimized.Optimized
 
 // NewBaseline preserves the planner facade constructor.

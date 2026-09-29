@@ -16,6 +16,16 @@ type routeEstimate struct {
 }
 
 func (p *routingProblem) estimate(v int, seq []int) routeEstimate {
+	if p.diagnostics != nil {
+		p.diagnostics.Estimates++
+	}
+	if p.fast != nil {
+		return p.fastEstimate(v, seq)
+	}
+	return p.referenceEstimate(v, seq)
+}
+
+func (p *routingProblem) referenceEstimate(v int, seq []int) routeEstimate {
 	w := p.workers[v]
 	w.Remaining = cloneStock(w.Remaining)
 	result := routeEstimate{finish: w.Time, ok: true}
@@ -81,6 +91,10 @@ type repairInsertion struct {
 }
 
 func (p *routingProblem) repair(ctx context.Context, seq [][]int, rng *rand.Rand, deadline time.Time, variant int) [][]int {
+	return p.repairRestricted(ctx, seq, rng, deadline, variant, -1)
+}
+
+func (p *routingProblem) repairRestricted(ctx context.Context, seq [][]int, rng *rand.Rand, deadline time.Time, variant, forbidden int) [][]int {
 	assigned := make([]bool, len(p.orders))
 	for _, r := range seq {
 		for _, i := range r {
@@ -120,6 +134,9 @@ func (p *routingProblem) repair(ctx context.Context, seq [][]int, rng *rand.Rand
 			ins := repairInsertion{order: i, cost: math.Inf(1)}
 			second := math.Inf(1)
 			for v, r := range seq {
+				if v == forbidden {
+					continue
+				}
 				entry := &cache[i][v]
 				if entry.generation != versions[v] {
 					entry.generation = versions[v]
@@ -191,10 +208,35 @@ func (p *routingProblem) repairSearch(ctx context.Context, best contracts.SolveR
 	if len(p.workers) == 0 || len(p.orders) == 0 {
 		return best, ctx.Err()
 	}
-	rng := rand.New(rand.NewSource(1))
+	seed := p.search.Seed
+	if seed == 0 {
+		seed = 1
+	}
+	rng := rand.New(rand.NewSource(seed))
+	if p.search.CrewElimination || p.search.Segments || p.search.Adaptive {
+		if p.search.RefineAfterRepair {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return best, ctx.Err()
+			}
+			var err error
+			best, err = p.legacyRepairSearch(ctx, best, deadline.Add(-remaining*3/10), rng)
+			if err != nil {
+				return best, err
+			}
+		}
+		return p.enhancedSearch(ctx, best, deadline, rng)
+	}
+	return p.legacyRepairSearch(ctx, best, deadline, rng)
+}
+
+func (p *routingProblem) legacyRepairSearch(ctx context.Context, best contracts.SolveResult, deadline time.Time, rng *rand.Rand) (contracts.SolveResult, error) {
 	score := p.score(best)
 	current := p.sequences(best)
 	for iteration := 0; time.Now().Before(deadline); iteration++ {
+		if p.diagnostics != nil {
+			p.diagnostics.Iterations++
+		}
 		if err := ctx.Err(); err != nil {
 			return best, err
 		}
@@ -223,6 +265,9 @@ func (p *routingProblem) repairSearch(ctx context.Context, best contracts.SolveR
 		}
 		candidateScore := p.score(candidate)
 		if betterPlan(candidateScore, score, p.input.EmergencyFirst) {
+			if p.diagnostics != nil {
+				p.diagnostics.Improvements++
+			}
 			best, score = candidate, candidateScore
 			current = seq
 		} else if iteration%7 == 0 {

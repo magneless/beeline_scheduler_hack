@@ -1,4 +1,4 @@
-//go:build ortools
+//go:build vroom
 
 package httpapi
 
@@ -13,8 +13,8 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/storage"
 )
 
-// The same HTTP/storage/planning-service assertions run with the native solver
-// and with PLANNER_EXPERIMENT_URL. No mocked solver participates in this test.
+// These HTTP/storage/planning-service assertions use the production solver.
+// No mocked or local experimental solver participates in this test.
 func TestSolverDecisionDispatcherConditions(t *testing.T) {
 	for _, phase := range []string{"trip", "work"} {
 		for _, eventType := range []string{"ordinary_order_added", "urgent_order_added", "order_cancelled", "engineer_unavailable"} {

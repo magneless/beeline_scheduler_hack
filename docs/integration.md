@@ -1,6 +1,6 @@
 # Интеграция модулей
 
-Объединённый проект хранит весь Go backend в `backend/`; в него входят PostgreSQL, geo, plans, OR-Tools planner, HTTP API и UI integration.
+Объединённый проект хранит весь Go backend в `backend/`; в него входят PostgreSQL, geo, plans, VROOM planner, HTTP API и UI integration.
 
 ## Запуск
 
@@ -12,7 +12,7 @@ docker compose up --build -d --wait
 
 UI: http://localhost:3000. API: http://localhost:8080/api/v1. PostgreSQL: localhost:5432. Данные сохраняются в Docker volume `postgres_data`. Остановка с сохранением данных: `docker compose down`.
 
-Режим по умолчанию — `DEPENDENCY_MODE=integrated`, `GEO_PROVIDER=osm`, `SOLVER_MODE=optimized`. Для запуска без OR-Tools задайте `SOLVER_MODE=baseline`. Сервер соединяет storage/HTTP/worker, GeoService, PlanService и planner. Миграции применяются автоматически. UI обращается к backend через nginx; браузеру не нужен отдельный CORS.
+Режим по умолчанию — `DEPENDENCY_MODE=integrated`, `GEO_PROVIDER=osm`, `SOLVER_MODE=optimized`. Для запуска без VROOM задайте `SOLVER_MODE=baseline`. Сервер соединяет storage/HTTP/worker, GeoService, PlanService и planner. Миграции применяются автоматически. UI обращается к backend через nginx; браузеру не нужен отдельный CORS.
 
 На стартовой странице доступны три синтетических района и контрактный пример. Откройте район, рассчитайте план, выберите заявку или инженера. Изменения создают новую версию плана и snapshot; предыдущие версии сохраняются. Кнопка «Новая заявка» открывает форму для аварийной или обычной заявки: существующий или новый адрес, навыки, транспорт, окно и оборудование. Обычная заявка вставляется в свободный интервал без переноса существующих визитов. Если план уже не совместим с фактическим состоянием, заявка сохраняется без назначения с объяснением.
 
@@ -21,7 +21,7 @@ UI: http://localhost:3000. API: http://localhost:8080/api/v1. PostgreSQL: localh
 - Общие модели находятся в `backend/internal/contracts`; пакет `backend/contracts` экспортирует совместимые алиасы. Payload событий остаётся JSON согласно HTTP-контракту.
 - Go-4 поддерживает пять видов событий, фактические статусы, остатки оборудования и сохранение выполненной части маршрута. Плановое время само по себе не завершает работы. Без ожидаемого окончания текущей работы дальнейшие назначения инженеру приостанавливаются.
 - PostgreSQL атомарно сохраняет snapshot, план, событие и результат run. Повтор запроса с тем же request_id не создаёт второй результат.
-- Оптимизированный planner подключён через OR-Tools и используется по умолчанию. `baseline` остаётся fallback-режимом через `SOLVER_MODE=baseline`.
+- Оптимизированный planner подключён через VROOM и используется по умолчанию. `baseline` остаётся fallback-режимом через `SOLVER_MODE=baseline`.
 - По умолчанию геоданные реальные: Photon и отдельные OSRM car/foot. Матрица строится пакетами, ответы кэшируются в volume `geo_cache`. Для офлайн-проверок явно задайте `GEO_PROVIDER=demo`; такие планы содержат `DEMO_GEO`. Ошибка OSM не переключает расчёт на прямые линии. [Настройки и ограничения](geo-provider.md).
 - UI по умолчанию показывает интерактивную карту OpenStreetMap через Leaflet без API-ключа. `VITE_YANDEX_MAPS_KEY` опционально переключает фон на Яндекс.Карты при сборке и не меняет источник дорожных маршрутов backend.
 - `DEPENDENCY_MODE=stub` оставлен для изолированных проверок Go-2. `frontend/docker-compose.yml` запускает отдельный mock UI; для совместной работы используйте compose в корне.

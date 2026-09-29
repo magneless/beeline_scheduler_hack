@@ -5,6 +5,8 @@
 !datasets/
 !datasets/original/
 !datasets/original/**
+!datasets/additional_days/
+!datasets/additional_days/**
 !docs/
 !docs/contracts/
 !docs/contracts/examples/
@@ -20,3 +22,9 @@
 **/*.test
 **/coverage.out
 **/.DS_Store
+
+# Research adapters remain local; the runtime uses the production VROOM adapter.
+backend/cmd/benchsolver/
+backend/cmd/solverdecision/
+backend/internal/planner/experiment/
+backend/internal/planner/optimized/experiment.go

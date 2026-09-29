@@ -17,6 +17,7 @@ services:
       GEO_MIN_INTERVAL_MS: ${GEO_MIN_INTERVAL_MS:-0}
       GEO_CACHE_DIR: /var/cache/scheduler
       SOLVER_MODE: ${SOLVER_MODE:-optimized}
+      SOLVER_TIME_LIMIT_MS: ${SOLVER_TIME_LIMIT_MS:-10000}
     volumes:
       - geo_cache:/var/cache/scheduler
     depends_on:

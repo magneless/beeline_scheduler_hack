@@ -1,4 +1,4 @@
-//go:build ortools
+//go:build vroom
 
 package optimized_test
 
@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
-	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/experiment"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/internal/testutil"
 )
 
-// These tests are opt-in because the RoutingModel implementation links the
-// native OR-Tools library. The default test suite remains cgo-free.
+// These integration tests require the VROOM executable. The default suite
+// tests the adapter and process handling without a native solver installation.
 func TestOptimizedPrioritizesEmergencyAndDoesNotMutateInput(t *testing.T) {
 	in := testutil.BaseRequest()
 	in.Mode = contracts.SolveModeOptimized
@@ -31,7 +31,7 @@ func TestOptimizedPrioritizesEmergencyAndDoesNotMutateInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestOptimizedWidenedEmergencyKeepsHardConstraints(t *testing.T) {
 			in.Orders[0].WorkType, in.Orders[0].Priority, in.Orders[0].ServiceSec = contracts.WorkTypeEmergency, contracts.PriorityUrgent, 4800
 			in.Orders[0].Window.End = testutil.At(12, 0)
 			mutate(&in)
-			got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+			got, err := planner.New().Solve(context.Background(), in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,7 +92,7 @@ func TestOptimizedEmergencyFirstPrefersEarlierArrivalOverOrdinaryAssignment(t *t
 	in.Engineers[0].Shift.End = testutil.At(10, 0)
 	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 
-	ordinaryFirst, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	ordinaryFirst, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestOptimizedEmergencyFirstPrefersEarlierArrivalOverOrdinaryAssignment(t *t
 		t.Fatalf("control schedule should fit both orders: %+v", ordinaryFirst)
 	}
 	in.EmergencyFirst = true
-	emergencyFirst, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	emergencyFirst, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestOptimizedEnforcesReceivedAtAndEligibility(t *testing.T) {
 	in.Mode = contracts.SolveModeOptimized
 	in.Orders[0].ReceivedAt = testutil.At(8, 0)
 	in.Orders[0].Window.Start = testutil.At(6, 0)
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestOptimizedRejectsUnreachableRoute(t *testing.T) {
 	cell := in.TravelMatrix.Profiles[contracts.TransportCar][0][1]
 	cell.Reachable, cell.DurationSec, cell.DistanceM = false, nil, nil
 	in.TravelMatrix.Profiles[contracts.TransportCar][0][1] = cell
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestOptimizedCancellationReturnsNoPlan(t *testing.T) {
 	cancel()
 	in := testutil.BaseRequest()
 	in.Mode = contracts.SolveModeOptimized
-	if _, err := experiment.FromEnvironment().Solve(ctx, in); err == nil {
+	if _, err := planner.New().Solve(ctx, in); err == nil {
 		t.Fatal("cancelled context should be returned to caller")
 	}
 }
@@ -183,7 +183,7 @@ func TestOptimizedConnectionCountDominatesRepairs(t *testing.T) {
 	in.Orders[2].WorkType = contracts.WorkTypeConnection
 	in.Engineers[0].Shift.End = testutil.At(6, 40)
 	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2", "p3"}, contracts.TransportCar)
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestOptimizedEmergencyDelayPrecedesNewEngineerCount(t *testing.T) {
 		{EngineerID: "e2", StartLocationID: "p1", AvailableFrom: testutil.At(8, 0), EquipmentAvailable: map[contracts.Equipment]int64{contracts.EquipmentRouter: 2}},
 	}
 	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1"}, contracts.TransportCar)
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestOptimizedAlreadyUsedEngineerPrecedesDistance(t *testing.T) {
 		{EngineerID: "e2", StartLocationID: "p1", AvailableFrom: testutil.At(6, 0), EquipmentAvailable: map[contracts.Equipment]int64{contracts.EquipmentRouter: 2}},
 	}
 	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1"}, contracts.TransportCar)
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestOptimizedDistanceReordersBaseline(t *testing.T) {
 	cells[1][2].DistanceM = testutil.Ptr(10000)
 	cells[0][2].DistanceM = testutil.Ptr(10)
 	cells[2][1].DistanceM = testutil.Ptr(10)
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestOptimizedUsesSkillsTransportEquipmentAndOpenRoutes(t *testing.T) {
 		profile[2][0] = contracts.TravelCell{}
 	}
 	in.TravelMatrix.Profiles[contracts.TransportCar][0][2] = contracts.TravelCell{}
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestOptimizedReceivedAtConstrainsTravelNotJustService(t *testing.T) {
 	in.Orders[0].Window = contracts.Window{Start: testutil.At(8, 5), End: testutil.At(8, 5)}
 	// Ten-minute travel cannot start before receipt, even though an 08:05 service
 	// start would satisfy a plain customer time window.
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestOptimizedContextCancelsNativeSearch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	got, err := experiment.FromEnvironment().Solve(ctx, in)
+	got, err := planner.New().Solve(ctx, in)
 	if !errors.Is(err, context.DeadlineExceeded) || len(got.Routes) != 0 {
 		t.Fatalf("cancellation: result=%+v err=%v", got, err)
 	}
@@ -340,7 +340,7 @@ func TestOptimizedTinyBudgetKeepsEveryOrder(t *testing.T) {
 	in.Mode = contracts.SolveModeOptimized
 	in.TimeLimitMS = 1
 	in.Orders = []contracts.Order{testutil.Order("a", "p1", 1, 6, 0, 10, 0), testutil.Order("b", "p1", 2, 6, 0, 10, 0)}
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestOptimizedEngineerCountPrecedesDistance(t *testing.T) {
 	in.TravelMatrix = testutil.Matrix([]string{"depot", "p1", "p2"}, contracts.TransportCar)
 	// Two engineers can each serve their local job with zero travel. One engineer
 	// serving both jobs takes a positive-distance trip, but has higher priority.
-	got, err := experiment.FromEnvironment().Solve(context.Background(), in)
+	got, err := planner.New().Solve(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
 	}

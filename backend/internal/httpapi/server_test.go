@@ -19,7 +19,6 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/geo"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner"
-	"github.com/magneless/beeline_scheduler_hack/backend/internal/planner/experiment"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/plans"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/runs"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/storage"
@@ -71,11 +70,7 @@ func integrationServerMode(t *testing.T, solverMode c.SolveMode, integrated ...b
 	if len(integrated) > 0 && integrated[0] {
 		g := geo.NewGeoService(&geo.DemoProvider{})
 		api.Importer.Geo = g
-		var solver c.Planner = planner.New()
-		if os.Getenv("PLANNER_EXPERIMENT_URL") != "" {
-			solver = experiment.FromEnvironment()
-		}
-		service, err := plans.New(s, g, solver, plans.Options{TimeLimitMS: 1000, Mode: solverMode})
+		service, err := plans.New(s, g, planner.New(), plans.Options{TimeLimitMS: 1000, Mode: solverMode})
 		if err != nil {
 			t.Fatal(err)
 		}
