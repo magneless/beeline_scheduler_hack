@@ -17,8 +17,8 @@ type russianAddress struct {
 
 var (
 	houseMarkerRE     = regexp.MustCompile(`(?i)(?:^|[ ,])(?:дом|д)\.?\s*((?:[0-9]|корпус|корп|к|строение|стр|с)[^;]*)$`)
-	houseTailRE       = regexp.MustCompile(`(?i)(?:^|[ ,])([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?(?:[\s,]*(?:корпус|корп|к|строение|стр|с)\.?\s*[0-9]+[а-яa-z]?){0,2})$`)
-	housePartsRE      = regexp.MustCompile(`^([0-9]+(?:[/\-][0-9]+)?[а-яa-z]?)(?:к([0-9]+[а-яa-z]?))?(?:с([0-9]+[а-яa-z]?))?$`)
+	houseTailRE       = regexp.MustCompile(`(?i)(?:^|[ ,])([0-9]+(?:-[0-9]+)?[а-яa-z]?(?:\s*/\s*[0-9]+[а-яa-z]?)?(?:[\s,]*(?:корпус|корп|к|строение|стр|с)\.?\s*[0-9]+[а-яa-z]?){0,2})$`)
+	housePartsRE      = regexp.MustCompile(`^([0-9]+(?:-[0-9]+)?[а-яa-z]?(?:/[0-9]+[а-яa-z]?)?)(?:к([0-9]+[а-яa-z]?))?(?:с([0-9]+[а-яa-z]?))?$`)
 	standaloneHouseRE = regexp.MustCompile(`^[кс][0-9]+[а-я]?$`)
 	streetMarkerRE    = regexp.MustCompile(`(?:^| )(?:улица|ул|пр-кт|пр-т|проспект|просп|проезд|переулок|пер|шоссе|ш|площадь|пл|набережная|наб|бульвар|бул|б-р) `)
 	regionPrefixRE    = regexp.MustCompile(`(?i)^(?:мо|(?:обл\.?\s*)?московская область)\s*,\s*`)
@@ -86,9 +86,14 @@ func normHouse(s string) string {
 	if parts == nil {
 		return ""
 	}
-	house := parts[1]
-	if parts[2] != "" {
-		house += " к" + parts[2]
+	house, corpus := parts[1], parts[2]
+	// Preserve a fractional house when the corpus is explicit: 83/2 к2.
+	// Only corpus-free input uses the existing import shorthand 5/1 -> 5 к1.
+	if before, after, fraction := strings.Cut(house, "/"); fraction && corpus == "" {
+		house, corpus = before, after
+	}
+	if corpus != "" {
+		house += " к" + corpus
 	}
 	if parts[3] != "" {
 		house += " с" + parts[3]

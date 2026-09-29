@@ -15,7 +15,14 @@ import (
 // An ordinary addition freezes every old visit. Execution history is kept outside
 // the inserter: it consumes the remaining stock and must not be scheduled again.
 func (service *Service) replanOrdinary(ctx context.Context, target contracts.Snapshot, base contracts.Plan, replay replayResult, event contracts.Event, mode contracts.SolveMode, policy dispatchPolicy) (contracts.PlanResult, error) {
-	fresh := target.Orders[len(target.Orders)-1]
+	fresh := []contracts.Order{}
+	ordersByID := orderMap(target.Orders)
+	for _, added := range eventList(event) {
+		payload := contracts.DecodePayload(added.Payload)
+		if payload.Order != nil {
+			fresh = append(fresh, ordersByID[payload.Order.ID])
+		}
+	}
 	finish := func(routes []contracts.Route, unassigned []contracts.UnassignedOrder, termination contracts.Termination, conflict bool) (contracts.PlanResult, error) {
 		unassigned = append(append([]contracts.UnassignedOrder{}, base.Unassigned...), unassigned...)
 		lateness := carryAcceptedLateness(target, routes, base.Lateness)
@@ -77,15 +84,19 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 		return contracts.PlanResult{Draft: draft, TargetSnapshot: target, AppliedEvent: &event}, nil
 	}
 	fallback := func(conflict bool) (contracts.PlanResult, error) {
-		item := contracts.UnassignedOrder{OrderID: fresh.ID, ReasonCode: "NO_FEASIBLE_INSERTION", Message: "Нет свободного интервала для новой заявки"}
-		if conflict {
-			item.ReasonCode, item.Message = contracts.UnassignedBySolver, "Существующий план требует уточнения; заявка сохранена без назначения"
+		items := []contracts.UnassignedOrder{}
+		for _, order := range fresh {
+			item := contracts.UnassignedOrder{OrderID: order.ID, ReasonCode: "NO_FEASIBLE_INSERTION", Message: "Нет свободного интервала для новой заявки"}
+			if conflict {
+				item.ReasonCode, item.Message = contracts.UnassignedBySolver, "Существующий план требует уточнения; заявка сохранена без назначения"
+			}
+			items = append(items, item)
 		}
 		routes := clonePlanRoutes(base.Routes)
 		// A failed insertion keeps the entire accepted schedule. Replay only
 		// contains history and the protected current trip, not later visits.
 		// Replacing a saved route with that prefix would silently drop work.
-		return finish(routes, []contracts.UnassignedOrder{item}, contracts.TerminationCompleted, conflict)
+		return finish(routes, items, contracts.TerminationCompleted, conflict)
 	}
 	engineers := []contracts.Engineer{}
 	states := []contracts.EngineerState{}
@@ -100,7 +111,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 	orders := orderMap(target.Orders)
 	fixed, history := []contracts.Route{}, []contracts.Route{}
 	protected := []string{}
-	solveOrders := []contracts.Order{fresh}
+	solveOrders := append([]contracts.Order{}, fresh...)
 	for _, saved := range base.Routes {
 		state := replay.states[saved.EngineerID]
 		future := contracts.Route{EngineerID: saved.EngineerID, StartLocationID: state.StartLocationID, StartAt: state.AvailableFrom, Visits: []contracts.Visit{}, Legs: []contracts.Leg{}}
@@ -190,7 +201,7 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 	}
 	request := contracts.SolveRequest{Mode: contracts.SolveModeInsertOnly, Orders: solveOrders, Engineers: engineers, EngineerStates: states, AlreadyUsedEngineerIDs: replay.usedEngineers, TravelMatrix: matrix, FixedRoutes: fixed, ProtectedLegIDs: protected, TimeLimitMS: service.timeLimitMS}
 	progress.Report(ctx, "solving", "Ищем место для новой заявки")
-	result, err := service.planner.Solve(ctx, cloneSolveRequest(request))
+	result, err := service.insertPendingOrders(ctx, request, fresh)
 	if err != nil {
 		var ce *contracts.ContractError
 		if errors.As(err, &ce) && ce.Code == contracts.ErrorInvalidInput {
@@ -237,6 +248,41 @@ func (service *Service) replanOrdinary(ctx context.Context, target contracts.Sna
 	}
 	result.Routes = renameCollidingFutureLegs(result.Routes, history, event.ID)
 	return finish(mergeRoutes(history, result.Routes), result.Unassigned, result.Termination, false)
+}
+
+// The inserter accepts one new order. Reuse the same matrix for queued ordinary
+// orders and freeze each accepted insertion before considering the next one.
+// These are candidate routes only; no intermediate plan is committed or replayed.
+func (service *Service) insertPendingOrders(ctx context.Context, request contracts.SolveRequest, fresh []contracts.Order) (contracts.SolveResult, error) {
+	orders := orderMap(request.Orders)
+	fixed := clonePlanRoutes(request.FixedRoutes)
+	result := contracts.SolveResult{Routes: fixed, Unassigned: []contracts.UnassignedOrder{}, Termination: contracts.TerminationCompleted}
+	for _, order := range fresh {
+		if err := ctx.Err(); err != nil {
+			return contracts.SolveResult{}, err
+		}
+		step := cloneSolveRequest(request)
+		step.FixedRoutes = fixed
+		step.Orders = []contracts.Order{order}
+		for _, route := range fixed {
+			for _, visit := range route.Visits {
+				step.Orders = append(step.Orders, orders[visit.OrderID])
+			}
+		}
+		candidate, err := service.planner.Solve(ctx, step)
+		if err != nil {
+			return contracts.SolveResult{}, err
+		}
+		if err = validateInsertionResult(step, candidate); err != nil {
+			return contracts.SolveResult{}, err
+		}
+		fixed, result.Routes = candidate.Routes, candidate.Routes
+		result.Unassigned = append(result.Unassigned, candidate.Unassigned...)
+		if candidate.Termination == contracts.TerminationTimeLimit {
+			result.Termination = candidate.Termination
+		}
+	}
+	return result, nil
 }
 
 func validateInsertionResult(request contracts.SolveRequest, result contracts.SolveResult) error {

@@ -88,6 +88,10 @@ func TestSolverDecisionDispatcherConditions(t *testing.T) {
 					if !keys["late_emergency"] || keys["original"] {
 						t.Fatalf("incorrect emergency choices: %v", keys)
 					}
+				} else if eventType == "engineer_unavailable" {
+					if keys["original"] || !keys["remove_unavailable"] {
+						t.Fatal("unavailable crew requires removal or redistribution")
+					}
 				} else if !keys["original"] {
 					t.Fatal("original plan choice is missing")
 				}
@@ -101,7 +105,7 @@ func TestSolverDecisionDispatcherConditions(t *testing.T) {
 					for _, v := range r.Visits {
 						if v.OrderID == first.OrderID {
 							found = true
-							if phase == "work" || eventType != "urgent_order_added" {
+							if phase == "work" || eventType != "urgent_order_added" && eventType != "engineer_unavailable" {
 								if v != first || r.EngineerID != before.Routes[0].EngineerID {
 									t.Fatalf("protected work/trip appointment moved: before=%+v after=%+v crew=%s", first, v, r.EngineerID)
 								}
@@ -109,7 +113,7 @@ func TestSolverDecisionDispatcherConditions(t *testing.T) {
 						}
 					}
 				}
-				if (phase == "work" || eventType != "urgent_order_added") && !found {
+				if (phase == "work" || eventType != "urgent_order_added" && eventType != "engineer_unavailable") && !found {
 					t.Fatal("protected appointment lost")
 				}
 				if eventType == "ordinary_order_added" {

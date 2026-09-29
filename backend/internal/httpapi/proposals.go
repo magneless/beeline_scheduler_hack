@@ -23,11 +23,12 @@ func (s *Server) createProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		RequestID string          `json:"request_id"`
-		Revision  int64           `json:"snapshot_revision"`
-		Expected  json.RawMessage `json:"expected_current_plan_id"`
-		SolveMode c.SolveMode     `json:"solve_mode"`
-		Event     *c.Event        `json:"event"`
+		RequestID       string          `json:"request_id"`
+		Revision        int64           `json:"snapshot_revision"`
+		Expected        json.RawMessage `json:"expected_current_plan_id"`
+		SolveMode       c.SolveMode     `json:"solve_mode"`
+		PendingRevision *int64          `json:"pending_revision"`
+		Event           *c.Event        `json:"event"`
 	}
 	if e := decode(r, &in); e != nil {
 		failure(w, e)
@@ -63,8 +64,25 @@ func (s *Server) createProposal(w http.ResponseWriter, r *http.Request) {
 		normalized := normalizeEvent(*in.Event)
 		in.Event = &normalized
 	}
+	if in.PendingRevision != nil {
+		if in.Event != nil || expected == nil {
+			failure(w, invalid("Для очереди нужен действующий план без отдельного события"))
+			return
+		}
+		q, err := s.Store.Pending(r.Context(), r.PathValue("id"))
+		if err != nil {
+			failure(w, err)
+			return
+		}
+		if q.Revision != *in.PendingRevision || len(q.Events) == 0 || q.SnapshotRevision != in.Revision || q.BasePlanID == nil || *q.BasePlanID != *expected {
+			failure(w, c.NewError("STALE_VERSION", "Очередь изменилась или пуста. Обновите смену."))
+			return
+		}
+		event := pendingEvent(q)
+		in.Event = &event
+	}
 	input := storage.ProposalInput{ScenarioID: r.PathValue("id"), RequestID: in.RequestID, SnapshotRevision: in.Revision,
-		ExpectedCurrentPlanID: expected, SolveMode: in.SolveMode, Event: in.Event}
+		ExpectedCurrentPlanID: expected, SolveMode: in.SolveMode, Event: in.Event, PendingRevision: in.PendingRevision}
 	total := 2
 	if input.Event != nil {
 		total = 3

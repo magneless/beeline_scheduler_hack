@@ -8,7 +8,7 @@ import {
     skillLabel,
     transportLabel,
 } from 'shared/lib/config';
-import { fromClockInput, toClockInput } from 'shared/lib/utils';
+import { formatClock } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 import {
     Form,
@@ -26,13 +26,10 @@ import {
     SelectValue,
 } from 'shared/ui/select';
 import { Switch } from 'shared/ui/switch';
-import { TimeSelect } from 'shared/ui/timeSelect';
 
 const schema = z.object({
     skills: z.array(z.string()),
     transport: z.enum(['car', 'walk']),
-    shiftStart: z.string().min(1),
-    shiftEnd: z.string().min(1),
     available: z.boolean(),
     router: z.number().int().min(0),
     tv_box: z.number().int().min(0),
@@ -42,14 +39,12 @@ type FormValues = z.infer<typeof schema>;
 
 type EngineerFormProps = {
     engineer: Engineer;
-    date: string;
     timezone: string;
     pending?: boolean;
     onCancel: () => void;
     onSave: (patch: {
         skills: string[];
         transport: Transport;
-        shift: Engineer['shift'];
         available: boolean;
         equipment_stock: Engineer['equipment_stock'];
     }) => void;
@@ -57,7 +52,6 @@ type EngineerFormProps = {
 
 export const EngineerForm = ({
     engineer,
-    date,
     timezone,
     pending,
     onCancel,
@@ -68,8 +62,6 @@ export const EngineerForm = ({
         defaultValues: {
             skills: engineer.skills,
             transport: engineer.transport,
-            shiftStart: toClockInput(engineer.shift.start, timezone),
-            shiftEnd: toClockInput(engineer.shift.end, timezone),
             available: engineer.available,
             router: engineer.equipment_stock.router ?? 0,
             tv_box: engineer.equipment_stock.tv_box ?? 0,
@@ -84,18 +76,6 @@ export const EngineerForm = ({
                     onSave({
                         skills: values.skills,
                         transport: values.transport,
-                        shift: {
-                            start: fromClockInput(
-                                date,
-                                values.shiftStart,
-                                timezone
-                            ),
-                            end: fromClockInput(
-                                date,
-                                values.shiftEnd,
-                                timezone
-                            ),
-                        },
                         available: values.available,
                         equipment_stock: {
                             router: values.router,
@@ -183,7 +163,7 @@ export const EngineerForm = ({
                         name="available"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>На линии</FormLabel>
+                                <FormLabel>Доступна для работы</FormLabel>
                                 <FormControl>
                                     <div className="flex h-8 items-center">
                                         <Switch
@@ -197,37 +177,12 @@ export const EngineerForm = ({
                     />
                 </div>
 
+                <p className="text-xs text-muted-foreground">
+                    Смена {formatClock(engineer.shift.start, timezone)}–
+                    {formatClock(engineer.shift.end, timezone)} · фиксированный
+                    график
+                </p>
                 <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
-                        name="shiftStart"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Начало смены</FormLabel>
-                                <TimeSelect
-                                    value={field.value}
-                                    className="rounded-[6px] bg-white"
-                                    aria-label="Начало смены"
-                                    onChange={field.onChange}
-                                />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="shiftEnd"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Конец смены</FormLabel>
-                                <TimeSelect
-                                    value={field.value}
-                                    className="rounded-[6px] bg-white"
-                                    aria-label="Конец смены"
-                                    onChange={field.onChange}
-                                />
-                            </FormItem>
-                        )}
-                    />
                     <FormField
                         control={form.control}
                         name="router"

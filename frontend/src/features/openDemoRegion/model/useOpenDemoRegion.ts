@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { createScenario } from 'shared/api';
+import { useRequestProgress } from 'shared/lib/useRequestProgress';
 
 type UseOpenDemoRegionParams = {
     errorFallback?: string;
@@ -15,11 +16,17 @@ export const useOpenDemoRegion = ({
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [lastDatasetId, setLastDatasetId] = useState<string>();
+    const progress = useRequestProgress();
 
     const mutation = useMutation({
-        mutationFn: createScenario,
+        mutationFn: (datasetId: string) =>
+            createScenario(datasetId, progress.callbacks),
+        onMutate: progress.start,
+        onSettled: progress.finish,
         onSuccess: (scenario) => {
             const scenarioId = scenario.snapshot.scenario_id;
+
+            queryClient.invalidateQueries({ queryKey: ['scenarios', 'list'] });
 
             queryClient.setQueryData(
                 ['scenarios', scenarioId, 'current'],
@@ -51,6 +58,7 @@ export const useOpenDemoRegion = ({
             }
         },
         pending: mutation.isPending,
+        progress: progress.state,
         error: mutation.error,
     };
 };

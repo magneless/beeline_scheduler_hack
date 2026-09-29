@@ -13,12 +13,18 @@ type Props = {
     state: CalculationState;
     title?: string;
     className?: string;
+    unitLabel?: string;
+    countLabel?: string;
+    initialMessage?: string;
 };
 
 export const CalculationProgressBar = ({
     state,
     title = 'Расчёт маршрутов',
     className = '',
+    unitLabel = 'вариантов',
+    countLabel = 'Готово',
+    initialMessage = 'Запускаем расчёт…',
 }: Props) => {
     const [now, setNow] = useState(Date.now());
     useEffect(() => {
@@ -36,7 +42,8 @@ export const CalculationProgressBar = ({
             ? `${Math.floor(elapsed / 60)} мин ${String(elapsed % 60).padStart(2, '0')} с`
             : `${elapsed} с`;
     const connectionQuiet = now - state.lastEventAt > 10000;
-    const phase = state.progress?.message || 'Запускаем расчёт…';
+    const phase = state.progress?.message || initialMessage;
+    const count = `${countLabel} ${completed} из ${total} ${unitLabel}`;
     const status = connectionQuiet
         ? 'Нет новых данных от сервера. Проверяем соединение…'
         : state.progress?.variant_label
@@ -52,9 +59,7 @@ export const CalculationProgressBar = ({
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
                 <strong className="font-semibold">{title}</strong>
                 <span className="tabular-nums text-muted-foreground">
-                    {total > 0
-                        ? `Готово ${completed} из ${total} вариантов · `
-                        : ''}
+                    {total > 0 ? `${count} · ` : ''}
                     {elapsedLabel}
                 </span>
             </div>
@@ -65,15 +70,13 @@ export const CalculationProgressBar = ({
                 aria-valuemin={0}
                 aria-valuemax={total || undefined}
                 aria-valuenow={total ? completed : undefined}
-                aria-valuetext={
-                    total ? `Готово ${completed} из ${total} вариантов` : status
-                }
+                aria-valuetext={total ? count : status}
             >
                 <div
                     className="h-full rounded-full bg-foreground transition-[width] duration-300"
                     style={{ width: `${fraction * 100}%` }}
                 />
-                {!connectionQuiet ? (
+                {!connectionQuiet && !total ? (
                     <div className="absolute inset-y-0 left-0 w-1/3 animate-pulse rounded-full bg-foreground/25" />
                 ) : null}
             </div>

@@ -151,7 +151,7 @@ export type CalculationCallbacks = {
     signal?: AbortSignal;
 };
 
-// A calculation endpoint can return either its usual JSON or a stream of
+// An endpoint can return either its usual JSON or a stream of
 // progress events followed by the same JSON in a `result` event.
 export const apiPostWithProgress = async <T>(
     path: string,
@@ -162,10 +162,12 @@ export const apiPostWithProgress = async <T>(
     try {
         response = await fetch(`${env.apiUrl}${path}`, {
             method: 'POST',
-            body: JSON.stringify(body),
+            body: toJsonBody(body) ?? undefined,
             headers: {
                 Accept: 'text/event-stream',
-                'Content-Type': 'application/json',
+                ...(body instanceof FormData
+                    ? {}
+                    : { 'Content-Type': 'application/json' }),
             },
             signal: callbacks.signal,
         });

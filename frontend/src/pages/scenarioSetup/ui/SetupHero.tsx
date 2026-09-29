@@ -15,13 +15,13 @@ export const SetupHero = () => (
         </p>
         <h1
             className={cn(
-                'mt-3 text-5xl leading-none font-extrabold tracking-tight',
-                'whitespace-nowrap lg:text-6xl'
+                'mt-3 text-2xl leading-tight font-bold tracking-tight',
+                'sm:text-3xl'
             )}
         >
             {setupCopy.title}
         </h1>
-        <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-[70ch] text-sm leading-relaxed text-muted-foreground">
             {setupCopy.description}
         </p>
     </>

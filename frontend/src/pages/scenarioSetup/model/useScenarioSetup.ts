@@ -27,11 +27,17 @@ export const useScenarioSetup = () => {
 
     return {
         datasets,
+        datasetsLoading: datasetsQuery.isPending,
+        datasetsError: datasetsQuery.error,
+        retryDatasets: () => void datasetsQuery.refetch(),
         pending: openRegion.pending || importOrders.pending,
+        progress: openRegion.progress ?? importOrders.progress,
         openRegionError: openRegion.error,
         retryOpenRegion: openRegion.retry,
         isImporting: importOrders.pending,
         openRegion: openRegion.open,
         importOrders: importOrders.importFile,
+        importError: importOrders.error,
+        resetImportError: importOrders.resetError,
     };
 };

@@ -6,6 +6,7 @@ import (
 	"github.com/magneless/beeline_scheduler_hack/backend/contracts"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 	"math"
+	"time"
 )
 
 func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snapshot, base contracts.Plan, event contracts.Event, replay replayResult) (contracts.Event, []string, error) {
@@ -172,6 +173,9 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			}
 			order.Execution.DepartedAt = ptr(event.OccurredAt)
 		case contracts.OrderStatusInProgress:
+			if !engineer.Available {
+				return normalized, nil, contracts.EventConflict("Инженер недоступен для начала работы", nil)
+			}
 			if order.Status == contracts.OrderStatusInProgress {
 				order.Execution.ExpectedEndAt = payload.ExpectedEndAt
 				return normalized, nil, nil
@@ -179,30 +183,12 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			if order.Status != contracts.OrderStatusActive && order.Status != contracts.OrderStatusSent && order.Status != contracts.OrderStatusEnRoute {
 				return normalized, nil, contracts.EventConflict("order must be assigned before work starts", nil)
 			}
-			orders := orderMap(snapshot.Orders)
-			for _, route := range base.Routes {
-				if route.EngineerID != engineer.ID {
-					continue
-				}
-				for _, visit := range route.Visits {
-					if visit.OrderID == order.ID {
-						break
-					}
-					previous := orders[visit.OrderID]
-					if previous.Status != contracts.OrderStatusCompleted && previous.Status != contracts.OrderStatusCancelled {
-						return normalized, nil, contracts.EventConflict("previous work must be completed before starting next", map[string]any{
-							"previous_order_id": previous.ID,
-							"previous_address":  locationMap(*snapshot)[previous.LocationID].Address,
-						})
-					}
-				}
-			}
-			if err := ensureIdle(*snapshot, order.ID, engineer.ID); err != nil {
-				return normalized, nil, err
-			}
-			state := replay.states[engineer.ID]
-			if state.StartLocationID != order.LocationID || state.AvailableFrom.After(event.OccurredAt) || event.OccurredAt.Before(order.Window.Start) || event.OccurredAt.Before(order.ReceivedAt) {
+			visit, found := assignedVisit(base, order.ID, engineer.ID)
+			if !found || event.OccurredAt.Before(visit.ArrivalAt) || event.OccurredAt.Before(order.Window.Start) || event.OccurredAt.Before(order.ReceivedAt) || event.OccurredAt.Before(engineer.Shift.Start) {
 				return normalized, nil, contracts.EventConflict("work cannot start before arrival or window", nil)
+			}
+			if err := validateWorkFact(*snapshot, order.ID, engineer.ID, event.OccurredAt, nil); err != nil {
+				return normalized, nil, err
 			}
 			stock, err := equipmentRemaining(*snapshot)
 			if err != nil {
@@ -216,11 +202,26 @@ func (service *Service) applyEvent(ctx context.Context, snapshot *contracts.Snap
 			if order.Execution == nil {
 				order.Execution = &contracts.OrderExecution{EngineerID: engineer.ID}
 			}
+			if order.Execution.DepartedAt == nil {
+				for _, route := range base.Routes {
+					if route.EngineerID != engineer.ID {
+						continue
+					}
+					for _, leg := range route.Legs {
+						if leg.ToLocationID == order.LocationID && leg.EndAt.Equal(visit.ArrivalAt) {
+							order.Execution.DepartedAt = ptr(leg.StartAt)
+						}
+					}
+				}
+			}
 			order.Execution.StartedAt = ptr(event.OccurredAt)
 			order.Execution.ExpectedEndAt = payload.ExpectedEndAt
 		case contracts.OrderStatusCompleted:
 			if order.Status != contracts.OrderStatusInProgress || order.Execution.StartedAt == nil || !event.OccurredAt.After(*order.Execution.StartedAt) {
 				return normalized, nil, contracts.EventConflict("only started work can be completed", nil)
+			}
+			if err := validateWorkFact(*snapshot, order.ID, engineer.ID, *order.Execution.StartedAt, &event.OccurredAt); err != nil {
+				return normalized, nil, err
 			}
 			order.Execution.FinishedAt = ptr(event.OccurredAt)
 			order.Execution.ExpectedEndAt = nil
@@ -237,6 +238,60 @@ func ensureIdle(s contracts.Snapshot, orderID, engineerID string) error {
 	for _, o := range s.Orders {
 		if o.ID != orderID && o.Execution != nil && o.Execution.EngineerID == engineerID && (o.Status == contracts.OrderStatusInProgress || o.Status == contracts.OrderStatusEnRoute) {
 			return contracts.EventConflict("engineer has another current trip or work", nil)
+		}
+	}
+	return nil
+}
+
+func assignedVisit(base contracts.Plan, orderID, engineerID string) (contracts.Visit, bool) {
+	for _, route := range base.Routes {
+		if route.EngineerID != engineerID {
+			continue
+		}
+		for _, visit := range route.Visits {
+			if visit.OrderID == orderID {
+				return visit, true
+			}
+		}
+	}
+	return contracts.Visit{}, false
+}
+
+// Missing reports are not evidence that earlier work is still ongoing. Check
+// known facts only; never infer a completion or spend equipment twice.
+func validateWorkFact(snapshot contracts.Snapshot, orderID, engineerID string, start time.Time, end *time.Time) error {
+	for _, other := range snapshot.Orders {
+		ex := other.Execution
+		if other.ID == orderID || ex == nil || ex.EngineerID != engineerID || ex.StartedAt == nil {
+			continue
+		}
+		conflict := start.Equal(*ex.StartedAt)
+		if ex.FinishedAt != nil {
+			conflict = conflict || (!start.Before(*ex.StartedAt) && start.Before(*ex.FinishedAt))
+		}
+		if end != nil && start.Before(*ex.StartedAt) && end.After(*ex.StartedAt) {
+			conflict = true
+		}
+		if conflict {
+			return contracts.EventConflict("Фактическое время пересекается с другой работой этой бригады", map[string]any{"order_id": orderID, "other_order_id": other.ID})
+		}
+	}
+	return nil
+}
+
+// Facts may arrive in either order. Replanning needs a finish for older work
+// once a later actual start is known; a forecast is not a reported completion.
+func requireHistoricalCompletions(snapshot contracts.Snapshot) error {
+	for _, order := range snapshot.Orders {
+		ex := order.Execution
+		if ex == nil || ex.StartedAt == nil || ex.FinishedAt != nil {
+			continue
+		}
+		for _, other := range snapshot.Orders {
+			next := other.Execution
+			if next != nil && next.EngineerID == ex.EngineerID && next.StartedAt != nil && next.StartedAt.After(*ex.StartedAt) {
+				return contracts.EventConflict("Перед пересчётом укажите фактическое завершение предыдущей работы", map[string]any{"order_id": order.ID, "address": locationMap(snapshot)[order.LocationID].Address})
+			}
 		}
 	}
 	return nil

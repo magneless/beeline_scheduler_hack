@@ -104,6 +104,9 @@ func same(a, b any) bool {
 }
 func ptrEqual(a, b *string) bool { return (a == nil && b == nil) || (a != nil && b != nil && *a == *b) }
 func (s *Store) CreateScenario(ctx context.Context, snap c.Snapshot, metadata any) (c.ScenarioView, error) {
+	if err := c.ValidateEngineerShifts(snap); err != nil {
+		return c.ScenarioView{}, err
+	}
 	if _, err := json.Marshal(snap); err != nil {
 		return c.ScenarioView{}, c.NewError("INVALID_INPUT", "Снимок содержит некорректные значения")
 	}
@@ -138,6 +141,10 @@ func (s *Store) GetSnapshot(ctx context.Context, id string, rev int64) (v c.Snap
 		return v, missing(e)
 	}
 	e = json.Unmarshal(b, &v)
+	// Planning reads must reject legacy shifts; GetScenario still exposes history.
+	if e == nil {
+		e = c.ValidateEngineerShifts(v)
+	}
 	return
 }
 func (s *Store) GetScenario(ctx context.Context, id string, rev int64) (v c.ScenarioView, e error) {
@@ -273,6 +280,9 @@ func (s *Store) Register(ctx context.Context, cmd Command) (string, error) {
 	if snap.Revision != rev || !ptrEqual(cur, pid) {
 		return "", c.NewError("STALE_VERSION", "Исходные данные или текущий план изменились")
 	}
+	if e = checkPending(ctx, tx, sid, nil); e != nil {
+		return "", e
+	}
 	if cmd.Kind == "build" {
 		if e = blocked(ctx, tx, snap, cur); e != nil {
 			return "", e
@@ -384,11 +394,17 @@ func (s *Store) CommitPlan(ctx context.Context, in c.PlanCommit) (c.Plan, error)
 	invalid := func() (c.Plan, error) {
 		return p, c.NewError("INVALID_PLAN", "Несогласованные снимок, событие и план")
 	}
+	if c.ValidateEngineerShifts(target) != nil {
+		return invalid()
+	}
 	if target.ScenarioID != sid || target.RegionID != snap.RegionID || target.Date != snap.Date || target.Timezone != snap.Timezone {
 		return invalid()
 	}
 	if target.OfficeLocationID != snap.OfficeLocationID {
 		return invalid()
+	}
+	if e = checkPending(ctx, tx, sid, nil); e != nil {
+		return p, e
 	}
 	if cmd.Kind == "build" {
 		if e = blocked(ctx, tx, snap, cur); e != nil {
@@ -412,7 +428,11 @@ func (s *Store) CommitPlan(ctx context.Context, in c.PlanCommit) (c.Plan, error)
 		if result.AppliedEvent == nil || result.AppliedEvent.ID != cmd.Replan.Event.ID || result.AppliedEvent.Type != cmd.Replan.Event.Type || !result.AppliedEvent.OccurredAt.Equal(cmd.Replan.Event.OccurredAt) || !ptrEqual(draft.BasePlanID, pid) || target.Revision != rev+1 || draft.SnapshotRevision != rev+1 {
 			return invalid()
 		}
-		if !draft.AsOf.Equal(cmd.Replan.Event.OccurredAt) {
+		expectedAsOf, err := eventPlanTime(ctx, tx, *pid, cmd.Replan.Event.OccurredAt)
+		if err != nil {
+			return p, err
+		}
+		if !draft.AsOf.Equal(expectedAsOf) {
 			return invalid()
 		}
 		if cmd.Replan.Event.Type != "urgent_order_added" && cmd.Replan.Event.Type != "ordinary_order_added" && !same(result.AppliedEvent.Payload, cmd.Replan.Event.Payload) {
@@ -479,6 +499,9 @@ func (s *Store) PatchEngineer(ctx context.Context, id, eid string, rev int64, ap
 	if !found {
 		return v, c.NewError("NOT_FOUND", "Инженер не найден")
 	}
+	if e = c.ValidateEngineerShifts(snap); e != nil {
+		return v, e
+	}
 	snap.Revision++
 	if _, e = tx.ExecContext(ctx, "INSERT INTO snapshots VALUES($1,$2,$3)", id, snap.Revision, encode(snap)); e != nil {
 		return v, e
@@ -513,4 +536,20 @@ func (s *Store) AcquireWorker(ctx context.Context) (func(), error) {
 		conn.ExecContext(release, "SELECT pg_advisory_unlock(73124012)")
 		conn.Close()
 	}, nil
+}
+
+// Event time is a fact; the accepted plan clock must never move backwards.
+func eventPlanTime(ctx context.Context, tx *sql.Tx, planID string, eventAt time.Time) (time.Time, error) {
+	var body []byte
+	if err := tx.QueryRowContext(ctx, "SELECT body FROM plans WHERE id=$1", planID).Scan(&body); err != nil {
+		return time.Time{}, missing(err)
+	}
+	var base c.Plan
+	if err := json.Unmarshal(body, &base); err != nil {
+		return time.Time{}, err
+	}
+	if base.AsOf.After(eventAt) {
+		return base.AsOf, nil
+	}
+	return eventAt, nil
 }

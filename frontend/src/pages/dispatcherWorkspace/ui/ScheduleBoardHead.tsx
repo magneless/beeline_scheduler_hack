@@ -45,56 +45,7 @@ export const ScheduleBoardHead = ({
 
     return (
         <div className={styles.head}>
-            <div className={styles.toolbar}>
-                <p className={styles.title}>{title}</p>
-                {summary ? (
-                    <span className="ml-auto mr-3 text-[11px] text-muted-foreground">
-                        {summary}
-                    </span>
-                ) : null}
-                <div className={styles.hint}>
-                    <button
-                        type="button"
-                        className={styles.hintBtn}
-                        aria-label={workspaceCopy.scheduleHintAria}
-                    >
-                        <CircleHelp />
-                    </button>
-                    <div className={styles.hintPop} role="tooltip">
-                        <ul className={styles.hintList}>
-                            {workspaceCopy.scheduleHintLegend.map((item) => (
-                                <li key={item.kind}>
-                                    <span
-                                        className={cn(
-                                            styles.hintMark,
-                                            legendMarkClass[item.kind]
-                                        )}
-                                        aria-hidden
-                                    />
-                                    {item.label}
-                                </li>
-                            ))}
-                        </ul>
-                        <ul className={styles.hintList}>
-                            {workspaceCopy.scheduleHintColors.map((item) => (
-                                <li key={item.tone}>
-                                    <span
-                                        className={cn(
-                                            styles.hintDot,
-                                            colorDotClass[item.tone]
-                                        )}
-                                        aria-hidden
-                                    />
-                                    {item.label}
-                                </li>
-                            ))}
-                        </ul>
-                        <p className={styles.hintKeys}>
-                            {workspaceCopy.scheduleHintKeys}
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <p className={styles.title}>{title}</p>
             {dense ? (
                 <div className={styles.actions}>
                     <label className={styles.search}>
@@ -102,6 +53,7 @@ export const ScheduleBoardHead = ({
                         <input
                             value={query}
                             placeholder={workspaceCopy.crewSearch}
+                            aria-label="Поиск бригады в расписании"
                             onChange={handleQueryChange}
                         />
                     </label>
@@ -117,6 +69,53 @@ export const ScheduleBoardHead = ({
                     </button>
                 </div>
             ) : null}
+            {summary ? (
+                <span className="ml-auto mr-3 text-[11px] text-muted-foreground">
+                    {summary}
+                </span>
+            ) : null}
+            <div className={styles.hint}>
+                <button
+                    type="button"
+                    className={styles.hintBtn}
+                    aria-label={workspaceCopy.scheduleHintAria}
+                >
+                    <CircleHelp />
+                </button>
+                <div className={styles.hintPop} role="tooltip">
+                    <ul className={styles.hintList}>
+                        {workspaceCopy.scheduleHintLegend.map((item) => (
+                            <li key={item.kind}>
+                                <span
+                                    className={cn(
+                                        styles.hintMark,
+                                        legendMarkClass[item.kind]
+                                    )}
+                                    aria-hidden
+                                />
+                                {item.label}
+                            </li>
+                        ))}
+                    </ul>
+                    <ul className={styles.hintList}>
+                        {workspaceCopy.scheduleHintColors.map((item) => (
+                            <li key={item.tone}>
+                                <span
+                                    className={cn(
+                                        styles.hintDot,
+                                        colorDotClass[item.tone]
+                                    )}
+                                    aria-hidden
+                                />
+                                {item.label}
+                            </li>
+                        ))}
+                    </ul>
+                    <p className={styles.hintKeys}>
+                        {workspaceCopy.scheduleHintKeys}
+                    </p>
+                </div>
+            </div>
         </div>
     );
 };

@@ -12,6 +12,7 @@ import { type TypeOrNull } from 'shared/lib/types';
 
 import { useWorkspaceQueries } from './queries';
 import { useDispatcherWorkspaceStore } from './store';
+import { usePendingChanges } from './usePendingChanges';
 import { usePlanProposal } from './usePlanProposal';
 import { useWorkspaceSelection } from './useWorkspaceSelection';
 import { buildMapModel } from '../lib/utils';
@@ -20,6 +21,14 @@ import { buildWorkspaceView } from '../lib/viewModel';
 export const useDispatcherWorkspace = (scenarioId: string) => {
     const selection = useWorkspaceSelection();
     const queries = useWorkspaceQueries(scenarioId);
+    const queue = queries.pendingChanges;
+    const pendingChanges =
+        queue?.events.length &&
+        queue.base_plan_id === queries.planId &&
+        queue.snapshot_revision === queries.currentSnapshot?.revision
+            ? queue
+            : undefined;
+    const displaySnapshot = pendingChanges?.snapshot ?? queries.snapshot;
     const [proposalOpen, setProposalOpen] = useState(true);
     const [scenarioTime, setScenarioTime] = useState('');
     useEffect(() => {
@@ -30,9 +39,9 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
 
     const mapModel = useMemo(
         () =>
-            queries.snapshot
+            displaySnapshot
                 ? buildMapModel(
-                      queries.snapshot,
+                      displaySnapshot,
                       queries.plan,
                       selection.selectedEngineerId,
                       selection.panelTab !== 'crews' &&
@@ -42,7 +51,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
                   )
                 : { markers: [], polylines: [] },
         [
-            queries.snapshot,
+            displaySnapshot,
             queries.plan,
             selection.selectedEngineerId,
             selection.panelTab,
@@ -54,21 +63,26 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     const view = useMemo(
         () =>
             buildWorkspaceView({
-                snapshot: queries.snapshot,
+                snapshot: displaySnapshot,
                 plan: queries.plan,
                 compareMetrics: queries.compareMetrics,
                 selectedOrderId: selection.selectedOrderId,
                 selectedEngineerId: selection.selectedEngineerId,
             }),
         [
-            queries.snapshot,
+            displaySnapshot,
             queries.plan,
             queries.compareMetrics,
             selection.selectedOrderId,
             selection.selectedEngineerId,
         ]
     );
-    const planAsOf = queries.plan?.as_of;
+    const planAsOf = [
+        queries.plan?.as_of,
+        ...(pendingChanges?.events.map((event) => event.occurred_at) ?? []),
+    ]
+        .filter((at): at is string => Boolean(at))
+        .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
     useEffect(() => {
         if (planAsOf) {
             setScenarioTime((current) =>
@@ -78,12 +92,13 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
             );
         }
     }, [planAsOf]);
-    const effectiveScenarioTime = scenarioTime || view.occurredAtDefault;
+    const effectiveScenarioTime =
+        scenarioTime || planAsOf || view.occurredAtDefault;
     const inTransitOrderIds = new Set<string>();
     const atMillis = Date.parse(effectiveScenarioTime);
     if (Number.isFinite(atMillis)) {
         const orderById = new Map(
-            queries.snapshot?.orders.map((order) => [order.id, order]) ?? []
+            displaySnapshot?.orders.map((order) => [order.id, order]) ?? []
         );
         queries.plan?.routes.forEach((route) => {
             const next = route.visits.find((visit) => {
@@ -136,10 +151,17 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         scenarioId,
         snapshot: queries.currentSnapshot,
         planId: queries.planId,
+        onReload: queries.reload,
+        pendingRevision: pendingChanges?.revision,
+        onProposalReady: () => setProposalOpen(true),
+    });
+    const changes = usePendingChanges({
+        scenarioId,
+        queue,
+        snapshot: displaySnapshot,
         plan: queries.plan,
         selectedOrderId: selection.selectedOrderId,
         onReload: queries.reload,
-        onProposalReady: () => setProposalOpen(true),
     });
     const planEvent = useApplyPlanEvent({
         solveMode,
@@ -157,7 +179,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     });
 
     const runStatus: TypeOrNull<Run['status']> = planEvent.runStatus;
-    const eventPending = planEvent.pending;
+    const eventPending = planEvent.pending || changes.saving;
     const showRunBanner =
         eventPending &&
         Boolean(runStatus) &&
@@ -165,14 +187,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         runStatus !== 'succeeded';
 
     const selectOrder = (id: TypeOrNull<string>) => {
-        const engineerId = id ? view.engineerByOrder.get(id) : undefined;
-        if (id) {
-            selection.focusEngineer(engineerId ?? null);
-        }
         selection.selectOrder(id);
-        if (!engineerId) {
-            selection.setFilter(selection.filter);
-        }
     };
     const showUnassigned = () => {
         selection.setPanelTab('both');
@@ -182,18 +197,23 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     };
 
     const handleOrderEvent = (input: PlanEventInput) => {
-        if (
-            input.kind === 'status' ||
-            input.kind === 'cancel_many' ||
-            isUnassignedCancellation(
-                input,
-                queries.plan,
-                selection.selectedOrderId
-            )
-        ) {
-            planEvent.apply(input);
+        const visit = selection.selectedOrderId
+            ? view.visitByOrder.get(selection.selectedOrderId)
+            : undefined;
+        const requiresRouting =
+            input.kind === 'status'
+                ? input.status === 'completed' &&
+                  (!visit ||
+                      Date.parse(input.occurredAt) > Date.parse(visit.end_at))
+                : !isUnassignedCancellation(
+                      input,
+                      queries.plan,
+                      selection.selectedOrderId
+                  ) && input.kind !== 'cancel_many';
+        if (pendingChanges || requiresRouting) {
+            changes.save(input);
         } else {
-            proposal.create(input);
+            planEvent.apply(input);
         }
     };
 
@@ -205,7 +225,7 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         engineerId: string,
         occurredAt: string
     ) => {
-        proposal.create({
+        changes.save({
             kind: 'engineer_unavailable',
             engineerId,
             occurredAt,
@@ -213,6 +233,8 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
     };
 
     return {
+        pendingChanges,
+        undoPendingChange: changes.undo,
         proposal: proposal.proposal,
         proposalCalculation: proposal.calculation,
         runCalculation: planEvent.calculation,
@@ -226,11 +248,12 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         solveMode,
         setSolveMode,
         savedSolveMode: queries.plan ? savedSolveMode : undefined,
-        snapshot: queries.snapshot,
+        snapshot: displaySnapshot,
         plan: queries.plan,
         compareMetrics: queries.compareMetrics,
         compareSource: queries.compareSource,
-        isLoading: queries.isLoading,
+        isLoading:
+            queries.isLoading || Boolean(queries.planId && !queries.plan),
         mapModel,
         mapFitToken: [
             scenarioId,
@@ -245,8 +268,10 @@ export const useDispatcherWorkspace = (scenarioId: string) => {
         ...selection,
         selectOrder,
         setFilter: (filter: typeof selection.filter) => {
-            selection.focusEngineer(null);
             selection.selectOrder(null);
+            if (filter === 'unassigned') {
+                selection.focusEngineer(null);
+            }
             selection.setFilter(filter);
         },
         onMarkerClick: (id: string) => {

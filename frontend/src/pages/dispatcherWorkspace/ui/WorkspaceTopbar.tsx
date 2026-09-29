@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { CalendarRange, PanelLeft, Plus, RotateCw } from 'lucide-react';
 
 import { type PlanEventInput } from 'features/applyPlanEvent';
@@ -13,6 +13,13 @@ import { type TypeOrNull } from 'shared/lib/types';
 import { formatDay, fromClockInput, toClockInput } from 'shared/lib/utils';
 import { Button } from 'shared/ui/button';
 import { Label } from 'shared/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from 'shared/ui/select';
 import { TimeSelect } from 'shared/ui/timeSelect';
 
 import { OrderForm } from './OrderForm';
@@ -45,6 +52,8 @@ type WorkspaceTopbarProps = {
     onTogglePanel: () => void;
 };
 
+const actionClassName = 'rounded-[8px] font-medium';
+
 export const WorkspaceTopbar = ({
     solveMode,
     savedSolveMode,
@@ -71,6 +80,7 @@ export const WorkspaceTopbar = ({
     onToggleSchedule,
     onTogglePanel,
 }: WorkspaceTopbarProps) => {
+    const fieldId = useId();
     const [orderFormOpen, setOrderFormOpen] = useState(false);
     return (
         <header
@@ -83,7 +93,7 @@ export const WorkspaceTopbar = ({
             <div className="flex min-w-0 items-center gap-3">
                 <Button
                     size="icon"
-                    variant="ghost"
+                    variant="outline"
                     className="size-9 rounded-[8px] text-muted-foreground"
                     onClick={onTogglePanel}
                     aria-label={
@@ -93,7 +103,7 @@ export const WorkspaceTopbar = ({
                     }
                     aria-expanded={panelOpen}
                 >
-                    <PanelLeft className="size-5" />
+                    <PanelLeft className="size-4" />
                 </Button>
                 <div>
                     <h1 className="text-lg leading-tight font-bold tracking-tight text-foreground">
@@ -118,24 +128,32 @@ export const WorkspaceTopbar = ({
                     </span>
                 ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="ml-auto flex min-w-0 flex-wrap items-end gap-3">
                 {(buildPending || eventPending) && !progressVisible ? (
                     <span
                         role="status"
-                        className="text-xs text-muted-foreground"
+                        className="self-center text-xs text-muted-foreground"
                     >
                         {runStatus
                             ? runStatusLabel[runStatus]
-                            : 'Рассчитываем маршруты…'}
+                            : buildPending
+                              ? 'Рассчитываем маршруты…'
+                              : 'Сохраняем изменения…'}
                     </span>
                 ) : null}
                 {snapshot ? (
-                    <div className="w-[140px] space-y-1">
-                        <Label>Время сценария</Label>
+                    <div className="flex w-[124px] flex-col gap-1.5">
+                        <Label
+                            htmlFor={`${fieldId}-time`}
+                            className="font-medium"
+                        >
+                            Время сценария
+                        </Label>
                         <TimeSelect
+                            id={`${fieldId}-time`}
                             value={toClockInput(defaultOccurredAt, timezone)}
                             aria-label="Время сценария"
-                            className="w-full rounded-[6px] border border-border bg-white"
+                            className="h-9 w-full rounded-[8px] bg-card font-medium"
                             onChange={(clock) =>
                                 onScenarioTime(
                                     fromClockInput(
@@ -148,22 +166,17 @@ export const WorkspaceTopbar = ({
                         />
                     </div>
                 ) : null}
-                {hasProposal ? (
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={onOpenProposal}
+                <div className="flex flex-col gap-1.5">
+                    <Label
+                        htmlFor={`${fieldId}-algorithm`}
+                        className="font-medium"
                     >
-                        Варианты плана
-                    </Button>
-                ) : null}
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    Алгоритм
-                    <select
-                        aria-label="Алгоритм расчёта маршрутов"
+                        Алгоритм
+                    </Label>
+                    <Select
                         value={solveMode}
-                        onChange={(event) =>
-                            onSolveMode(event.target.value as SolveMode)
+                        onValueChange={(value) =>
+                            onSolveMode(value as SolveMode)
                         }
                         disabled={
                             !snapshot ||
@@ -171,23 +184,46 @@ export const WorkspaceTopbar = ({
                             eventPending ||
                             hasProposal
                         }
-                        title="Применяется при следующем расчёте маршрутов"
-                        className={[
-                            'h-9 max-w-[180px] rounded-[8px] border border-border bg-white px-2',
-                            'text-xs font-medium text-foreground focus:outline-primary disabled:opacity-50',
-                        ].join(' ')}
                     >
-                        <option value="optimized">Оптимизированный</option>
-                        <option value="baseline">Базовый (по порядку)</option>
-                    </select>
-                </label>
+                        <SelectTrigger
+                            id={`${fieldId}-algorithm`}
+                            size="sm"
+                            aria-label="Алгоритм расчёта маршрутов"
+                            title="Применяется при следующем расчёте маршрутов"
+                            className={[
+                                'w-[180px] rounded-[8px] border border-border font-medium',
+                                'hover:bg-muted data-[size=sm]:h-9',
+                            ].join(' ')}
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            <SelectItem value="optimized">
+                                Оптимизированный
+                            </SelectItem>
+                            <SelectItem value="baseline">
+                                Базовый (по порядку)
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                {hasProposal ? (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={onOpenProposal}
+                        className={actionClassName}
+                    >
+                        Варианты плана
+                    </Button>
+                ) : null}
                 {canCompare ? (
                     <Button
                         size="sm"
                         variant="outline"
                         disabled={buildPending || eventPending || hasProposal}
                         onClick={onCompare}
-                        className="rounded-[8px]"
+                        className={actionClassName}
                     >
                         Собрать с нуля
                     </Button>
@@ -203,9 +239,9 @@ export const WorkspaceTopbar = ({
                         disabled={buildPending || eventPending || hasProposal}
                         onClick={onRebuild}
                         title="Заменить рабочий план новым расчётом до начала событий"
-                        className="rounded-[8px]"
+                        className={actionClassName}
                     >
-                        <RotateCw className="size-3.5" />
+                        <RotateCw className="size-4" />
                         {buildPending
                             ? 'Считаем…'
                             : savedSolveMode && savedSolveMode !== solveMode
@@ -219,22 +255,20 @@ export const WorkspaceTopbar = ({
                     disabled={!metrics}
                     onClick={onToggleSchedule}
                     aria-pressed={scheduleOpen}
-                    className="rounded-[8px] border-border"
+                    className={actionClassName}
                 >
                     <CalendarRange className="size-4" />
                     {scheduleOpen ? 'Скрыть расписание' : 'Расписание'}
                 </Button>
-                <RegionSwitcher currentRegionId={snapshot?.region_id} />
+                <RegionSwitcher currentScenarioId={snapshot?.scenario_id} />
                 {canEvent ? (
                     <div className="relative">
                         <Button
                             size="sm"
-                            disabled={
-                                eventPending || buildPending || hasProposal
-                            }
+                            disabled={eventPending || buildPending}
                             onClick={() => setOrderFormOpen((value) => !value)}
                             aria-expanded={orderFormOpen}
-                            className="rounded-[8px]"
+                            className={actionClassName}
                         >
                             <Plus className="size-4" />
                             Новая заявка

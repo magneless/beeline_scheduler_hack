@@ -33,6 +33,15 @@ type ScenarioView struct {
 	Snapshot      Snapshot `json:"snapshot"`
 	CurrentPlanID *string  `json:"current_plan_id"`
 }
+type ScenarioSummary struct {
+	ScenarioID     string  `json:"scenario_id"`
+	Revision       int64   `json:"revision"`
+	RegionID       string  `json:"region_id"`
+	Date           string  `json:"date"`
+	OrderCount     int     `json:"order_count"`
+	UnlocatedCount int     `json:"unlocated_count"`
+	CurrentPlanID  *string `json:"current_plan_id"`
+}
 type EngineerDistance struct {
 	EngineerID string `json:"engineer_id"`
 	DistanceM  int64  `json:"distance_m"`

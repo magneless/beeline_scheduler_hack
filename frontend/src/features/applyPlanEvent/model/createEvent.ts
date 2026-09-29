@@ -89,7 +89,16 @@ export const createEvent = (
         if (
             new Set(input.orderIds).size !== input.orderIds.length ||
             input.orderIds.some(
-                (id) => !plan.unassigned.some((item) => item.order_id === id)
+                (id) =>
+                    !snapshot.orders.some(
+                        (order) =>
+                            order.id === id &&
+                            order.status !== 'completed' &&
+                            order.status !== 'cancelled'
+                    ) ||
+                    plan.routes.some((route) =>
+                        route.visits.some((visit) => visit.order_id === id)
+                    )
             )
         ) {
             throw new Error('Список заявок изменился. Обновите смену.');

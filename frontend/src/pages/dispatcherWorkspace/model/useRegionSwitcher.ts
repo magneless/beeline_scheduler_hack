@@ -1,52 +1,38 @@
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { useOpenDemoRegion } from 'features/openDemoRegion';
-import { getDemoDatasets } from 'shared/api';
-import { env } from 'shared/config/env';
-import { regionLabel } from 'shared/lib/config';
+import { getScenarios } from 'shared/api';
 
 import { useDispatcherWorkspaceStore } from './store';
-import { workspaceCopy } from '../lib/config';
 
-const fallbackDatasets = Object.entries(regionLabel).map(([id, name]) => ({
-    id,
-    name,
-    region_id: id,
-    date: '',
-    timezone: 'Europe/Moscow',
-}));
-
-export const useRegionSwitcher = (currentRegionId?: string) => {
+export const useRegionSwitcher = (currentScenarioId?: string) => {
+    const navigate = useNavigate();
     const resetSelection = useDispatcherWorkspaceStore(
         (state) => state.resetSelection
     );
-    const datasetsQuery = useQuery({
-        queryKey: ['demo-datasets'],
-        queryFn: getDemoDatasets,
-        initialData:
-            env.apiMode === 'mock' ? { items: fallbackDatasets } : undefined,
+    const scenariosQuery = useQuery({
+        queryKey: ['scenarios', 'list'],
+        queryFn: getScenarios,
+        enabled: Boolean(currentScenarioId),
     });
-    const openRegion = useOpenDemoRegion({
-        errorFallback: workspaceCopy.regionSwitchError,
-    });
+    const scenarios = scenariosQuery.data?.items ?? [];
 
-    const datasets = datasetsQuery.data?.items ?? [];
-
-    const switchRegion = (regionId: string) => {
-        if (!regionId || regionId === currentRegionId) {
+    const switchRegion = (scenarioId: string) => {
+        if (!scenarioId || scenarioId === currentScenarioId) {
             return;
         }
 
-        resetSelection();
-        const dataset = datasets.find((item) => item.region_id === regionId);
-        if (dataset) {
-            openRegion.open(dataset.id);
+        if (scenarios.some((item) => item.scenario_id === scenarioId)) {
+            resetSelection();
+            navigate(`/s/${encodeURIComponent(scenarioId)}`);
         }
     };
 
     return {
-        datasets,
-        pending: openRegion.pending,
+        scenarios,
+        pending: scenariosQuery.isPending,
+        error: scenariosQuery.error,
+        refresh: () => void scenariosQuery.refetch(),
         switchRegion,
     };
 };

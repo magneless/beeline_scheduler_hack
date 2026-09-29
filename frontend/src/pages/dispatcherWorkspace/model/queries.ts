@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getPlan, getScenario } from 'shared/api';
+import { apiGet, getPlan, getScenario } from 'shared/api';
+import { type PendingChanges } from 'shared/api/types/contracts';
 
 export const useWorkspaceQueries = (scenarioId: string) => {
     const queryClient = useQueryClient();
@@ -33,6 +34,12 @@ export const useWorkspaceQueries = (scenarioId: string) => {
             planRevision !== currentRevision,
     });
 
+    const pendingQuery = useQuery({
+        queryKey: ['scenarios', scenarioId, 'pending'],
+        queryFn: () =>
+            apiGet<PendingChanges>(`/scenarios/${scenarioId}/pending-changes`),
+        enabled: Boolean(scenarioId),
+    });
     const currentSnapshot = scenarioQuery.data?.snapshot;
     const snapshot = displayQuery.data?.snapshot ?? currentSnapshot;
     const plan = planId ? planQuery.data : undefined;
@@ -55,6 +62,7 @@ export const useWorkspaceQueries = (scenarioId: string) => {
 
     return {
         snapshot,
+        pendingChanges: pendingQuery.data,
         currentSnapshot,
         plan,
         planId,

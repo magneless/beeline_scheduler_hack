@@ -43,7 +43,6 @@ type WorkspaceSidePanelProps = {
     unassigned: Map<string, UnassignedOrder>;
     lateness?: OrderLateness[];
     inTransitOrderIds?: Set<string>;
-    deferredOrderIds: Set<string>;
     visits: Map<string, Visit>;
     timezone: string;
     date: string;
@@ -87,7 +86,6 @@ export const WorkspaceSidePanel = ({
     unassigned,
     lateness,
     inTransitOrderIds,
-    deferredOrderIds,
     visits,
     timezone,
     date,
@@ -256,14 +254,11 @@ export const WorkspaceSidePanel = ({
                             orders={orders}
                             engineers={engineers}
                             selectedOrderId={selectedOrderId}
-                            selectedEngineerId={
-                                panelTab === 'both' ? null : selectedEngineerId
-                            }
+                            selectedEngineerId={selectedEngineerId}
                             engineerByOrder={engineerByOrder}
                             unassigned={unassigned}
                             lateness={lateness}
                             inTransitOrderIds={inTransitOrderIds}
-                            deferredOrderIds={deferredOrderIds}
                             visits={visits}
                             timezone={timezone}
                             addressByOrder={addressByOrder}

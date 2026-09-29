@@ -1,5 +1,6 @@
 import { type DemoDataset } from 'shared/api';
-import { cn } from 'shared/lib/utils';
+import { Button } from 'shared/ui/button';
+import { CalculationProgressBar } from 'shared/ui/calculationProgress';
 
 import { RegionCardList } from './RegionCardList';
 import { SetupHero } from './SetupHero';
@@ -9,84 +10,112 @@ import { useScenarioSetup } from '../model/useScenarioSetup';
 export const ScenarioSetupPage = () => {
     const {
         datasets,
+        datasetsLoading,
+        datasetsError,
+        retryDatasets,
         pending,
+        progress,
         isImporting,
         openRegion,
         openRegionError,
         retryOpenRegion,
         importOrders,
+        importError,
+        resetImportError,
     } = useScenarioSetup();
-
-    const handleOpenRegion = (dataset: DemoDataset) => {
-        openRegion(dataset.id);
-    };
-
+    const handleOpen = (dataset: DemoDataset) => openRegion(dataset.id);
     return (
-        <section
-            className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[32px] bg-card"
-            style={{ boxShadow: 'var(--shadow-soft)' }}
-        >
+        <section className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-[24px] bg-card">
             <div
-                className={cn(
-                    'pointer-events-none absolute -top-[18%] -right-[8%]',
-                    'h-[42%] w-[28%] rounded-[46%] bg-primary/90'
-                )}
-            />
-            <div
-                className={cn(
-                    'pointer-events-none absolute -bottom-[16%] -left-[6%]',
-                    'h-[26%] w-[20%] rounded-[40%] bg-primary/35'
-                )}
-            />
-            <div className="relative z-10 flex h-full flex-col justify-center px-10 py-10 lg:px-16">
-                <SetupHero />
-                {pending && !isImporting ? (
-                    <div
-                        className={cn(
-                            'mt-5 rounded-2xl border border-primary/30',
-                            'bg-primary/10 px-4 py-3 text-sm text-foreground'
-                        )}
-                        role="status"
-                    >
-                        Открываем сценарий. Определяем координаты адресов —
-                        первая загрузка может занять несколько минут.
-                    </div>
-                ) : null}
-                {openRegionError ? (
-                    <div
-                        className={cn(
-                            'mt-5 flex flex-wrap items-center justify-between gap-3',
-                            'rounded-2xl border border-destructive/30',
-                            'bg-destructive/10 px-4 py-3 text-sm text-foreground'
-                        )}
-                        role="alert"
-                    >
-                        <span>
-                            {openRegionError instanceof Error
-                                ? openRegionError.message
-                                : 'Не удалось открыть сценарий.'}
-                        </span>
-                        <button
-                            type="button"
-                            className="rounded-full bg-card px-3 py-1.5 font-semibold hover:bg-accent"
-                            onClick={retryOpenRegion}
-                            disabled={pending}
+                className="h-full overflow-y-auto overscroll-contain"
+                role="region"
+                aria-label="Подготовка дня"
+                tabIndex={0}
+            >
+                <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-8 sm:py-8">
+                    <header>
+                        <SetupHero />
+                    </header>
+                    {pending && progress ? (
+                        <div className="sticky top-3 z-20 mt-5">
+                            <CalculationProgressBar
+                                state={progress}
+                                title={
+                                    isImporting
+                                        ? 'Подготовка дня'
+                                        : 'Открываем набор заявок'
+                                }
+                                unitLabel="адресов"
+                                countLabel="Обработано"
+                                initialMessage="Проверяем данные…"
+                                className="shadow-sm"
+                            />
+                        </div>
+                    ) : null}
+                    <div className="mt-7 grid items-stretch gap-6 lg:grid-cols-2">
+                        <aside
+                            className="min-w-0 rounded-2xl border border-border p-5 sm:p-6"
+                            aria-label="Готовые наборы заявок"
                         >
-                            Повторить
-                        </button>
+                            <h2 className="text-base font-bold">
+                                Готовые наборы заявок
+                            </h2>
+                            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                                В наборах используются демонстрационные бригады.
+                            </p>
+                            {datasetsLoading ? (
+                                <p
+                                    role="status"
+                                    className="mt-5 text-sm text-muted-foreground"
+                                >
+                                    Загружаем наборы…
+                                </p>
+                            ) : null}
+                            {datasetsError ? (
+                                <div className="mt-4 space-y-2" role="alert">
+                                    <p className="text-sm text-destructive">
+                                        Не удалось загрузить готовые наборы.
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={retryDatasets}
+                                    >
+                                        Повторить
+                                    </Button>
+                                </div>
+                            ) : null}
+                            {openRegionError ? (
+                                <div className="mt-4 space-y-2" role="alert">
+                                    <p className="text-sm text-destructive">
+                                        {openRegionError.message}
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={pending}
+                                        onClick={retryOpenRegion}
+                                    >
+                                        Повторить открытие
+                                    </Button>
+                                </div>
+                            ) : null}
+                            <RegionCardList
+                                datasets={datasets}
+                                pending={pending}
+                                onOpen={handleOpen}
+                            />
+                        </aside>
+                        <SetupImportBar
+                            pending={pending}
+                            error={importError}
+                            onEdit={resetImportError}
+                            onImport={importOrders}
+                        />
                     </div>
-                ) : null}
-                <SetupImportBar
-                    datasets={datasets}
-                    pending={pending}
-                    isImporting={isImporting}
-                    onImport={importOrders}
-                />
-                <RegionCardList
-                    datasets={datasets}
-                    pending={pending}
-                    onOpen={handleOpenRegion}
-                />
+                </div>
             </div>
         </section>
     );

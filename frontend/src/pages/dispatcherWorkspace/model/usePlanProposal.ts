@@ -2,17 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { createEvent, type PlanEventInput } from 'features/applyPlanEvent';
 import {
     acceptPlanProposal,
     createPlanProposal,
     getCurrentPlanProposal,
 } from 'shared/api';
-import {
-    type Plan,
-    type Snapshot,
-    type SolveMode,
-} from 'shared/api/types/contracts';
+import { type Snapshot, type SolveMode } from 'shared/api/types/contracts';
 import {
     commandErrorMessage,
     isStaleVersionError,
@@ -22,10 +17,9 @@ import { type CalculationState } from 'shared/ui/calculationProgress';
 type Params = {
     scenarioId: string;
     snapshot?: Snapshot;
-    plan?: Plan;
     planId: string | null;
     solveMode: SolveMode;
-    selectedOrderId: string | null;
+    pendingRevision?: number;
     onReload: () => Promise<void>;
     onProposalReady: () => void;
 };
@@ -33,10 +27,9 @@ type Params = {
 export const usePlanProposal = ({
     scenarioId,
     snapshot,
-    plan,
     planId,
     solveMode,
-    selectedOrderId,
+    pendingRevision,
     onReload,
     onProposalReady,
 }: Params) => {
@@ -63,11 +56,9 @@ export const usePlanProposal = ({
     });
     const create = useMutation({
         mutationFn: async ({
-            input,
             token,
             startedFor,
         }: {
-            input?: PlanEventInput;
             token: string;
             startedFor: string;
         }) => {
@@ -83,13 +74,6 @@ export const usePlanProposal = ({
             if (snapshot.engineers.length === 0) {
                 throw new Error('Добавьте бригады');
             }
-            if (input && !plan) {
-                throw new Error('Сначала примите план дня');
-            }
-            const event =
-                input && plan
-                    ? createEvent(input, snapshot, plan, selectedOrderId)
-                    : undefined;
             const controller = new AbortController();
             request.current = controller;
             const startedAt = Date.now();
@@ -106,7 +90,7 @@ export const usePlanProposal = ({
                         snapshotRevision: snapshot.revision,
                         expectedCurrentPlanId: planId,
                         solveMode,
-                        event,
+                        pendingRevision,
                     },
                     {
                         signal: controller.signal,
@@ -210,11 +194,11 @@ export const usePlanProposal = ({
 
     return {
         proposal: query.data ?? null,
-        create: (input?: PlanEventInput) => {
+        create: () => {
             request.current?.abort();
             const token = crypto.randomUUID();
             activeRequestToken.current = token;
-            create.mutate({ input, token, startedFor: scenarioId });
+            create.mutate({ token, startedFor: scenarioId });
         },
         accept: (optionKey: string) => accept.mutate(optionKey),
         creating: create.isPending,

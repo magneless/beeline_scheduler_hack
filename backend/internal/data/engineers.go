@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
+	"golang.org/x/text/encoding/charmap"
 )
 
 var engineerHeader = []string{"id", "skills", "transport", "shift_start", "shift_end", "available", "router", "tv_box"}
@@ -26,7 +28,13 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 	if len(raw) > 10*1024*1024 {
 		return nil, &FormatError{"CSV превышает 10 МБ"}
 	}
-	cr := csv.NewReader(strings.NewReader(string(raw)))
+	if !utf8.Valid(raw) {
+		raw, err = charmap.Windows1251.NewDecoder().Bytes(raw)
+		if err != nil {
+			return nil, &FormatError{"Нечитаемая кодировка CSV"}
+		}
+	}
+	cr := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(raw), "\ufeff")))
 	cr.Comma = ';'
 	cr.FieldsPerRecord = -1
 	h, err := cr.Read()
@@ -93,8 +101,12 @@ func ParseEngineers(r io.Reader, date, timezone string) ([]c.Engineer, error) {
 			return nil, &FormatError{fmt.Sprintf("Строка %d: некорректный shift_start", line)}
 		}
 		end, e := parseClock(day, row[4], loc)
-		if e != nil || !end.After(start) {
+		if e != nil {
 			return nil, &FormatError{fmt.Sprintf("Строка %d: некорректный shift_end", line)}
+		}
+		shift := c.WorkingShiftOn(day)
+		if !start.Equal(shift.Start) || !end.Equal(shift.End) {
+			return nil, c.NewError("INVALID_INPUT", fmt.Sprintf("Строка %d: обязательная смена бригады — 10:00–22:00 (%s)", line, timezone))
 		}
 		var available bool
 		switch row[5] {

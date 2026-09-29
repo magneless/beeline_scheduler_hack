@@ -27,6 +27,9 @@ func (s *Store) ReplaceEngineers(ctx context.Context, id string, rev int64, engi
 		return v, err
 	}
 	snap.Engineers = append([]c.Engineer(nil), engineers...)
+	if err = c.ValidateEngineerShifts(snap); err != nil {
+		return v, err
+	}
 	filtered := snap.Issues[:0]
 	for _, issue := range snap.Issues {
 		if issue.Code != "ENGINEERS_REQUIRED" && issue.Code != "DEMO_ENGINEERS" {

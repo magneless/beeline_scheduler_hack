@@ -7,6 +7,7 @@ import {
     type ScenarioView,
 } from 'shared/api/types/contracts';
 import { env } from 'shared/config/env';
+import { fromClockInput } from 'shared/lib/utils';
 
 import {
     applyEngineerPatch,
@@ -50,6 +51,28 @@ export const handlers = [
     http.get(`${api}/demo-datasets`, () => {
         return HttpResponse.json(demoDatasets);
     }),
+    http.get(`${api}/scenarios`, () => {
+        const items = [...memory.scenarios.values()].map(
+            ({ snapshot, current_plan_id }) => ({
+                scenario_id: snapshot.scenario_id,
+                revision: snapshot.revision,
+                region_id: snapshot.region_id,
+                date: snapshot.date,
+                order_count:
+                    snapshot.orders.length +
+                    (snapshot.unlocated_orders?.length ?? 0),
+                unlocated_count: snapshot.unlocated_orders?.length ?? 0,
+                current_plan_id,
+            })
+        );
+        items.sort(
+            (a, b) =>
+                b.date.localeCompare(a.date) ||
+                a.region_id.localeCompare(b.region_id) ||
+                a.scenario_id.localeCompare(b.scenario_id)
+        );
+        return HttpResponse.json({ items });
+    }),
     http.post(`${api}/scenarios`, async ({ request }) => {
         const body = (await request.json()) as { demo_dataset_id: string };
         const scenario = createScenarioView(body.demo_dataset_id);
@@ -61,7 +84,8 @@ export const handlers = [
     http.post(`${api}/scenarios/import`, async ({ request }) => {
         const form = await request.formData();
         const file = form.get('file');
-        const regionId = String(form.get('region_id') ?? '');
+        const regionId = String(form.get('region_id') ?? 'custom');
+        const engineersFile = form.get('engineers_file');
         const date = String(form.get('date') ?? '');
 
         if (!(file instanceof File) || file.size === 0 || !regionId || !date) {
@@ -70,6 +94,13 @@ export const handlers = [
                 'INVALID_INPUT',
                 'Нечитаемый CSV или некорректный multipart'
             );
+        }
+
+        if (
+            regionId === 'custom' &&
+            (!(engineersFile instanceof File) || engineersFile.size === 0)
+        ) {
+            return errorBody(422, 'INVALID_INPUT', 'Загрузите файл бригад');
         }
 
         const csvText = await file.text();
@@ -148,6 +179,28 @@ export const handlers = [
                     409,
                     'STALE_VERSION',
                     'Исходные данные или текущий план изменились'
+                );
+            }
+
+            const shiftStart = fromClockInput(
+                scenario.snapshot.date,
+                '10:00',
+                scenario.snapshot.timezone
+            );
+            const shiftEnd = fromClockInput(
+                scenario.snapshot.date,
+                '22:00',
+                scenario.snapshot.timezone
+            );
+            if (
+                body.shift !== undefined &&
+                (Date.parse(body.shift.start) !== Date.parse(shiftStart) ||
+                    Date.parse(body.shift.end) !== Date.parse(shiftEnd))
+            ) {
+                return errorBody(
+                    422,
+                    'INVALID_INPUT',
+                    'Обязательная смена бригады — 10:00–22:00'
                 );
             }
 

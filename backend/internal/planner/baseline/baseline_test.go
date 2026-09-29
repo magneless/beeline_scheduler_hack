@@ -51,15 +51,15 @@ func TestBaselineBackendFlowExample(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", got)
 	}
 	r := got.Routes[0]
-	if r.EngineerID != "eng-1" || r.StartLocationID != "office-1" || !r.StartAt.Equal(testutil.At(6, 0)) || len(r.Visits) != 1 || len(r.Legs) != 1 {
+	if r.EngineerID != "eng-1" || r.StartLocationID != "office-1" || !r.StartAt.Equal(testutil.At(7, 0)) || len(r.Visits) != 1 || len(r.Legs) != 1 {
 		t.Fatalf("unexpected route: %+v", r)
 	}
 	v := r.Visits[0]
-	if v.OrderID != "order-1" || !v.ArrivalAt.Equal(testutil.At(6, 15)) || !v.StartAt.Equal(testutil.At(7, 0)) || !v.EndAt.Equal(testutil.At(7, 30)) {
+	if v.OrderID != "order-1" || !v.ArrivalAt.Equal(testutil.At(7, 15)) || !v.StartAt.Equal(testutil.At(8, 0)) || !v.EndAt.Equal(testutil.At(8, 30)) {
 		t.Fatalf("unexpected visit: %+v", v)
 	}
 	l := r.Legs[0]
-	if l.ID != "leg-1" || l.FromLocationID != "office-1" || l.ToLocationID != "loc-1" || !l.StartAt.Equal(testutil.At(6, 0)) || !l.EndAt.Equal(testutil.At(6, 15)) || l.DistanceM != 1200 || l.GeoContextID != "geo-1" {
+	if l.ID != "leg-1" || l.FromLocationID != "office-1" || l.ToLocationID != "loc-1" || !l.StartAt.Equal(testutil.At(7, 0)) || !l.EndAt.Equal(testutil.At(7, 15)) || l.DistanceM != 1200 || l.GeoContextID != "geo-1" {
 		t.Fatalf("unexpected leg: %+v", l)
 	}
 }

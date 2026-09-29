@@ -31,7 +31,7 @@ func TestCompoundHouseStructuredSearchChecksFullNumber(t *testing.T) {
 func TestAddressHierarchyAndApartment(t *testing.T) {
 	for _, address := range []string{"Россия, 142007, Московская область, г. Домодедово, пгт.Востряково-1, ул.Жуковского, д.14/18", "обл.Московская область, г.Домодедово, пгт.Востряково-1, ул.Жуковского, д. 14/18, кв. 21"} {
 		parts := parseRussianAddress(address)
-		if !parts.ok || parts.city != "домодедово" || parts.street != "улица жуковского" || parts.house != "14/18" {
+		if !parts.ok || parts.city != "домодедово" || parts.street != "улица жуковского" || parts.house != "14 к18" {
 			t.Fatalf("%s: %+v", address, parts)
 		}
 	}
@@ -41,6 +41,7 @@ func TestUnusualAddressMatchesCompleteCandidate(t *testing.T) {
 	for _, tc := range []struct{ address, city, street, house string }{
 		{"Город Москва, б-р.Самаркандский Квартал 137а, д. к5", "Москва", "квартал Самаркандский Бульвар 137А", "к5"},
 		{"г. Великий Новгород Большая Московская ул. д. 5", "Великий Новгород", "Большая Московская улица", "5"},
+		{"г. Великий Новгород Большая Московская ул. д. 5 / 1", "Великий Новгород", "Большая Московская улица", "5 корпус 1"},
 		{"Москва, улица 8-го Марта, д. 4, кв. 12", "Москва", "улица 8 Марта", "4"},
 	} {
 		t.Run(tc.address, func(t *testing.T) {
@@ -98,6 +99,130 @@ func TestBuildingSuffixMismatchIsSuggestedNotAssigned(t *testing.T) {
 		t.Fatalf("%+v %v", got, err)
 	}
 }
+
+func TestGeocodeNearbyExactCandidates(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		lons   []float64
+		houses []string
+		issue  string
+	}{
+		{name: "first in provider order", lons: []float64{37.6109, 37.61}},
+		{name: "reversed provider order", lons: []float64{37.61, 37.6109}},
+		{name: "just below 100 meters", lons: []float64{37.61, 37.61158}},
+		{name: "just above 100 meters", lons: []float64{37.61, 37.61162}, issue: "INVALID_INPUT"},
+		{name: "distant pair", lons: []float64{37.61, 37.62}, issue: "INVALID_INPUT"},
+		{name: "three nearby points", lons: []float64{37.61, 37.6101, 37.6102}, issue: "INVALID_INPUT"},
+		{name: "nearby wrong corpus and building", lons: []float64{37.61, 37.6101}, houses: []string{"5 к2", "5 с1"}, issue: "GEO_UNAVAILABLE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testPhoton(t, func(w http.ResponseWriter, r *http.Request) {
+				var features []any
+				for i, lon := range tc.lons {
+					house := "5 корпус 1"
+					if len(tc.houses) > 0 {
+						house = tc.houses[i]
+					}
+					features = append(features, photonFeature(lon, "улица Мира", house))
+				}
+				photonReply(w, features...)
+			})
+			address := "Москва, ул. Мира, 5 / 1"
+			got, err := NewGeoService(p).Geocode(context.Background(), c.GeocodeRequest{Locations: []c.LocationInput{{ID: "one", Address: address}}})
+			if err != nil || len(got.Items) != 1 {
+				t.Fatalf("result=%+v err=%v", got, err)
+			}
+			item := got.Items[0]
+			if len(item.Candidates) != len(tc.lons) {
+				t.Fatalf("lost distinct candidates: %+v", item)
+			}
+			if tc.issue != "" {
+				if item.Location != nil || item.Issue == nil || item.Issue.Code != tc.issue {
+					t.Fatalf("expected %s without location: %+v", tc.issue, item)
+				}
+				return
+			}
+			if item.Issue != nil || item.Location == nil {
+				t.Fatalf("expected resolved first point: %+v", item)
+			}
+			if *item.Location != (c.Location{ID: "one", Address: address, Point: c.Point{Lat: 55.76, Lon: tc.lons[0]}}) {
+				t.Fatalf("provider order or original input lost: %+v", item.Location)
+			}
+		})
+	}
+}
+
+func TestSlashCorpusSearchFallback(t *testing.T) {
+	var calls atomic.Int32
+	p := testPhoton(t, func(w http.ResponseWriter, r *http.Request) {
+		call := calls.Add(1)
+		if call == 1 {
+			if r.URL.Query().Get("q") != "москва улица мира 5 к1" {
+				t.Errorf("slash was not normalized for search: %s", r.URL)
+			}
+			photonReply(w, photonFeature(37.61, "улица Мира", "5"))
+			return
+		}
+		if r.URL.Path != "/structured" || r.URL.Query().Get("housenumber") != "5" {
+			t.Errorf("expected structured search by base house: %s", r.URL)
+		}
+		photonReply(w, photonFeature(37.61, "улица Мира", "5 с1"), photonFeature(37.6101, "улица Мира", "5 к2"), photonFeature(37.6102, "улица Мира", "5 к1"))
+	})
+	address := "Москва, ул. Мира, д. 5/1, кв. 2"
+	got, err := NewGeoService(p).Geocode(context.Background(), c.GeocodeRequest{Locations: []c.LocationInput{{ID: "one", Address: address}}})
+	if err != nil || len(got.Items) != 1 {
+		t.Fatalf("result=%+v err=%v", got, err)
+	}
+	item := got.Items[0]
+	if calls.Load() != 2 || item.Issue != nil || item.Location == nil || item.Location.Point.Lon != 37.6102 || item.Location.Address != address {
+		t.Fatalf("calls=%d result=%+v", calls.Load(), item)
+	}
+}
+
+func TestFractionalHouseWithExplicitCorpusSearch(t *testing.T) {
+	for _, structured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "full text", true: "structured fallback"}[structured], func(t *testing.T) {
+			var calls atomic.Int32
+			p := testPhoton(t, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.URL.Path == "/api/" {
+					if r.URL.Query().Get("q") != "москва проспект рязанский 83/2 к2" {
+						t.Errorf("fraction or explicit corpus lost in query: %s", r.URL.Query().Get("q"))
+					}
+					if structured {
+						photonReply(w)
+						return
+					}
+				} else if r.URL.Path != "/structured" || r.URL.Query().Get("housenumber") != "83" {
+					t.Errorf("unexpected fallback: %s", r.URL)
+				}
+				// The returned house spelling is the actual Photon / OSM value.
+				photonReply(w,
+					photonFeature(37.79, "Рязанский проспект", "83 к2"),
+					photonFeature(37.79, "Рязанский проспект", "83/2 к1"),
+					photonFeature(37.7982718, "Рязанский проспект", "83/2 к2"),
+				)
+			})
+			address := "Город Москва, пр-кт.Рязанский, д. 83/2 к 2"
+			got, err := NewGeoService(p).Geocode(context.Background(), c.GeocodeRequest{Locations: []c.LocationInput{{ID: "one", Address: address}}})
+			if err != nil || len(got.Items) != 1 {
+				t.Fatalf("result=%+v err=%v", got, err)
+			}
+			item := got.Items[0]
+			if item.Issue != nil || item.Location == nil || item.Location.Point.Lon != 37.7982718 || item.Location.Address != address || len(item.Candidates) != 1 {
+				t.Fatalf("fractional house did not resolve exactly: %+v", item)
+			}
+			wantCalls := int32(1)
+			if structured {
+				wantCalls++
+			}
+			if calls.Load() != wantCalls {
+				t.Fatalf("calls=%d want=%d", calls.Load(), wantCalls)
+			}
+		})
+	}
+}
+
 func TestGeocodeBatchDeduplicatesInputsWithoutPersistentCache(t *testing.T) {
 	var calls atomic.Int32
 	p := testPhoton(t, func(w http.ResponseWriter, r *http.Request) {

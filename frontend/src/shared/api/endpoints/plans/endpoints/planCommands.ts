@@ -70,6 +70,7 @@ export const createPlanProposal = (
         expectedCurrentPlanId: TypeOrNull<string>;
         solveMode?: SolveMode;
         event?: PlanEvent;
+        pendingRevision?: number;
     },
     callbacks?: CalculationCallbacks
 ) =>
@@ -81,6 +82,9 @@ export const createPlanProposal = (
             expected_current_plan_id: input.expectedCurrentPlanId,
             solve_mode: input.solveMode,
             ...(input.event ? { event: input.event } : {}),
+            ...(input.pendingRevision !== undefined
+                ? { pending_revision: input.pendingRevision }
+                : {}),
         },
         callbacks
     );

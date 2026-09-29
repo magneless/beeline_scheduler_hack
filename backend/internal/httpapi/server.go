@@ -14,6 +14,7 @@ import (
 
 	c "github.com/magneless/beeline_scheduler_hack/backend/internal/contracts"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/data"
+	"github.com/magneless/beeline_scheduler_hack/backend/internal/progress"
 	"github.com/magneless/beeline_scheduler_hack/backend/internal/storage"
 )
 
@@ -35,6 +36,10 @@ func (s *Server) Handler() http.Handler {
 		write(w, 200, map[string]any{"items": s.Importer.Catalog()})
 	})
 	m.HandleFunc("POST /api/v1/scenarios", s.create)
+	m.HandleFunc("GET /api/v1/scenarios", func(w http.ResponseWriter, r *http.Request) {
+		items, err := s.Store.ListScenarios(r.Context())
+		respond(w, http.StatusOK, map[string]any{"items": items}, err)
+	})
 	m.HandleFunc("POST /api/v1/scenarios/import", s.importCSV)
 	m.HandleFunc("GET /api/v1/scenarios/{id}", s.scenario)
 	m.HandleFunc("POST /api/v1/geocode", s.searchAddress)
@@ -43,6 +48,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/scenarios/{id}/engineers/import", s.importEngineers)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/plans", s.build)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/proposals", s.createProposal)
+	m.HandleFunc("GET /api/v1/scenarios/{id}/pending-changes", s.getPending)
+	m.HandleFunc("POST /api/v1/scenarios/{id}/pending-changes", s.savePending)
 	m.HandleFunc("GET /api/v1/scenarios/{id}/proposals/current", s.currentProposal)
 	m.HandleFunc("POST /api/v1/proposals/{id}/accept", s.acceptProposal)
 	m.HandleFunc("POST /api/v1/scenarios/{id}/plans/compare", s.compare)
@@ -57,7 +64,11 @@ func (s *Server) Handler() http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		r.Body = http.MaxBytesReader(w, r.Body, 11*1024*1024)
+		limit := int64(11 * 1024 * 1024)
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/scenarios/import" {
+			limit = 21 * 1024 * 1024
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 		defer cancel()
 		m.ServeHTTP(w, r.WithContext(ctx))
@@ -143,13 +154,13 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		failure(w, invalid("Не указан demo_dataset_id"))
 		return
 	}
-	snap, meta, e := s.Importer.Demo(r.Context(), in.DatasetID)
-	if e != nil {
-		failure(w, e)
-		return
-	}
-	v, e := s.Store.CreateScenario(r.Context(), snap, meta)
-	respond(w, 201, v, e)
+	respondCalculation(w, r, http.StatusCreated, 0, func(ctx context.Context) (any, error) {
+		snap, meta, err := s.Importer.Demo(ctx, in.DatasetID)
+		if err != nil {
+			return nil, err
+		}
+		return s.saveImportedScenario(ctx, snap, meta)
+	})
 }
 func (s *Server) importCSV(w http.ResponseWriter, r *http.Request) {
 	if e := r.ParseMultipartForm(1024 * 1024); e != nil {
@@ -163,13 +174,66 @@ func (s *Server) importCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	snap, meta, e := s.Importer.Import(r.Context(), f, r.FormValue("region_id"), r.FormValue("date"))
+	// The streaming worker can outlive a disconnected request. Give it its own
+	// bytes so multipart cleanup cannot close the file while it is being read.
+	raw, e := io.ReadAll(io.LimitReader(f, 10*1024*1024+1))
 	if e != nil {
 		failure(w, e)
 		return
 	}
-	v, e := s.Store.CreateScenario(r.Context(), snap, meta)
-	respond(w, 201, v, e)
+	region, date := r.FormValue("region_id"), r.FormValue("date")
+	var office *c.LocationInput
+	if address := strings.TrimSpace(r.FormValue("office_address")); address != "" {
+		office = &c.LocationInput{Address: address}
+	}
+	if pointJSON := r.FormValue("office_point"); pointJSON != "" {
+		var point struct {
+			Lat *float64 `json:"lat"`
+			Lon *float64 `json:"lon"`
+		}
+		if office == nil || json.Unmarshal([]byte(pointJSON), &point) != nil || point.Lat == nil || point.Lon == nil {
+			failure(w, invalid("Укажите адрес и корректные координаты офиса"))
+			return
+		}
+		office.Point = &c.Point{Lat: *point.Lat, Lon: *point.Lon}
+	}
+	var engineers []c.Engineer
+	roster, _, rosterErr := r.FormFile("engineers_file")
+	if rosterErr == nil {
+		defer roster.Close()
+		engineers, e = data.ParseEngineers(roster, date, "Europe/Moscow")
+		if e != nil {
+			_, issue := errorResponse(e)
+			failure(w, invalid("Файл бригад: "+issue.Message))
+			return
+		}
+	} else if rosterErr != http.ErrMissingFile || strings.TrimSpace(region) == "" {
+		failure(w, invalid("Добавьте CSV со списком бригад"))
+		return
+	}
+	respondCalculation(w, r, http.StatusCreated, 0, func(ctx context.Context) (any, error) {
+		snap, meta, err := s.Importer.ImportDay(ctx, bytes.NewReader(raw), region, date, office)
+		if err != nil {
+			return nil, err
+		}
+		if engineers != nil {
+			snap.Engineers = engineers
+			issues := make([]c.Issue, 0, len(snap.Issues))
+			for _, issue := range snap.Issues {
+				if issue.Code != "ENGINEERS_REQUIRED" {
+					issues = append(issues, issue)
+				}
+			}
+			snap.Issues = issues
+		}
+		return s.saveImportedScenario(ctx, snap, meta)
+	})
+}
+
+func (s *Server) saveImportedScenario(ctx context.Context, snap c.Snapshot, meta any) (any, error) {
+	total := len(snap.Orders) + len(snap.UnlocatedOrders)
+	progress.Report(progress.WithState(ctx, progress.State{Completed: total, Total: total}), "saving", "Сохраняем сценарий")
+	return s.Store.CreateScenario(ctx, snap, meta)
 }
 func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	var rev int64
@@ -287,6 +351,16 @@ func (s *Server) event(w http.ResponseWriter, r *http.Request) {
 			if change.Status != c.OrderStatusInProgress && change.Status != c.OrderStatusCompleted {
 				failure(w, invalid("Инженер сообщает только о начале и завершении работы; статус «В пути» определяется автоматически"))
 				return
+			}
+			if change.Status == c.OrderStatusCompleted {
+				for _, route := range p.Routes {
+					for _, visit := range route.Visits {
+						if visit.OrderID == change.OrderID && in.Event.OccurredAt.After(visit.EndAt) {
+							failure(w, c.NewError("EVENT_CONFLICT", "Позднее завершение меняет маршрут. Сохраните событие в очередь и запустите пересчёт кнопкой."))
+							return
+						}
+					}
+				}
 			}
 		}
 	}
