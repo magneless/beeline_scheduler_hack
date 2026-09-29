@@ -41,7 +41,6 @@ frontend/                 # Интерфейс диспетчера: React, Type
 datasets/original/        # Исходные наборы заявок
 datasets/additional_days/ # Дополнительные дни, доступные на начальном экране
 docs/                     # Требования, контракты и инструкции
-.github/workflows/        # Автоматические проверки
 compose.yaml              # Совместный запуск frontend, backend и PostgreSQL
 ```
 
